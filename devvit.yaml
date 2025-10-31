@@ -1,0 +1,10 @@
+{
+  "name": "ukpolitics-man",
+  "schemaVersion": "0.0.22",
+  "capabilities": [
+    "modActions",
+    "http",
+    "redis",
+    "scheduler"
+  ]
+}
