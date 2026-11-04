@@ -7,6 +7,7 @@ A Reddit Devvit application that brings your subreddit's modlog activity straigh
 **Platform:** Reddit Devvit v0.12.1
 
 ## What You Get
+
 - Live Slack alerts for the mod actions you choose (removals, bans, flair edits, and more).
 - Automatic ban-duration context so unban events can be paired with the original discipline.
 - Optional warnings whenever unknown accounts act on the subreddit, or when the modqueue grows too large or too old.
@@ -16,6 +17,7 @@ A Reddit Devvit application that brings your subreddit's modlog activity straigh
 ## Prerequisites
 
 Before installing this app, you'll need:
+
 - Moderator permissions on your subreddit
 - A Slack workspace with an [Incoming Webhook URL](https://api.slack.com/messaging/webhooks)
 - The [Devvit CLI](https://developers.reddit.com/docs/quickstart) installed (`npm install -g devvit`)
@@ -25,30 +27,34 @@ Before installing this app, you'll need:
 ### Option 1: Install from Source
 
 1. **Clone this repository:**
-   ```bash
-   git clone https://github.com/ivashkin-reddit/mod-action-notifications.git
-   cd mod-action-notifications
-   ```
+
+    ```bash
+    git clone https://github.com/ivashkin-reddit/mod-action-notifications.git
+    cd mod-action-notifications
+    ```
 
 2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+
+    ```bash
+    npm install
+    ```
 
 3. **Login to Devvit:**
-   ```bash
-   devvit login
-   ```
+
+    ```bash
+    devvit login
+    ```
 
 4. **Upload the app:**
-   ```bash
-   devvit upload
-   ```
+
+    ```bash
+    devvit upload
+    ```
 
 5. **Install to your subreddit:**
-   ```bash
-   devvit install <your-subreddit>
-   ```
+    ```bash
+    devvit install <your-subreddit>
+    ```
 
 ### Option 2: Install from Apps Directory
 
@@ -69,6 +75,7 @@ Once saved, perform any moderator action from the enabled list to confirm Slack 
 ## Customization
 
 Fine-tune the bot to match your team's workflow:
+
 - **Modqueue Monitoring:** Adjust thresholds for queue size and oldest item age
 - **AutoModerator Alerts:** Toggle on/off to control bot action visibility
 - **Excluded Moderators:** Hide notifications from specific accounts (useful for bots)
@@ -107,6 +114,7 @@ devvit logs <your-subreddit>
 ## Data Privacy
 
 This app:
+
 - ✅ Only collects data necessary for Slack notifications
 - ✅ Automatically deletes all data after 7-90 days (Redis TTL)
 - ✅ Does not share data with third parties (except Slack for notifications)
@@ -124,22 +132,26 @@ See [PRIVACY-POLICY.md](./PRIVACY-POLICY.md) for complete details.
 ### Troubleshooting
 
 **Slack not receiving alerts?**
+
 - Verify webhook URL is correct in app settings
 - Run the "Test Slack Connection" menu item
 - Check webhook hasn't been revoked in Slack workspace settings
 
 **Missing notifications?**
+
 - Ensure mod action types are enabled in settings
 - Check moderator isn't in the excluded list
 - Review Devvit logs: `devvit logs <your-subreddit>`
 
 **High latency?**
+
 - Reddit API and Slack may experience occasional delays
 - Devvit platform has rate limits that may queue notifications
 
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Fork this repository
 2. Create a feature branch
 3. Make your changes with clear commit messages

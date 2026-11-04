@@ -1,107 +1,68 @@
-import { banDurationFrom, type ModAction, type ModActionTarget } from '../domain/modAction';
+import { isBlank } from "../domain/modAction.js";
+import type { ModAction, ModActionTarget } from "../domain/modAction.js";
+
+/** What the app reads from a ModAction trigger event; Devvit's event type satisfies it. */
+export type ModActionEvent = Readonly<{
+    id?: string | undefined;
+    action?: string | undefined;
+    subreddit?: Readonly<{ name: string }> | undefined;
+    moderator?: Readonly<{ name: string }> | undefined;
+    targetUser?: Readonly<{ name: string }> | undefined;
+    targetPost?:
+        Readonly<{ id: string; authorId: string; permalink: string; selftext: string; title: string }> | undefined;
+    targetComment?: Readonly<{ id: string; author: string; permalink: string; body: string }> | undefined;
+}>;
+
+/** `value`, or `fallback` when `value` is blank. */
+function orIfBlank(value: string | undefined, fallback: string): string {
+    return isBlank(value) ? fallback : value;
+}
+
+function targetOf(event: ModActionEvent): ModActionTarget | undefined {
+    const { targetPost, targetComment, targetUser } = event;
+    if (targetPost !== undefined && targetPost.id !== "") {
+        return {
+            author: orIfBlank(targetUser?.name, targetPost.authorId),
+            permalink: targetPost.permalink,
+            body: orIfBlank(targetPost.selftext, targetPost.title),
+            isComment: false,
+        };
+    }
+    if (targetComment !== undefined && targetComment.id !== "") {
+        return {
+            author: orIfBlank(targetUser?.name, targetComment.author),
+            permalink: targetComment.permalink,
+            body: targetComment.body,
+            isComment: true,
+        };
+    }
+    const username = targetUser?.name;
+    return isBlank(username)
+        ? undefined
+        : { author: username, permalink: undefined, body: undefined, isComment: false };
+}
 
 /**
- * Translates a ModAction trigger event into a ModAction.
- *
- * Devvit delivers `{ action, actionedAt, subreddit, moderator, targetUser, targetPost, targetComment, id }`.
- * Older shapes are still read: the action nested in `modAction` or `modaction`, a time in `createdAt` and
- * similar fields, and ban lengths and notes in fields Devvit's event never had. Devvit's own `actionedAt` is
- * not read, so the action is timed by when the trigger runs.
+ * Translates a ModAction trigger event into a ModAction. Devvit's event carries no ban length, note or details, so
+ * a ban's length comes from the mod log. The event's `actionedAt` is not read: the action is timed by when the
+ * trigger runs.
  */
-// The event arrives in several historical shapes, read defensively field by field.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function modActionFromTriggerEvent(event: any): ModAction {
-  const source = event?.modAction ?? event?.modaction ?? event;
-  const resolvedId = source?.id ?? event.id ?? event.modActionId ?? event.mod_action_id ?? null;
-  const rawDetails = source?.details ?? event.details ?? undefined;
-  const moderatorName: string | undefined = event.moderator?.name;
-
-  const modAction: ModAction = {
-    id: typeof resolvedId === 'string' ? resolvedId : resolvedId != null ? String(resolvedId) : undefined,
-    type: event.action,
-    moderatorName,
-    subredditName: event.subreddit?.name,
-    description: (source?.description ?? event.description ?? '') || '',
-    details: rawDetails !== undefined && rawDetails !== null ? String(rawDetails) : rawDetails,
-    occurredAt: occurredAt(source, event),
-    target: target(source, event),
-    isAutoModerator: (moderatorName ?? '').toLowerCase() === 'automoderator',
-    relatedAction: null,
-    activitySpike: null,
-  };
-
-  if (modAction.type === 'banuser') {
-    const numericDuration =
-      source?.duration ?? source?.banDuration ?? source?.ban_duration ??
-      event.duration ?? event.banDuration ?? event.ban_duration ?? event.days ?? event.banDays ?? event.ban_days;
-    Object.assign(modAction, banDurationFrom(numericDuration, modAction.details, modAction.description));
-  }
-
-  return modAction;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function occurredAt(source: any, event: any): Date {
-  const time =
-    source?.createdAt ??
-    event.createdAt ??
-    event.created_at ??
-    event.triggeredAt ??
-    event.triggered_at ??
-    source?.timestamp ??
-    event.timestamp ??
-    null;
-
-  if (!time) {
-    return new Date();
-  }
-  if (time instanceof Date) {
-    return time;
-  }
-  if (typeof time === 'string') {
-    const parsed = new Date(time);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  }
-  if (typeof time === 'number') {
-    // Seconds, unless it is too large to be.
-    return new Date(time * (time > 10_000_000_000 ? 1 : 1000));
-  }
-  if (typeof time === 'object' && 'seconds' in time) {
-    const seconds = Number(time.seconds ?? 0);
-    const nanos = Number(time.nanos ?? 0);
-    return new Date(seconds * 1000 + Math.floor(nanos / 1_000_000));
-  }
-  return new Date();
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function target(source: any, event: any): ModActionTarget | null {
-  if (event.targetPost?.id) {
+export function modActionFromTriggerEvent(event: ModActionEvent): ModAction {
+    const type = event.action ?? "";
+    const moderatorName = event.moderator?.name;
     return {
-      author: event.targetUser?.name || event.targetPost?.authorId,
-      permalink: event.targetPost?.permalink,
-      body: event.targetPost?.selftext || event.targetPost?.title,
-      isComment: false,
+        id: event.id,
+        type,
+        moderatorName,
+        subredditName: event.subreddit?.name,
+        target: targetOf(event),
+        description: "",
+        details: undefined,
+        occurredAt: new Date(),
+        isAutoModerator: (moderatorName ?? "").toLowerCase() === "automoderator",
+        banDuration: undefined,
+        banDurationLabel: undefined,
+        relatedAction: undefined,
+        activitySpike: undefined,
     };
-  }
-  if (event.targetComment?.id) {
-    return {
-      author: event.targetUser?.name || event.targetComment?.author,
-      permalink: event.targetComment?.permalink,
-      body: event.targetComment?.body,
-      isComment: true,
-    };
-  }
-  if (event.targetUser?.name) {
-    return { author: event.targetUser.name, permalink: null, body: null, isComment: false };
-  }
-  if (source?.target) {
-    return {
-      author: source.target.author ?? undefined,
-      permalink: source.target.permalink ?? null,
-      body: source.target.body ?? source.target.title ?? null,
-      isComment: Boolean(source.target.body && !source.target.title),
-    };
-  }
-  return null;
 }

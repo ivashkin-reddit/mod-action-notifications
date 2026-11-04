@@ -1,0 +1,3 @@
+# Prettier writes LF. Keeping LF in the working tree on every platform lets `prettier --check` pass on Windows,
+# where Git would otherwise check text files out with CRLF.
+* text=auto eol=lf

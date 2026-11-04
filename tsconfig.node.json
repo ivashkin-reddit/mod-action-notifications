@@ -1,0 +1,20 @@
+{
+  // Tooling that runs on Node rather than in Devvit: currently the ESLint config.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "types": ["node"],
+
+    // WORKAROUND: library declaration files are not type-checked for the ESLint config
+    //   cause: eslint-import-context 0.1.9 (used by eslint-plugin-import-x and eslint-import-resolver-typescript)
+    //     imports types from `type-fest` without declaring it as a dependency, so they resolve the hoisted
+    //     type-fest 0.21.3 (from devvit's CLI), whose ts41/get.d.ts fails to check (TS2344).
+    //   blocked: the missing dependency is in eslint-import-context's published package.json, and its consumers
+    //     require ^0.1.x.
+    //   fix: eslint-import-context declares `type-fest`, or stops importing it; then delete this setting.
+    //   until: `npx tsc -p tsconfig.node.json --skipLibCheck false` reports no errors.
+    "skipLibCheck": true
+  },
+  "include": ["eslint.config.mjs", "eslint/*.mjs"]
+}

@@ -1,25 +1,36 @@
 {
+  "extends": "@devvit/public-api/devvit.tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "allowJs": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+
+    // Declared here rather than inherited, so a Devvit upgrade cannot loosen them.
     "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "resolveJsonModule": true,
-    "types": ["node"]
-  },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+    "noImplicitOverride": true,
+
+    // Beyond `strict`.
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noUncheckedSideEffectImports": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+
+    // Devvit's shared config adds vitest's globals to every file, app code included; tests import from "vitest" instead.
+    "types": [],
+
+    // Devvit's lib list plus ES2022.Error: its Node runtime supports `new Error(message, { cause })`, which
+    // preserve-caught-error requires when a catch block throws a new error.
+    "lib": ["ES2020", "ES2022.Error", "WebWorker"],
+
+    // Devvit's shared config skips checking library declarations; every declaration this program loads checks cleanly.
+    "skipLibCheck": false
+  }
 }

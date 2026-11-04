@@ -1,115 +1,125 @@
-import { vi } from 'vitest';
-import { createFakeContext, defaultSettings, type FakeContext, type Settings, type Toast } from './fakeContext';
-import type { FakeDevvit, FormDefinition, Registrations } from './fakeDevvit';
-import { FakeSlack } from './fakeSlack';
+import { vi } from "vitest";
+import { createFakeContext, defaultSettings } from "./fakeContext.js";
+import type { FakeContext, Settings, Toast } from "./fakeContext.js";
+import type { FakeDevvit, FormDefinition, Handler, Registrations } from "./fakeDevvit.js";
+import { createFakeSlack } from "./fakeSlack.js";
+import type { FakeSlack } from "./fakeSlack.js";
 
 /** The instant every test starts at. Fake timers hold the clock here until a test advances it. */
-export const NOW = new Date('2026-11-04T12:00:00.000Z');
+export const NOW = new Date("2026-11-04T12:00:00.000Z");
 
-export interface App {
-  /** What the app registered with Devvit. */
-  readonly registrations: Registrations;
-  /** The installation's settings. Changing a value here changes what the app reads next. */
-  readonly settings: Settings;
-  readonly context: FakeContext;
-  readonly slack: FakeSlack;
-  readonly toasts: Toast[];
-  /** Delivers a trigger event to every handler registered for it. */
-  fire(event: string, payload: object): Promise<void>;
-  /** Runs a scheduler job the way the scheduler would. */
-  runJob(name: string): Promise<void>;
-  /** Presses a menu item by its label. */
-  pressMenuItem(label: string): Promise<void>;
-  /** The form the app most recently showed with ui.showForm. */
-  shownForm(): { key: string; definition: FormDefinition };
-  /** Submits a form with the values a moderator entered. */
-  submitForm(key: string, values: Record<string, unknown>): Promise<void>;
-  /** Moves the clock forward, running any timers that fall due. */
-  advance(ms: number): Promise<void>;
+export type App = Readonly<{
+    /** What the app registered with Devvit. */
+    registrations: Registrations;
+    /** The installation's settings. Changing a value here changes what the app reads next. */
+    settings: Settings;
+    context: FakeContext;
+    slack: FakeSlack;
+    toasts: readonly Toast[];
+    /** Delivers a trigger event to the handler registered for it. */
+    fire: (event: string, payload: unknown) => Promise<void>;
+    /** Runs a scheduler job the way the scheduler would. */
+    runJob: (name: string) => Promise<void>;
+    /** Presses a menu item by its label. */
+    pressMenuItem: (label: string) => Promise<void>;
+    /** The form the app most recently showed with ui.showForm. */
+    shownForm: () => Readonly<{ key: string; definition: FormDefinition }>;
+    /** Submits a form with the values a moderator entered. */
+    submitForm: (key: string, values: Readonly<Record<string, unknown>>) => Promise<void>;
+    /** Presses a menu item, then submits the form it shows with `values`. */
+    fillForm: (menuItem: string, values: Readonly<Record<string, unknown>>) => Promise<void>;
+    /** Moves the clock forward, running any timers that fall due. */
+    advance: (ms: number) => Promise<void>;
+}>;
+
+const STILL_RUNNING = Symbol("still running");
+
+/**
+ * Settles `work`, advancing fake time only while it waits on a timer (a Slack retry backoff), so delays happen
+ * exactly as long as the app asks for.
+ */
+async function drive(work: Readonly<Promise<void>>): Promise<void> {
+    const outcome = await Promise.race([
+        work,
+        vi.advanceTimersToNextTimerAsync().then((): typeof STILL_RUNNING => STILL_RUNNING),
+    ]);
+    if (outcome === STILL_RUNNING) {
+        await drive(work);
+    }
+}
+
+function named<T>(registry: Readonly<Record<string, T>>, kind: string, name: string): T {
+    const entry = registry[name];
+    if (entry === undefined) {
+        throw new Error(`no ${kind} named ${name}`);
+    }
+    return entry;
+}
+
+async function invoke(handler: Handler, event: unknown, context: unknown): Promise<void> {
+    await drive(Promise.resolve(handler(event, context)));
+}
+
+function shownFormIn(registrations: Registrations, shownForms: readonly string[]): App["shownForm"] {
+    return (): Readonly<{ key: string; definition: FormDefinition }> => {
+        const key = shownForms[shownForms.length - 1];
+        if (key === undefined) {
+            throw new Error("no form has been shown");
+        }
+        return { key, definition: named(registrations.forms, "form", key).definition };
+    };
+}
+
+type Actions = Pick<App, "fire" | "runJob" | "pressMenuItem" | "shownForm" | "submitForm" | "fillForm" | "advance">;
+
+/** What a test can do to the app: deliver what Devvit would, and move the clock. */
+function actions(registrations: Registrations, context: unknown, shownForms: readonly string[]): Actions {
+    const shownForm = shownFormIn(registrations, shownForms);
+    const pressMenuItem = async (label: string): Promise<void> => {
+        const item = registrations.menuItems.find((menuItem): boolean => menuItem.label === label);
+        if (item === undefined) {
+            throw new Error(`no menu item labelled ${label}`);
+        }
+        await invoke(item.onPress, { location: "subreddit", targetId: "t5_testsub" }, context);
+    };
+    const submitForm = async (key: string, values: Readonly<Record<string, unknown>>): Promise<void> => {
+        await invoke(named(registrations.forms, "form", key).onSubmit, { values }, context);
+    };
+    return {
+        fire: async (event: string, payload: unknown): Promise<void> => {
+            await invoke(named(registrations.triggers, "trigger", event), payload, context);
+        },
+        runJob: async (name: string): Promise<void> => {
+            await invoke(named(registrations.schedulerJobs, "scheduler job", name), { name }, context);
+        },
+        pressMenuItem,
+        shownForm,
+        submitForm,
+        fillForm: async (menuItem: string, values: Readonly<Record<string, unknown>>): Promise<void> => {
+            await pressMenuItem(menuItem);
+            await submitForm(shownForm().key, values);
+        },
+        advance: async (ms: number): Promise<void> => {
+            await vi.advanceTimersByTimeAsync(ms);
+        },
+    };
 }
 
 /**
- * Settles `work`, advancing fake time only when the app is waiting on a timer (a Slack retry backoff),
- * so delays happen exactly as long as the app asks for.
+ * Loads src/main.ts afresh, so each test gets a new bot with no cached settings or moderator list, and wires it to
+ * fake Devvit services, a fake Slack webhook and a clock frozen at NOW.
  */
-async function drive<T>(work: Promise<T>): Promise<T> {
-  let settled = false;
-  work.then(
-    () => {
-      settled = true;
-    },
-    () => {
-      settled = true;
-    },
-  );
-  while (!settled) {
-    await vi.advanceTimersToNextTimerAsync();
-  }
-  return work;
-}
+export async function loadApp(devvit: FakeDevvit, settingsOverrides: Readonly<Settings> = {}): Promise<App> {
+    vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const settings: Settings = { ...defaultSettings(), ...settingsOverrides };
+    const { context, toasts, shownForms } = createFakeContext(settings);
+    const slack = createFakeSlack();
+    vi.stubGlobal("fetch", slack.fetch);
 
-/**
- * Loads src/main.ts afresh, so each test gets a new bot with no cached settings or moderator list, and
- * wires it to fake Devvit services, a fake Slack webhook and a clock frozen at NOW.
- */
-export async function loadApp(devvit: FakeDevvit, settingsOverrides: Settings = {}): Promise<App> {
-  vi.useFakeTimers({ now: NOW, toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-  const settings: Settings = { ...defaultSettings(), ...settingsOverrides };
-  const { context, toasts, shownForms } = createFakeContext(settings);
-  const slack = new FakeSlack();
-  vi.stubGlobal('fetch', slack.fetch);
+    devvit.reset();
+    vi.resetModules();
+    await import("../../src/main.js");
+    const registrations = devvit.registrations();
 
-  devvit.reset();
-  vi.resetModules();
-  await import('../../src/main');
-  const registrations = devvit.registrations;
-
-  return {
-    registrations,
-    settings,
-    context,
-    slack,
-    toasts,
-    async fire(event, payload) {
-      const handlers = registrations.triggers.get(event);
-      if (!handlers) {
-        throw new Error(`no handler registered for ${event}`);
-      }
-      for (const handler of handlers) {
-        await drive(Promise.resolve(handler(payload, context)));
-      }
-    },
-    async runJob(name) {
-      const handler = registrations.schedulerJobs.get(name);
-      if (!handler) {
-        throw new Error(`no scheduler job named ${name}`);
-      }
-      await drive(Promise.resolve(handler({ name }, context)));
-    },
-    async pressMenuItem(label) {
-      const item = registrations.menuItems.find((menuItem) => menuItem.label === label);
-      if (!item) {
-        throw new Error(`no menu item labelled ${label}`);
-      }
-      await drive(Promise.resolve(item.onPress({ location: 'subreddit', targetId: 't5_testsub' }, context)));
-    },
-    shownForm() {
-      const key = shownForms.at(-1);
-      const form = key === undefined ? undefined : registrations.forms.get(key);
-      if (key === undefined || !form) {
-        throw new Error('no form has been shown');
-      }
-      return { key, definition: form.definition };
-    },
-    async submitForm(key, values) {
-      const form = registrations.forms.get(key);
-      if (!form) {
-        throw new Error(`no form with key ${key}`);
-      }
-      await drive(Promise.resolve(form.onSubmit({ values }, context)));
-    },
-    async advance(ms) {
-      await vi.advanceTimersByTimeAsync(ms);
-    },
-  };
+    return { registrations, settings, context, slack, toasts, ...actions(registrations, context, shownForms) };
 }

@@ -1,37 +1,64 @@
-import type { QueueItem } from '../domain/monitoring';
+import type { QueueItem } from "../domain/monitoring.js";
 
 /** The subreddit's modqueue. */
 export interface Modqueue {
-  items(): Promise<QueueItem[]>;
+    readonly items: () => Promise<readonly QueueItem[]>;
 }
 
-export type QueueAlertType = 'modqueue_size' | 'modqueue_unmoderated';
+/** The kinds of queue alert, each throttled on its own. */
+export type QueueAlert = "queue-size" | "unmoderated";
 
 /** What the monitor keeps between runs. */
 export interface MonitorStore {
-  /** Claims the alert for the period: false when one of that type was sent within it, true otherwise. */
-  claimAlert(alert: QueueAlertType, periodSeconds: number): Promise<boolean>;
-  /** Adds a failure to the count of consecutive failures and returns the new count. */
-  countFailure(): Promise<number>;
-  /** Forgets the failure count `seconds` from now, unless it changes first. */
-  expireFailuresAfter(seconds: number): Promise<void>;
-  clearFailures(): Promise<void>;
-  monitorJobId(): Promise<string | undefined>;
-  rememberMonitorJob(jobId: string): Promise<void>;
-  forgetMonitorJob(): Promise<void>;
+    /** Claims the alert for the period: false when one of that kind was sent within it, true otherwise. */
+    readonly claimAlert: (alert: QueueAlert, periodSeconds: number) => Promise<boolean>;
+    /** Adds a failure to the count of consecutive failures and returns the new count. */
+    readonly countFailure: () => Promise<number>;
+    /** Forgets the failure count `seconds` from now, unless it changes first. */
+    readonly expireFailuresAfter: (seconds: number) => Promise<void>;
+    readonly clearFailures: () => Promise<void>;
+    readonly monitorJobId: () => Promise<string | undefined>;
+    readonly rememberMonitorJob: (jobId: string) => Promise<void>;
+    readonly forgetMonitorJob: () => Promise<void>;
+}
+
+export interface ScheduledMonitorJob {
+    readonly id: string;
+    /** Absent for a one-off job. */
+    readonly cron?: string;
 }
 
 export interface MonitorScheduler {
-  /** Schedules the monitor job and returns its ID. */
-  schedule(cron: string): Promise<string>;
-  cancel(jobId: string): Promise<void>;
-  jobs(): Promise<{ id: string; cron?: string }[]>;
+    /** Schedules the monitor job and returns its ID. */
+    readonly schedule: (cron: string) => Promise<string>;
+    readonly cancel: (jobId: string) => Promise<void>;
+    readonly jobs: () => Promise<readonly ScheduledMonitorJob[]>;
+}
+
+export interface QueueTooLongAlert {
+    readonly size: number;
+    readonly posts: number;
+    readonly comments: number;
+    readonly threshold: number;
+}
+
+export interface WaitingTooLongAlert {
+    /** The oldest of the `total` waiting items, oldest first. */
+    readonly oldest: readonly QueueItem[];
+    readonly total: number;
+    readonly ageHours: number;
+    /** When ages are measured, in ms since the epoch. */
+    readonly now: number;
+}
+
+export interface MonitorFailingAlert {
+    readonly failures: number;
+    /** The last failure's message, '' when it had none. */
+    readonly error: string;
 }
 
 export interface ModqueueAlerts {
-  queueTooLong(alert: { size: number; posts: number; comments: number; threshold: number }): Promise<void>;
-  /** `oldest` are the oldest of `total` waiting items, oldest first; ages are measured at `now`. */
-  waitingTooLong(alert: { oldest: QueueItem[]; total: number; ageHours: number; now: number }): Promise<void>;
-  /** `error` is the last failure's message, '' when it had none. */
-  monitorFailing(alert: { failures: number; error: string }): Promise<void>;
+    readonly queueTooLong: (alert: QueueTooLongAlert) => Promise<void>;
+    readonly waitingTooLong: (alert: WaitingTooLongAlert) => Promise<void>;
+    readonly monitorFailing: (alert: MonitorFailingAlert) => Promise<void>;
 }

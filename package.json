@@ -2,15 +2,16 @@
   "name": "reddit-mod-action-slack-bot",
   "version": "1.0.0",
   "description": "A Devvit bot that sends Reddit mod actions to Slack",
-  "main": "src/main.ts",
+  "type": "module",
   "scripts": {
-    "dev": "npx devvit start",
-    "upload": "npx devvit upload",
-    "lint": "npx eslint src tests",
-    "type-check": "npx tsc --noEmit && npx tsc -p tests",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "playtest": "npx devvit playtest"
+    "playtest": "devvit playtest",
+    "upload": "devvit upload"
   },
   "dependencies": {
     "@devvit/public-api": "^0.15.2",
@@ -18,13 +19,21 @@
   },
   "devDependencies": {
     "@devvit/protos": "^0.15.2",
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
-    "@typescript-eslint/eslint-plugin": "^8.72.1",
-    "@typescript-eslint/parser": "^8.72.1",
     "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/eslint-plugin": "^1.6.28",
     "devvit": "^0.15.2",
     "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.4.1",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-regexp": "^3.3.3",
+    "prettier": "3.9.10",
     "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.1.0"
   },
   "engines": {

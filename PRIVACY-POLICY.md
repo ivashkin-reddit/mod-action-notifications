@@ -20,6 +20,7 @@ This Privacy Policy describes how the Reddit Mod Action Slack Bot ("the Bot") co
 The Bot only collects data necessary to send moderation action notifications to your configured Slack workspace:
 
 ### 2.1 Moderation Action Data
+
 - **Moderator username** (who performed the action)
 - **Action type** (e.g., removed post, banned user, approved comment)
 - **Target user** (if applicable - username only, no personal information)
@@ -28,12 +29,14 @@ The Bot only collects data necessary to send moderation action notifications to 
 - **Mod notes** (if included by moderators)
 
 ### 2.2 Post Deletion Monitoring Data
+
 - **Post scores** (upvote counts)
 - **Post titles**
 - **Post authors** (usernames only)
 - **Post permalinks**
 
 ### 2.3 Configuration Data
+
 - **Slack webhook URL** (stored securely in Reddit's Devvit platform)
 - **Bot settings** (enabled actions, excluded moderators, notification preferences)
 
@@ -55,9 +58,11 @@ The Bot only collects data necessary to send moderation action notifications to 
 ## 4. How We Use Data
 
 ### 4.1 Primary Purpose
+
 All data is used **solely** to send real-time notifications to your subreddit's moderation team via Slack when moderation actions occur.
 
 ### 4.2 Specific Uses
+
 - Send Slack alerts when moderators perform actions
 - Pair ban/unban events to show context
 - Detect rapid-fire moderation activity
@@ -65,7 +70,9 @@ All data is used **solely** to send real-time notifications to your subreddit's 
 - Notify when high-scoring posts are deleted
 
 ### 4.3 No Secondary Uses
+
 We **do not**:
+
 - Sell or share data with third parties
 - Use data for advertising or marketing
 - Train AI/ML models
@@ -77,12 +84,14 @@ We **do not**:
 ## 5. Where Data Is Sent
 
 ### 5.1 Slack Integration
+
 - Moderation notifications are sent to your configured Slack webhook URL
 - Data is transmitted over HTTPS (encrypted in transit)
 - Only the Slack workspace you configure receives notifications
 - Slack's data handling is governed by [Slack's Privacy Policy](https://slack.com/trust/privacy/privacy-policy)
 
 ### 5.2 Reddit's Devvit Platform
+
 - Configuration settings are stored in Reddit's secure Devvit infrastructure
 - We do not operate any external servers or databases
 - All processing occurs within Reddit's controlled environment
@@ -93,13 +102,13 @@ We **do not**:
 
 All data is stored temporarily in Reddit's Redis infrastructure with automatic expiration:
 
-| Data Type | Retention Period | Purpose |
-|-----------|-----------------|---------|
-| Ban/mute context | 90 days | Pair with unban/unmute events |
-| Post score cache | 7 days | Track high-scoring deletions |
-| Moderator activity | 1 hour | Detect rapid-fire actions |
-| Alert throttling | 1 hour | Prevent notification spam |
-| Scheduler failures | 1 hour | Track monitoring issues |
+| Data Type          | Retention Period | Purpose                       |
+| ------------------ | ---------------- | ----------------------------- |
+| Ban/mute context   | 90 days          | Pair with unban/unmute events |
+| Post score cache   | 7 days           | Track high-scoring deletions  |
+| Moderator activity | 1 hour           | Detect rapid-fire actions     |
+| Alert throttling   | 1 hour           | Prevent notification spam     |
+| Scheduler failures | 1 hour           | Track monitoring issues       |
 
 **Important:** Data is automatically deleted after these periods. We do not maintain long-term archives.
 
@@ -108,6 +117,7 @@ All data is stored temporarily in Reddit's Redis infrastructure with automatic e
 ## 7. Data Security
 
 ### 7.1 Security Measures
+
 - All data stored in Reddit's secure infrastructure
 - Webhook URLs encrypted at rest
 - HTTPS-only communication with Slack
@@ -115,6 +125,7 @@ All data is stored temporarily in Reddit's Redis infrastructure with automatic e
 - Input sanitization to prevent injection attacks
 
 ### 7.2 Access Control
+
 - Only subreddit moderators with bot configuration access can view settings
 - Webhook URL is stored securely and not exposed in logs
 - Reddit controls all infrastructure security
@@ -124,12 +135,15 @@ All data is stored temporarily in Reddit's Redis infrastructure with automatic e
 ## 8. User Rights & Deletions
 
 ### 8.1 Respecting Reddit Deletions
+
 When users delete their posts, comments, or accounts on Reddit:
+
 - Post/comment content is removed from our cache within 7-90 days (automatic TTL expiration)
 - Account deletions: User IDs are removed from all stored data
 - The bot respects Reddit's PostDelete and CommentDelete events
 
 ### 8.2 Opting Out
+
 - Subreddit moderators can disable or uninstall the bot at any time via Reddit's app settings
 - Specific moderators can be excluded from notifications via bot settings
 - Uninstalling the bot immediately stops all data collection
@@ -139,12 +153,14 @@ When users delete their posts, comments, or accounts on Reddit:
 ## 9. Third-Party Services
 
 ### 9.1 Slack
+
 - We send notifications to Slack via webhooks
 - Slack's data handling is governed by their own privacy policy
 - We recommend reviewing [Slack's Privacy Policy](https://slack.com/trust/privacy/privacy-policy)
 - You control who has access to your Slack workspace
 
 ### 9.2 No Other Third Parties
+
 We do not integrate with any services other than Slack and Reddit's Devvit platform.
 
 ---
@@ -166,6 +182,7 @@ This bot is designed for use by subreddit moderators (Reddit requires users to b
 ## 12. Changes to This Policy
 
 We may update this Privacy Policy to reflect changes in:
+
 - Bot functionality
 - Data practices
 - Legal requirements
@@ -186,6 +203,7 @@ We may update this Privacy Policy to reflect changes in:
 ## 14. Legal Compliance
 
 This bot complies with:
+
 - ✅ Reddit's [Developer Terms](https://www.redditinc.com/policies/developer-terms)
 - ✅ Reddit's [Developer Data Protection Addendum](https://www.redditinc.com/policies/developer-dpa)
 - ✅ Reddit's [Privacy Policy](https://www.reddit.com/policies/privacy-policy)

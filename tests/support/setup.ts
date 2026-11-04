@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from "vitest";
 
-beforeEach(() => {
-  // The app logs the failures it recovers from. Silence them; tests that care assert on these spies.
-  vi.spyOn(console, 'error').mockImplementation(() => undefined);
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+beforeEach((): void => {
+    // The app logs the failures it recovers from. Silence them; tests that care assert on these spies.
+    vi.spyOn(console, "error").mockImplementation((): void => undefined);
+    vi.spyOn(console, "warn").mockImplementation((): void => undefined);
+    vi.spyOn(console, "log").mockImplementation((): void => undefined);
 });
 
-afterEach(() => {
-  vi.useRealTimers();
+afterEach((): void => {
+    vi.useRealTimers();
 });
