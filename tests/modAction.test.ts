@@ -276,7 +276,7 @@ describe('a mod action', () => {
   });
 
   it('is sent to the notification channel, with any leading #s normalised to one', async () => {
-    const app = await loadApp(devvit, { notificationChannel: ' ##mod-log ' });
+    const app = await loadApp(devvit, { notificationChannel: ' ###mod-log ' });
 
     await app.fire('ModAction', removedPost());
 

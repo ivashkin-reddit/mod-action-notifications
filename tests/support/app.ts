@@ -7,7 +7,7 @@ import { FakeSlack } from './fakeSlack';
 export const NOW = new Date('2026-11-04T12:00:00.000Z');
 
 export interface App {
-  /** What src/main.ts registered with Devvit (it is the app's only module). */
+  /** What the app registered with Devvit. */
   readonly registrations: Registrations;
   /** The installation's settings. Changing a value here changes what the app reads next. */
   readonly settings: Settings;
