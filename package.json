@@ -6,23 +6,28 @@
   "scripts": {
     "dev": "npx devvit start",
     "upload": "npx devvit upload",
-    "lint": "npx eslint src/**/*.ts",
-    "type-check": "npx tsc --noEmit",
-    "test": "npx devvit playtest"
+    "lint": "npx eslint src tests",
+    "type-check": "npx tsc --noEmit && npx tsc -p tests",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "playtest": "npx devvit playtest"
   },
   "dependencies": {
     "@devvit/public-api": "^0.15.2",
     "@devvit/shared-types": "^0.15.2"
   },
   "devDependencies": {
+    "@devvit/protos": "^0.15.2",
     "@types/node": "^26.6.6",
     "@typescript-eslint/eslint-plugin": "^8.72.1",
     "@typescript-eslint/parser": "^8.72.1",
+    "@vitest/coverage-v8": "^5.1.0",
     "devvit": "^0.15.2",
     "eslint": "^10.14.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   }
 }
