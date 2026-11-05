@@ -4,6 +4,7 @@ import { removedPost } from "./support/events.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import type { SlackMessage } from "./support/fakeSlack.js";
 import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "./support/messages.js";
+import { keysBesidesOutbox } from "./support/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -49,7 +50,7 @@ describe("an activity spike", (): void => {
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 
-        expect(app.context.redis.keys()).toStrictEqual([ACTIVITY_KEY]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([ACTIVITY_KEY, "mod_actions:reported:ModAction_1"]);
         await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toStrictEqual([
             { member: "ModAction_1", score: NOW.getTime() },
         ]);
@@ -71,7 +72,7 @@ describe("an activity spike", (): void => {
         expect(statusLines(app)).toContain("• *Status:* Activity spike 5 actions / 1 min");
     });
 
-    it("counts an action delivered twice once", TEST_OPTIONS, async (): Promise<void> => {
+    it("counts an action delivered again once", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -79,8 +80,10 @@ describe("an activity spike", (): void => {
         for (let count = 0; count < 5; count += 1) {
             await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         }
+        await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
 
-        expect(statusLines(app)).toStrictEqual([undefined, undefined, undefined, undefined, undefined]);
+        // One alert for each action, and the second is the moderator's second action, not their sixth.
+        expect(statusLines(app)).toStrictEqual([undefined, undefined]);
     });
 
     // A backlog Devvit delivers at once is not a burst: actions count by when they were taken.
@@ -166,7 +169,7 @@ describe("an activity spike", (): void => {
 
         await app.fire("ModAction", removedPost({ subreddit: undefined }));
 
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
         expect(app.slack.requests).toHaveLength(1);
     });
 

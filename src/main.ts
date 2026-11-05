@@ -10,12 +10,13 @@ import {
     deliverQueuedAlerts,
     alertOnPostDeletion,
     botStatus,
+    invokedByModerator,
     runModqueueMonitor,
     sendSimulatedModAction,
     setUpModqueueMonitor,
     testSlackConnection,
 } from "./composition.js";
-import type { AppContext, BotStatus, ConnectionTest } from "./composition.js";
+import type { AppContext, BotStatus, ConnectionTest, InvokerContext } from "./composition.js";
 import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
@@ -25,7 +26,31 @@ import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
 
 /** The Devvit APIs a menu item or form handler calls. */
-type MenuContext = AppContext & Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
+type MenuContext = AppContext &
+    InvokerContext &
+    Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
+
+const MODERATORS_ONLY_TOAST: Readonly<{ text: string; appearance: "neutral" }> = {
+    text: "🔒 Only this subreddit's moderators can use this.",
+    appearance: "neutral",
+};
+
+/**
+ * Runs `action` for a moderator of the subreddit, and tells anyone else it is not for them. Devvit shows moderator
+ * menu items only to moderators but runs their handlers for whoever invokes them, so every menu item and form
+ * checks for itself. When Reddit cannot say who the user moderates, the action is refused.
+ */
+async function forModerators(context: MenuContext, action: () => Promise<void> | void): Promise<void> {
+    const allowed = await invokedByModerator(context).catch((error: unknown): boolean => {
+        console.error("Failed to check that the user moderates the subreddit; refusing:", error);
+        return false;
+    });
+    if (!allowed) {
+        context.ui.showToast(MODERATORS_ONLY_TOAST);
+        return;
+    }
+    await action();
+}
 
 function describeMonitorJob(status: MonitorJobStatus): string {
     switch (status.state) {
@@ -127,7 +152,25 @@ Devvit.addSchedulerJob({
     },
 });
 
-// Forms and menu items, for moderators only.
+/** Sets up the monitor from the menu, and says how it went. */
+async function setUpFromMenu(context: MenuContext): Promise<void> {
+    try {
+        const result = await setUpModqueueMonitor(context);
+        context.ui.showToast(
+            result.enabled
+                ? {
+                      text: `✅ Modqueue monitoring enabled (Job ID: ${result.jobId === undefined || result.jobId === "" ? "unknown" : result.jobId})`,
+                      appearance: "success",
+                  }
+                : { text: "⚠️ Modqueue monitoring disabled (thresholds set to 0)", appearance: "neutral" },
+        );
+    } catch (error) {
+        console.error("Failed to setup modqueue monitoring:", error);
+        context.ui.showToast({ text: "❌ Failed to setup modqueue monitoring", appearance: "neutral" });
+    }
+}
+
+// Forms and menu items, for moderators only: each checks the user who invokes it.
 
 const testForm = Devvit.createForm(
     {
@@ -147,20 +190,24 @@ const testForm = Devvit.createForm(
         cancelLabel: "Close",
     },
     async (_event: unknown, context: MenuContext): Promise<void> => {
-        context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
+        await forModerators(context, async (): Promise<void> => {
+            context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
+        });
     },
 );
 
 const simulateActionForm = Devvit.createForm(
     simulateForm,
     async ({ values }: Readonly<{ values: SimulateFormValues }>, context: MenuContext): Promise<void> => {
-        try {
-            await sendSimulatedModAction(values, context);
-            context.ui.showToast({ text: "✅ Simulation delivered to Slack!", appearance: "success" });
-        } catch (error) {
-            console.error("Failed to send simulated action", error);
-            context.ui.showToast({ text: "❌ Could not send simulation. Check logs.", appearance: "neutral" });
-        }
+        await forModerators(context, async (): Promise<void> => {
+            try {
+                await sendSimulatedModAction(values, context);
+                context.ui.showToast({ text: "✅ Simulation delivered to Slack!", appearance: "success" });
+            } catch (error) {
+                console.error("Failed to send simulated action", error);
+                context.ui.showToast({ text: "❌ Could not send simulation. Check logs.", appearance: "neutral" });
+            }
+        });
     },
 );
 
@@ -168,8 +215,10 @@ Devvit.addMenuItem({
     label: "Test Slack Connection",
     location: "subreddit",
     forUserType: "moderator",
-    onPress: (_event: unknown, context: MenuContext): void => {
-        context.ui.showForm(testForm);
+    onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
+        await forModerators(context, (): void => {
+            context.ui.showForm(testForm);
+        });
     },
 });
 
@@ -178,7 +227,9 @@ Devvit.addMenuItem({
     location: "subreddit",
     forUserType: "moderator",
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
-        context.ui.showToast({ text: describeStatus(await botStatus(context)), appearance: "neutral" });
+        await forModerators(context, async (): Promise<void> => {
+            context.ui.showToast({ text: describeStatus(await botStatus(context)), appearance: "neutral" });
+        });
     },
 });
 
@@ -186,8 +237,10 @@ Devvit.addMenuItem({
     label: "Simulate Mod Action",
     location: "subreddit",
     forUserType: "moderator",
-    onPress: (_event: unknown, context: MenuContext): void => {
-        context.ui.showForm(simulateActionForm);
+    onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
+        await forModerators(context, (): void => {
+            context.ui.showForm(simulateActionForm);
+        });
     },
 });
 
@@ -196,20 +249,9 @@ Devvit.addMenuItem({
     location: "subreddit",
     forUserType: "moderator",
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
-        try {
-            const result = await setUpModqueueMonitor(context);
-            context.ui.showToast(
-                result.enabled
-                    ? {
-                          text: `✅ Modqueue monitoring enabled (Job ID: ${result.jobId === undefined || result.jobId === "" ? "unknown" : result.jobId})`,
-                          appearance: "success",
-                      }
-                    : { text: "⚠️ Modqueue monitoring disabled (thresholds set to 0)", appearance: "neutral" },
-            );
-        } catch (error) {
-            console.error("Failed to setup modqueue monitoring:", error);
-            context.ui.showToast({ text: "❌ Failed to setup modqueue monitoring", appearance: "neutral" });
-        }
+        await forModerators(context, async (): Promise<void> => {
+            await setUpFromMenu(context);
+        });
     },
 });
 

@@ -14,6 +14,10 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 
 const TEST_OPTIONS = { timeout: 10_000 };
 const QUEUE_KEY = "slack_outbox";
+/** How long the outbox lease lasts: a drain's 10 s budget, a 1.1 s pause, the 30 s fetch timeout and a 5 s margin. */
+const LEASE_MS = 46_100;
+/** The recovery drain a drain that finds work schedules, a second after its lease would expire. */
+const RECOVERY = new Date(NOW.getTime() + LEASE_MS + 1000);
 const DAY = 86_400_000;
 
 /** User`index`'s post removed by ModA. */
@@ -78,7 +82,7 @@ describe("the Slack outbox", (): void => {
             ).toStrictEqual([1100, 1100, 1100, 1100]);
             expect(
                 app.context.redis.keys().filter((key: string): boolean => key.startsWith("slack_outbox")),
-            ).toStrictEqual([]);
+            ).toStrictEqual(["slack_outbox_recovery_scheduled"]);
         },
     );
 
@@ -104,7 +108,10 @@ describe("the Slack outbox", (): void => {
         await burst(app.fire, 12);
 
         expect(app.slack.requests.length).toBeLessThan(12);
-        expect(outboxJobs(app.context.scheduler.jobs)).toHaveLength(1);
+        expect(
+            outboxJobs(app.context.scheduler.jobs).map((job: ScheduledJob): Date | undefined => job.runAt),
+            // The last delivery starts before the 10-second budget runs out, at 11 s; the drain continues a second later.
+        ).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 12_000)]);
 
         await app.runJob("slackOutbox");
 
@@ -124,7 +131,9 @@ describe("the Slack outbox", (): void => {
             await app.fire("ModAction", removal(0));
             await app.fire("ModAction", removal(1));
 
-            expect(outboxJobs(app.context.scheduler.jobs)).toHaveLength(1);
+            expect(
+                outboxJobs(app.context.scheduler.jobs).map((job: ScheduledJob): Date | undefined => job.runAt),
+            ).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 7000 + 30_000)]);
             expect(app.slack.requests).toHaveLength(8);
 
             await app.runJob("slackOutbox");
@@ -249,7 +258,7 @@ describe("the Slack outbox", (): void => {
             expect(app.slack.requests).toHaveLength(1);
             expect(
                 outboxJobs(app.context.scheduler.jobs).map((job: ScheduledJob): Date | undefined => job.runAt),
-            ).toStrictEqual([new Date(NOW.getTime() + 60_000)]);
+            ).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 60_000)]);
         },
     );
 
@@ -261,7 +270,8 @@ describe("the Slack outbox", (): void => {
 
         const app = await loadApp(devvit);
         await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "late"));
-        app.context.redis.zRange.mockResolvedValueOnce([]);
+        // The drain looks twice before it lets go: once as it takes the lease, and once to deliver.
+        app.context.redis.zRange.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
         await app.runJob("slackOutbox");
 

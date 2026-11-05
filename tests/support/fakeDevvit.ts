@@ -20,6 +20,8 @@ export type SettingDefinition = Readonly<{
     defaultValue?: unknown;
     options?: readonly Option[];
     multiSelect?: boolean;
+    /** Checks a value as the settings form saves it: a message rejects the value. */
+    onValidate?: (event: Readonly<{ value?: unknown; isEditing: boolean }>, context: unknown) => unknown;
 }>;
 
 export type MenuItemDefinition = Readonly<{

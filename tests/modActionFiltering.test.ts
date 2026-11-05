@@ -4,6 +4,7 @@ import { removedPost } from "./support/events.js";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./support/fakeContext.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "./support/messages.js";
+import { keysBesidesOutbox } from "./support/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -32,7 +33,9 @@ describe("which mod actions are sent", (): void => {
         await app.fire("ModAction", removedPost());
 
         expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith("Invalid Slack webhook URL: must start with https://");
+        expect(console.error).toHaveBeenCalledWith(
+            "Invalid Slack webhook URL: must be an https://hooks.slack.com/ URL",
+        );
     });
 
     it("trims spaces around the webhook URL", TEST_OPTIONS, async (): Promise<void> => {
@@ -262,6 +265,6 @@ describe("autoModerator actions", (): void => {
         expect(app.slack.messages.map((message): string | undefined => lastLine(message))).toStrictEqual(
             Array<string>(6).fill("• *Status:* Origin AutoModerator"),
         );
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
     });
 });

@@ -71,9 +71,15 @@ After installation, configure the app through Reddit:
 4. Optionally set different channels for regular notifications vs. elevated alerts
 5. Configure modqueue monitoring thresholds if desired. Setting all three to 0 turns monitoring off; after turning it on or off, run the **Setup Modqueue Monitoring** menu item to schedule or cancel the monitor
 
-The channel settings rely on Slack letting a message choose its channel, which only legacy incoming webhooks allow. A webhook created by a Slack app always posts to the channel picked when it was created, so with one, create a webhook per channel instead.
+The channel settings rely on Slack letting a message choose its channel, which only legacy incoming webhooks allow. A webhook created by a Slack app always posts to the channel picked when it was created: with one, every alert goes to that channel and the channel settings have no effect.
 
 Once saved, perform any moderator action from the enabled list to confirm Slack is receiving notifications. Use the **Test Slack Connection** menu item for a test notification.
+
+## Fetch Domains
+
+The following domain is requested for this app:
+
+- `hooks.slack.com` - Slack incoming webhooks: the app posts moderation alerts to the webhook URL a subreddit's moderators enter in the app's settings, and the settings accept only a `https://hooks.slack.com/` URL. The app fetches no other domain.
 
 ## Customization
 

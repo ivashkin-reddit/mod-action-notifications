@@ -14,6 +14,12 @@ const TEST_OPTIONS = { timeout: 5000 };
 
 const removal = modActionEvent({ action: "removelink", moderator: { name: "ModA" }, targetUser: { name: "Author" } });
 
+/**
+ * The recovery drain a drain that finds work schedules, for in case it dies: after its lease (10 s budget, 1.1 s
+ * pause, 30 s fetch timeout, 5 s margin) and a second more.
+ */
+const RECOVERY = new Date(NOW.getTime() + 47_100);
+
 /** When each scheduled later drain of the outbox is due. */
 function outboxJobs(
     app: Readonly<{ context: Readonly<{ scheduler: Readonly<{ jobs: readonly ScheduledJob[] }> }> }>,
@@ -79,7 +85,7 @@ describe("delivering an alert to Slack", (): void => {
                         "Check: 1) Webhook URL is valid, 2) Slack workspace permissions, 3) Network connectivity",
                 },
             );
-            expect(outboxJobs(app)).toStrictEqual([new Date(NOW.getTime() + 7000 + 30_000)]);
+            expect(outboxJobs(app)).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 7000 + 30_000)]);
         },
     );
 
@@ -99,7 +105,7 @@ describe("delivering an alert to Slack", (): void => {
                 "Slack webhook request failed - verify webhook URL is correct:",
                 expect.objectContaining({ status }),
             );
-            expect(outboxJobs(app)).toStrictEqual([]);
+            expect(outboxJobs(app)).toStrictEqual([RECOVERY]);
         },
     );
 
@@ -154,7 +160,7 @@ describe("delivering an alert to Slack", (): void => {
                     troubleshooting: "Verify webhook URL in settings and check Slack status at status.slack.com",
                 },
             );
-            expect(outboxJobs(app)).toHaveLength(1);
+            expect(outboxJobs(app)).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 30_000)]);
         },
     );
 

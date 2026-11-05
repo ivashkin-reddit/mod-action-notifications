@@ -177,6 +177,55 @@ describe("installing or upgrading the app", (): void => {
     });
 });
 
+// Devvit can deliver a trigger twice at once, and a moderator can press Setup as the app installs: each setup can find
+// no job and schedule one.
+describe("setups that run at once", (): void => {
+    it("leave one monitor job when AppUpgrade is delivered twice at once", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await Promise.all([
+            app.fire("AppUpgrade", { type: "AppUpgrade" }),
+            app.fire("AppUpgrade", { type: "AppUpgrade" }),
+        ]);
+
+        expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+    });
+
+    it("leave one monitor job when Setup is pressed as the app installs", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await Promise.all([
+            app.fire("AppInstall", { type: "AppInstall" }),
+            app.pressMenuItem("Setup Modqueue Monitoring"),
+        ]);
+
+        expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+        expect(app.toasts).toStrictEqual([
+            { text: "✅ Modqueue monitoring enabled (Job ID: job-1)", appearance: "success" },
+        ]);
+    });
+
+    it("still report the job scheduled when listing jobs again fails", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        const failure = new Error("scheduler down");
+        app.context.scheduler.listJobs.mockResolvedValueOnce([]).mockRejectedValueOnce(failure);
+
+        await app.pressMenuItem("Setup Modqueue Monitoring");
+
+        expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+        expect(app.toasts).toStrictEqual([
+            { text: "✅ Modqueue monitoring enabled (Job ID: job-1)", appearance: "success" },
+        ]);
+        expect(console.error).toHaveBeenCalledWith("Failed to list monitor jobs after scheduling one:", failure);
+    });
+});
+
 describe("the Setup Modqueue Monitoring menu item", (): void => {
     it("schedules the monitor and shows its job ID", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

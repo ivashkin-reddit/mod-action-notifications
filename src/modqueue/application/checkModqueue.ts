@@ -47,19 +47,26 @@ async function alertIfOld({ alert, items, ageHours }: AgeCheck, ports: CheckModq
     await (alert === "unmoderated" ? ports.alerts.waitingTooLong(content) : ports.alerts.reportedContentOld(content));
 }
 
-async function countFailure(ports: CheckModqueuePorts, error: Readonly<Error>): Promise<void> {
+async function countFailure(ports: CheckModqueuePorts, errorMessage: string): Promise<void> {
     try {
         const failures = await ports.store.countFailure();
         if (failures < FAILURES_BEFORE_ALERT) {
             await ports.store.expireFailuresAfter(FAILURE_MEMORY_SECONDS);
             return;
         }
-        await ports.alerts.monitorFailing({ failures, error: error.message });
+        await ports.alerts.monitorFailing({ failures, error: errorMessage });
         await ports.store.clearFailures();
-    } catch {
-        // Failure tracking must not break the scheduler.
-        console.error("Failed to track scheduler failures");
+    } catch (trackingError) {
+        // The run has already failed, and rejects with its own error; failing to count it must not replace that.
+        console.error("Failed to track scheduler failures:", trackingError);
     }
+}
+
+/** Clears the failure count after a run that succeeded; a count left behind expires within the hour. */
+async function clearFailuresAfterSuccess(store: MonitorStore): Promise<void> {
+    await store.clearFailures().catch((error: unknown): void => {
+        console.error("Failed to clear the modqueue monitor's failure count:", error);
+    });
 }
 
 /**
@@ -82,29 +89,21 @@ async function checkQueues(
         const items = await queues.reported();
         await alertIfOld({ alert: "reported", items, ageHours: thresholds.reportedAgeHours }, ports);
     }
-    try {
-        await ports.store.clearFailures();
-    } catch {
-        // A stale failure count expires within the hour.
-    }
+    await clearFailuresAfterSuccess(ports.store);
 }
 
 /**
  * One run of the modqueue monitor: alerts when the modqueue is too long, when content has waited unreviewed too
- * long, and when reported content is too old, each at most once an hour. A run that fails to read a listing is
- * counted, and the third failure in a row alerts moderators; the run then rejects so the scheduler records the
- * failure. Failing to open the subreddit at all rejects without being counted.
+ * long, and when reported content is too old, each at most once an hour. Every run that fails is counted, however
+ * it fails, and the third failure in a row alerts moderators; the run then rejects so the scheduler records the
+ * failure.
  */
 export async function checkModqueue(thresholds: MonitorThresholds, ports: CheckModqueuePorts): Promise<void> {
-    const queues = await ports.openQueues();
-
     try {
-        await checkQueues(queues, thresholds, ports);
+        await checkQueues(await ports.openQueues(), thresholds, ports);
     } catch (error) {
         console.error("Failed to check modqueue:", error);
-        if (error instanceof Error) {
-            await countFailure(ports, error);
-        }
+        await countFailure(ports, error instanceof Error ? error.message : String(error));
         throw error;
     }
 }

@@ -11,13 +11,19 @@ const MAX_TRACKED_ACTIONS = 100;
 const DISCIPLINE_RETENTION_SECONDS = 7_776_000;
 /** At most this many of a user's bans, mutes and liftings are kept: an unban needs only the latest. */
 const MAX_DISCIPLINE_EVENTS = 20;
+/** How long a reported action is remembered, so that Devvit delivering it again sends no second alert. A day. */
+const REPORT_MEMORY_SECONDS = 86_400;
 
 type ModerationRedis = Readonly<
-    Pick<TriggerContext["redis"], "get" | "del" | "expire" | "zAdd" | "zRemRangeByScore" | "zRemRangeByRank" | "zRange">
+    Pick<
+        TriggerContext["redis"],
+        "get" | "set" | "del" | "expire" | "zAdd" | "zRemRangeByScore" | "zRemRangeByRank" | "zRange"
+    >
 >;
 
 type ActivityRecords = Pick<ModerationRecords, "countAction">;
 type DisciplineRecords = Pick<ModerationRecords, "recordDiscipline" | "disciplineEvents">;
+type ReportRecords = Pick<ModerationRecords, "claimReport">;
 
 // Installations already hold values under these keys, in these shapes.
 function keyPart(value: string): string {
@@ -35,6 +41,11 @@ function activityKey({ subredditName, moderatorName }: ModeratorRef): string {
 /** The member an action is counted under: its ID, or, for an action without one, a member of its own. */
 function activityMember(id: string | undefined, at: number): string {
     return id === undefined || id === "" ? `${String(at)}:${String(Math.random())}` : id;
+}
+
+/** Present while the mod action with this ID has been reported within the last day. */
+function reportedKey(actionId: string): string {
+    return `mod_actions:reported:${actionId}`;
 }
 
 /** A sorted set of the user's bans or mutes and their liftings, scored by when each was taken. */
@@ -171,6 +182,18 @@ function disciplineRecords(redis: ModerationRedis): DisciplineRecords {
     };
 }
 
+// One atomic SET NX, so deliveries of one action handled at once cannot both claim its report. Redis answers an NX
+// set that finds the key with nil, which Devvit returns as "".
+function reportRecords(redis: ModerationRedis): ReportRecords {
+    return {
+        claimReport: async (actionId: string): Promise<boolean> =>
+            (await redis.set(reportedKey(actionId), "1", {
+                nx: true,
+                expiration: new Date(Date.now() + REPORT_MEMORY_SECONDS * MS_PER_SECOND),
+            })) !== "",
+    };
+}
+
 export function createRedisModerationRecords(redis: ModerationRedis): ModerationRecords {
-    return { ...activityRecords(redis), ...disciplineRecords(redis) };
+    return { ...activityRecords(redis), ...disciplineRecords(redis), ...reportRecords(redis) };
 }

@@ -3,6 +3,7 @@ import { loadApp } from "./support/app.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { lastField, NOW_SECONDS } from "./support/messages.js";
 import { freshQueue, queuedComment, queuedPost } from "./support/queue.js";
+import { keysBesidesOutbox } from "./support/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -226,7 +227,7 @@ describe("the modqueue monitor", (): void => {
             "⚠️ Modqueue Alert: 1 items pending",
             "⏰ Unmoderated Content Alert: 1 items over 1h old",
         ]);
-        expect(app.context.redis.keys()).toStrictEqual([
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([
             "mod_actions:throttle:modqueue_size",
             "mod_actions:throttle:modqueue_unmoderated",
         ]);

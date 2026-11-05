@@ -1,4 +1,4 @@
-import type { TriggerContext } from "@devvit/public-api";
+import type { TriggerContext, User } from "@devvit/public-api";
 import {
     createModListCache,
     createRedditModerationLookups,
@@ -38,6 +38,7 @@ import type {
 import {
     alertOnUserDeletion,
     createRedditPostLookup,
+    createRedisDeletionClaims,
     createSlackPostDeletionAlerts,
     postDeletionFromTriggerEvent,
 } from "./postDeletion/index.js";
@@ -83,6 +84,15 @@ export type AppContext = Readonly<{
     subredditName?: string | undefined;
 }>;
 
+/** What the moderator check reads of the user who pressed a menu item or submitted a form. */
+export type InvokerContext = Readonly<{
+    reddit: Readonly<{
+        getCurrentUser: () => Promise<Readonly<Pick<User, "getModPermissionsForSubreddit">> | undefined>;
+        getCurrentSubredditName: () => Promise<string>;
+    }>;
+    subredditName?: string | undefined;
+}>;
+
 export interface BotStatus {
     readonly monitoringEnabled: boolean;
     readonly webhookConfigured: boolean;
@@ -93,6 +103,23 @@ export interface BotStatus {
 // read successfully, and its mod list as last fetched.
 const loadConfig = createConfigLoader();
 const modListCache = createModListCache();
+
+/**
+ * Whether the user who pressed a menu item or submitted a form moderates the subreddit: false for a logged-out user.
+ * Devvit only hides a moderator menu item from other users; it calls the handler for whoever invokes it, and shows
+ * a form to whoever that handler shows it to. Rejects when Reddit cannot say.
+ */
+export async function invokedByModerator(context: InvokerContext): Promise<boolean> {
+    const user = await context.reddit.getCurrentUser();
+    if (user === undefined) {
+        return false;
+    }
+    const subredditName =
+        context.subredditName === undefined || context.subredditName === ""
+            ? await context.reddit.getCurrentSubredditName()
+            : context.subredditName;
+    return (await user.getModPermissionsForSubreddit(subredditName)).length > 0;
+}
 
 async function configOf(context: AppContext): Promise<AppConfig> {
     return await loadConfig(context.settings, context.subredditId);
@@ -230,6 +257,7 @@ export async function alertOnPostDeletion(event: PostDeleteEvent, context: AppCo
     }
     await alertOnUserDeletion(postDeletionConfig(config), postDeletionFromTriggerEvent(event), {
         posts: createRedditPostLookup(context.reddit),
+        claims: createRedisDeletionClaims(context.redis),
         alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
     });
 }

@@ -4,6 +4,7 @@ import { bigPost, DeletionReason, DeletionSource, userDeletion } from "./support
 import type { Settings } from "./support/fakeContext.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { lastField } from "./support/messages.js";
+import { keysBesidesOutbox } from "./support/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -51,7 +52,7 @@ describe("a user deleting their own post", (): void => {
         ]);
     });
 
-    it("keeps nothing in Redis", TEST_OPTIONS, async (): Promise<void> => {
+    it("keeps only that the deletion was alerted, for a day", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -59,7 +60,8 @@ describe("a user deleting their own post", (): void => {
 
         await app.fire("PostDelete", userDeletion());
 
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual(["post_deletion:alerted:t3_big"]);
+        expect(app.context.redis.ttlSeconds("post_deletion:alerted:t3_big")).toBe(86_400);
     });
 
     it("is not alerted while the score is below the threshold", TEST_OPTIONS, async (): Promise<void> => {

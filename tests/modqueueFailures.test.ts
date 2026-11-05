@@ -128,7 +128,7 @@ describe("a failing modqueue monitor run", (): void => {
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
     });
 
-    it("does not count a failure that is not an Error", TEST_OPTIONS, async (): Promise<void> => {
+    it("counts a failure that is not an Error", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -136,19 +136,22 @@ describe("a failing modqueue monitor run", (): void => {
 
         await expect(app.runJob("modqueueMonitor")).rejects.toBe("reddit said no");
 
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
     });
 
-    it("does not count a failure to look up the subreddit", TEST_OPTIONS, async (): Promise<void> => {
+    // The failure alert says monitoring is not working, which a subreddit Reddit cannot look up means as much as a
+    // listing it cannot read.
+    it("counts a failure to look up the subreddit", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.reddit.getCurrentSubreddit.mockRejectedValue(new Error("reddit down"));
+        const failure = new Error("reddit down");
+        app.context.reddit.getCurrentSubreddit.mockRejectedValue(failure);
 
         await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit down");
 
-        expect(app.context.redis.keys()).toStrictEqual([]);
-        expect(console.error).not.toHaveBeenCalled();
+        await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
+        expect(console.error).toHaveBeenCalledWith("Failed to check modqueue:", failure);
     });
 
     it(
@@ -163,7 +166,7 @@ describe("a failing modqueue monitor run", (): void => {
 
             await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
 
-            expect(console.error).toHaveBeenCalledWith("Failed to track scheduler failures");
+            expect(console.error).toHaveBeenCalledWith("Failed to track scheduler failures:", new Error("redis down"));
         },
     );
 });

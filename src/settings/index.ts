@@ -5,6 +5,34 @@ const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 const DECIMAL = 10;
+/** The only host the app may fetch (devvit.json permissions.http.domains): a Slack incoming webhook's. */
+const SLACK_WEBHOOK_HOST = "hooks.slack.com";
+const WEBHOOK_URL_PROBLEM = "Enter a Slack incoming webhook URL, starting https://hooks.slack.com/";
+const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
+
+/** The text as a URL, or undefined when it is not one. */
+function urlOf(text: string): URL | undefined {
+    try {
+        return new URL(text);
+    } catch {
+        // Not a URL: what a moderator typed, which the caller reports.
+        return undefined;
+    }
+}
+
+/** Why the text cannot be the webhook URL, or undefined when it can: blank (no alerts) or an https Slack webhook. */
+function webhookUrlProblem(text: string): string | undefined {
+    if (text === "") {
+        return undefined;
+    }
+    const url = urlOf(text);
+    return url?.protocol === "https:" && url.hostname === SLACK_WEBHOOK_HOST ? undefined : WEBHOOK_URL_PROBLEM;
+}
+
+/** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
+function wholeNumberProblem(value: number | undefined): string | undefined {
+    return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
+}
 
 /**
  * What the Enabled Mod Actions setting offers, and those it starts with. The moderation module knows the mod
@@ -55,6 +83,8 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         label: "Modqueue Size Alert Threshold",
         helpText: "Send alert when modqueue exceeds this many items (0 to disable)",
         defaultValue: DEFAULT_MODQUEUE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
     },
     {
         type: "number",
@@ -64,6 +94,8 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         helpText:
             "Alert when posts/comments have waited this many hours without a moderator reviewing them (0 to disable)",
         defaultValue: DEFAULT_UNMODERATED_AGE_HOURS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
     },
     {
         type: "number",
@@ -72,6 +104,8 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         helpText:
             "Alert when reported posts/comments at least this many hours old are waiting for review (0 to disable)",
         defaultValue: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
     },
     {
         type: "boolean",
@@ -86,6 +120,8 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         label: "Post Deletion Alert Threshold",
         helpText: "Alert when deleted posts had at least this many upvotes (0 to disable)",
         defaultValue: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
     },
 ];
 
@@ -101,7 +137,9 @@ export function settingsDefinitions(modActions: ModActionChoices): SettingsFormF
             type: "string",
             name: "slackWebhookUrl",
             label: "Slack Webhook URL",
-            helpText: "The Slack webhook URL to send mod action notifications to",
+            helpText: "The Slack incoming webhook URL to send notifications to (https://hooks.slack.com/...)",
+            onValidate: ({ value }: Readonly<{ value?: string | undefined }>): string | undefined =>
+                webhookUrlProblem((value ?? "").trim()),
         },
         {
             type: "select",
@@ -118,7 +156,7 @@ export function settingsDefinitions(modActions: ModActionChoices): SettingsFormF
 
 /** The installation's settings, validated. */
 export interface AppConfig {
-    /** An https URL, or '' when none is set or the one set is not https. */
+    /** An https://hooks.slack.com/ URL, or '' when none is set or the one set is not one. */
     readonly slackWebhookUrl: string;
     readonly enabledActions: readonly string[];
     /** Lower-cased usernames, from the comma-separated setting. */
@@ -159,13 +197,13 @@ const DEFAULT_CONFIG: AppConfig = {
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
 };
 
-/** An https URL, or '' (logging an error when the setting is not https). */
+/** An https Slack webhook URL, or '' (logging an error for a setting saved before it was checked on saving). */
 function webhookUrl(value: SettingValue): string {
     const url = typeof value === "string" ? value.trim() : "";
-    if (url === "" || url.startsWith("https://")) {
+    if (webhookUrlProblem(url) === undefined) {
         return url;
     }
-    console.error("Invalid Slack webhook URL: must start with https://");
+    console.error("Invalid Slack webhook URL: must be an https://hooks.slack.com/ URL");
     return "";
 }
 

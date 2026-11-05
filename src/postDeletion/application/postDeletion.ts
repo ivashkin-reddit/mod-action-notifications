@@ -1,6 +1,6 @@
 import { deletionAlertsOn, deservesAlert } from "../domain/posts.js";
 import type { PostDeletion } from "../domain/posts.js";
-import type { PostDeletionAlerts, PostLookup } from "./ports.js";
+import type { DeletionAlertClaims, PostDeletionAlerts, PostLookup } from "./ports.js";
 
 export interface PostDeletionConfig {
     /** 0 turns deleted-post alerts off. */
@@ -9,7 +9,20 @@ export interface PostDeletionConfig {
 
 export interface PostDeletionPorts {
     readonly posts: PostLookup;
+    readonly claims: DeletionAlertClaims;
     readonly alerts: PostDeletionAlerts;
+}
+
+/**
+ * Whether this delivery of the deletion is the first, so the one to alert: Devvit can deliver an event more than
+ * once. Claimed just before the alert is queued; a claim that cannot be stored alerts anyway, as a second alert is
+ * better than none.
+ */
+async function isFirstDelivery(postId: string, claims: DeletionAlertClaims): Promise<boolean> {
+    return await claims.claim(postId).catch((error: unknown): boolean => {
+        console.error("Failed to record an alerted post deletion; alerting anyway:", error);
+        return true;
+    });
 }
 
 async function alertIfHighScore(
@@ -19,7 +32,7 @@ async function alertIfHighScore(
 ): Promise<void> {
     // Votes fire no trigger, so the score that counts is the one Reddit shows as the post is deleted.
     const post = await ports.posts.deletedPost(deletion.postId);
-    if (!deservesAlert(post.score, config.upvoteThreshold)) {
+    if (!deservesAlert(post.score, config.upvoteThreshold) || !(await isFirstDelivery(deletion.postId, ports.claims))) {
         return;
     }
     await ports.alerts.highScorePostDeleted({

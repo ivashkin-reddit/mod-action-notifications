@@ -6,19 +6,29 @@ import type { Delivery } from "./webhook.js";
 /** The scheduler job that delivers what an earlier drain left queued; the composition root registers it. */
 export const OUTBOX_JOB_NAME = "slackOutbox";
 
-// The queue, a sorted set of messages scored by when each was queued, and its bookkeeping. A drain that delivers
-// everything leaves none of these behind.
+// The queue, a sorted set of messages scored by when each was queued, and its bookkeeping, each of which expires.
 const QUEUE_KEY = "slack_outbox";
 const LEASE_KEY = "slack_outbox_lease";
+/** Present while a drain is scheduled to continue where one left off. */
 const DRAIN_SCHEDULED_KEY = "slack_outbox_drain_scheduled";
+/** Present while a drain is scheduled to follow one that may die before it finishes. */
+const RECOVERY_SCHEDULED_KEY = "slack_outbox_recovery_scheduled";
 
 const MS_PER_SECOND = 1000;
 /** Slack takes about one message a second from a webhook. */
 const SEND_INTERVAL_MS = 1100;
-/** One drain delivers for at most this long, so the trigger or job running it finishes well within its time. */
+/** One drain starts delivering for at most this long, so the trigger or job running it finishes well within its time. */
 const DRAIN_BUDGET_MS = 10_000;
-/** Longer than any drain: a drain that dies holds the queue for at most this long. */
-const LEASE_SECONDS = 60;
+/** Devvit ends an HTTP request after this long (developers.reddit.com/docs, 0.15, HTTP Fetch: "HTTP timeout limit"). */
+const FETCH_TIMEOUT_MS = 30_000;
+/** The Redis commands a drain makes after its last request. */
+const LEASE_MARGIN_MS = 5000;
+/**
+ * Longer than any drain can hold it: its budget, then a pause before the next message, then a request that runs
+ * to the fetch timeout. So a drain never outlives its lease, and letting go of the lease never frees another's; a
+ * drain that dies holds the queue for at most this long.
+ */
+const LEASE_MS = DRAIN_BUDGET_MS + SEND_INTERVAL_MS + FETCH_TIMEOUT_MS + LEASE_MARGIN_MS;
 /** A message queued longer than this is dropped: it is no longer news. A day. */
 const MAX_AGE_SECONDS = 86_400;
 /** At most this many messages wait; beyond that the oldest are dropped. */
@@ -165,39 +175,59 @@ async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
     return (await deliverNext(drain, queued)) ?? (await drainQueue(drain, Date.now()));
 }
 
-/** Drains the queue while holding the lease; undefined when another drain holds it, and will deliver the queue. */
-async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | undefined> {
-    const leased =
-        (await outbox.redis.set(LEASE_KEY, String(Date.now()), {
-            nx: true,
-            expiration: new Date(Date.now() + LEASE_SECONDS * MS_PER_SECOND),
-        })) !== "";
-    if (!leased) {
-        return undefined;
-    }
-    try {
-        return await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, 0);
-    } finally {
-        await outbox.redis.del(LEASE_KEY);
-    }
-}
-
-/** Schedules one later drain; a drain already scheduled covers this one. */
+/** Schedules one drain to continue later; a continuation already scheduled covers this one. */
 async function scheduleDrain({ redis, scheduler }: OutboxDependencies, afterMs: number): Promise<void> {
     const runAt = new Date(Date.now() + afterMs);
     const claimed =
         (await redis.set(DRAIN_SCHEDULED_KEY, runAt.toISOString(), {
             nx: true,
-            expiration: new Date(runAt.getTime() + LEASE_SECONDS * MS_PER_SECOND),
+            expiration: new Date(runAt.getTime() + LEASE_MS),
         })) !== "";
     if (claimed) {
         await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
     }
 }
 
+/**
+ * Schedules a drain for after the current lease has expired, for when the drain holding it dies first: Devvit ends
+ * a handler that runs too long, and a Slack request can take up to the fetch timeout. Without it, what that drain
+ * left queued would wait for the next alert. A recovery already scheduled covers this one; it expires as its drain
+ * runs, so a drain that finds the lease held can schedule the next.
+ */
+async function scheduleRecovery({ redis, scheduler }: OutboxDependencies): Promise<void> {
+    const runAt = new Date(Date.now() + LEASE_MS + MS_PER_SECOND);
+    const claimed =
+        (await redis.set(RECOVERY_SCHEDULED_KEY, runAt.toISOString(), { nx: true, expiration: runAt })) !== "";
+    if (claimed) {
+        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
+    }
+}
+
+/** Drains the queue while holding the lease; undefined when another drain holds it, and will deliver the queue. */
+async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | undefined> {
+    const leased =
+        (await outbox.redis.set(LEASE_KEY, String(Date.now()), {
+            nx: true,
+            expiration: new Date(Date.now() + LEASE_MS),
+        })) !== "";
+    if (!leased) {
+        return undefined;
+    }
+    try {
+        if ((await oldest(outbox)) !== undefined) {
+            await scheduleRecovery(outbox);
+        }
+        return await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, 0);
+    } finally {
+        await outbox.redis.del(LEASE_KEY);
+    }
+}
+
 async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
     const end = await drainUnderLease(outbox);
     if (end === undefined) {
+        // Another drain holds the lease and will deliver what is queued; should it die first, a recovery does.
+        await scheduleRecovery(outbox);
         return;
     }
     if (end.until === "later") {
@@ -215,8 +245,9 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
 /**
  * Alerts as a queue in Redis, delivered oldest first at the pace Slack takes them, so a burst of mod actions is
  * delivered in full rather than rate-limited away. One drain delivers at a time (a lease); what it cannot deliver in
- * its time, or while Slack is failing, waits for a scheduled later drain. A message is delivered at least once: a
- * request Slack took but whose answer was lost is sent again.
+ * its time, or while Slack is failing, waits for a scheduled later drain, and what a drain that dies leaves waits for
+ * a recovery drain after its lease expires. A message is delivered at least once: a request Slack took but whose
+ * answer was lost, or that a dying drain made, is sent again.
  */
 export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {

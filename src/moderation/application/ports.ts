@@ -22,6 +22,11 @@ export interface ModerationRecords {
     readonly recordDiscipline: (subject: DisciplineSubject, event: DisciplineEvent) => Promise<void>;
     /** The subject's recorded events, in no particular order; [] when none. */
     readonly disciplineEvents: (subject: DisciplineSubject) => Promise<readonly DisciplineEvent[]>;
+    /**
+     * Claims the report of the action with this ID: true the first time, false when it was already claimed within
+     * the last day, as for an event Devvit delivers again. Safe for deliveries handled at once: one claims it.
+     */
+    readonly claimReport: (actionId: string) => Promise<boolean>;
 }
 
 /** What mod-action alerts look up on Reddit. */

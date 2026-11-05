@@ -27,8 +27,8 @@ async function withBanFromModLog(modAction: ModAction, lookups: ModerationLookup
     try {
         const entry = matchBanLogEntry(await lookups.recentBans(modAction.subredditName), modAction);
         return entry === undefined ? modAction : withBanLogEntry(modAction, entry);
-    } catch {
-        // The alert goes out without the length.
+    } catch (error) {
+        console.error("Failed to read the mod log for a ban's length; alerting without it:", error);
         return modAction;
     }
 }
@@ -47,9 +47,17 @@ async function withDiscipline(modAction: ModAction, records: ModerationRecords):
     const event = disciplineEventOf(modAction, step.change);
     const relatedAction =
         step.change === "lifted"
-            ? liftedBy(await records.disciplineEvents(subject).catch((): readonly DisciplineEvent[] => []), event.at)
+            ? liftedBy(
+                  await records.disciplineEvents(subject).catch((error: unknown): readonly DisciplineEvent[] => {
+                      console.error("Failed to read a user's bans and mutes; alerting without the one lifted:", error);
+                      return [];
+                  }),
+                  event.at,
+              )
             : undefined;
-    await records.recordDiscipline(subject, event).catch((): undefined => undefined);
+    await records.recordDiscipline(subject, event).catch((error: unknown): void => {
+        console.error("Failed to record a ban or mute; a later unban or unmute will not name it:", error);
+    });
     return step.change === "lifted" ? { ...modAction, relatedAction } : modAction;
 }
 
@@ -64,7 +72,10 @@ async function withActivity(modAction: ModAction, records: ModerationRecords): P
     }
     const actionCount = await records
         .countAction(moderator, { id: modAction.id, at: modAction.occurredAt.getTime() }, ACTIVITY_WINDOW_MS)
-        .catch((): undefined => undefined);
+        .catch((error: unknown): undefined => {
+            console.error("Failed to count a moderator's action; alerting without spike detection:", error);
+            return undefined;
+        });
     return actionCount === undefined ? modAction : { ...modAction, activitySpike: activitySpike(actionCount) };
 }
 
@@ -103,10 +114,25 @@ async function actorOf(modAction: ModAction, config: ModerationConfig, lookups: 
 }
 
 /**
+ * Whether this delivery of the action is the first, so the one to report: Devvit can deliver an event more than
+ * once. An action without an ID cannot be told apart from another, and is reported; so is one whose claim cannot be
+ * stored, as a second alert is better than none.
+ */
+async function isFirstDelivery(modAction: ModAction, records: ModerationRecords): Promise<boolean> {
+    if (isBlank(modAction.id)) {
+        return true;
+    }
+    return await records.claimReport(modAction.id).catch((error: unknown): boolean => {
+        console.error("Failed to record a reported mod action; reporting it anyway:", error);
+        return true;
+    });
+}
+
+/**
  * Tells moderators about a mod action. Every action, sent or not, is first completed from the mod log (a ban
  * without a length), remembered or matched against what it lifts (bans and mutes), and counted toward its
  * moderator's activity (except AutoModerator's and Reddit's). Only an action that is reported has its moderator
- * checked against the mod list.
+ * checked against the mod list, and an action delivered again is reported once.
  */
 export async function notifyModAction(
     action: ModAction,
@@ -117,7 +143,12 @@ export async function notifyModAction(
         await withDiscipline(await withBanFromModLog(action, ports.lookups), ports.records),
         ports.records,
     );
-    if (isReported(modAction, config)) {
-        await ports.alerts.report(modAction, await actorOf(modAction, config, ports.lookups));
+    if (!isReported(modAction, config)) {
+        return;
+    }
+    const actor = await actorOf(modAction, config, ports.lookups);
+    // Claimed just before the alert is queued, so a delivery that fails earlier leaves the report to the next one.
+    if (await isFirstDelivery(modAction, ports.records)) {
+        await ports.alerts.report(modAction, actor);
     }
 }

@@ -3,6 +3,7 @@ import { loadApp } from "./support/app.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { NOW_SECONDS } from "./support/messages.js";
 import { queuedComment, queuedPost } from "./support/queue.js";
+import { keysBesidesOutbox } from "./support/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -68,7 +69,7 @@ describe("the old reported content alert", (): void => {
         await app.runJob("modqueueMonitor");
 
         expect(app.slack.requests).toHaveLength(1);
-        expect(app.context.redis.keys()).toStrictEqual(["mod_actions:throttle:modqueue_reported"]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual(["mod_actions:throttle:modqueue_reported"]);
         expect(app.context.redis.ttlSeconds("mod_actions:throttle:modqueue_reported")).toBe(3600);
     });
 

@@ -37,7 +37,7 @@ When a user deletes their own post, the Bot reads from Reddit at that moment, an
 - **Post authors** (usernames only)
 - **Post permalinks**
 
-None of this is stored.
+None of this is stored. Only the post's ID is kept, for a day, so that an alert is not sent twice.
 
 ### 2.3 Configuration Data
 
@@ -106,13 +106,14 @@ We **do not**:
 
 All data is stored temporarily in Reddit's Redis infrastructure with automatic expiration:
 
-| Data Type                  | Retention Period | Purpose                                           |
-| -------------------------- | ---------------- | ------------------------------------------------- |
-| Ban/mute history           | 90 days          | Pair unbans/unmutes with the bans/mutes they lift |
-| Queued Slack notifications | Up to 1 day      | Deliver notifications at the rate Slack accepts   |
-| Moderator activity         | 1 hour           | Detect rapid-fire actions                         |
-| Alert throttling           | 1 hour           | Prevent notification spam                         |
-| Scheduler failures         | 1 hour           | Track monitoring issues                           |
+| Data Type                                     | Retention Period | Purpose                                                          |
+| --------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| Ban/mute history                              | 90 days          | Pair unbans/unmutes with the bans/mutes they lift                |
+| Queued Slack notifications                    | Up to 1 day      | Deliver notifications at the rate Slack accepts                  |
+| Moderator activity                            | 1 hour           | Detect rapid-fire actions                                        |
+| Alert throttling                              | 1 hour           | Prevent notification spam                                        |
+| Alerts already sent (mod action and post IDs) | 1 day            | Avoid sending an alert twice when Reddit delivers an event again |
+| Scheduler failures                            | 1 hour           | Track monitoring issues                                          |
 
 **Important:** Data is automatically deleted after these periods. We do not maintain long-term archives.
 
@@ -232,4 +233,4 @@ For questions about this Privacy Policy or the bot's data practices:
 
 ---
 
-**Last Updated:** November 4, 2026
+**Last Updated:** November 5, 2026
