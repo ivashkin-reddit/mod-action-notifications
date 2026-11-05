@@ -159,14 +159,14 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
     const style = ACTOR_STYLES[actor];
     const message: SlackMessage = {
         text: style.text(actionTitle(modAction.type, modAction.target?.commentId !== undefined)),
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: style.icon,
         attachments: [
             {
                 color: unknownModerator ? "#ff0000" : actionColor(modAction.type),
                 text: messageLines(modAction, presentation, actor).join("\n"),
                 mrkdwn_in: ["text", "fields"],
-                footer: "Reddit Mod Action Bot",
+                footer: "Mod Action Notifications",
                 ts: Math.floor(modAction.occurredAt.getTime() / MS_PER_SECOND),
             },
         ],

@@ -145,8 +145,8 @@ export async function sendTestMessage(webhookUrl: string): Promise<boolean> {
     return await postToSlack(
         webhookUrl,
         {
-            text: "🧪 Test message from Reddit Mod Action Bot",
-            username: "Reddit Mod Bot (Test)",
+            text: "🧪 Test message from Mod Action Notifications",
+            username: "Mod Action Notifications (Test)",
             icon_emoji: ":robot_face:",
             attachments: [
                 {
@@ -155,7 +155,7 @@ export async function sendTestMessage(webhookUrl: string): Promise<boolean> {
                         { title: "Status", value: "Bot is working correctly!", short: true },
                         { title: "Timestamp", value: new Date().toISOString(), short: true },
                     ],
-                    footer: "Reddit Mod Action Bot - Test Message",
+                    footer: "Mod Action Notifications - Test Message",
                 },
             ],
         },

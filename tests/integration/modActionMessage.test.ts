@@ -29,7 +29,7 @@ describe("a mod action", (): void => {
         expect(request.headers).toStrictEqual({ "Content-Type": "application/json" });
         expect(request.message).toStrictEqual({
             text: "🗑️ Post Removed",
-            username: "Reddit Mod Bot",
+            username: "Mod Action Notifications",
             icon_emoji: ":shield:",
             attachments: [
                 {
@@ -44,7 +44,7 @@ describe("a mod action", (): void => {
                         WHEN_NOW,
                     ].join("\n"),
                     mrkdwn_in: ["text", "fields"],
-                    footer: "Reddit Mod Action Bot",
+                    footer: "Mod Action Notifications",
                     ts: NOW_SECONDS,
                 },
             ],

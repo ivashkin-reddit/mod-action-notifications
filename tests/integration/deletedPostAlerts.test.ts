@@ -26,7 +26,7 @@ describe("a user deleting their own post", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "🗑️ User Deleted High-Score Post: 150 upvotes",
-                username: "Reddit Mod Bot",
+                username: "Mod Action Notifications",
                 icon_emoji: ":wastebasket:",
                 attachments: [
                     {
@@ -44,7 +44,7 @@ describe("a user deleting their own post", (): void => {
                             },
                             { title: "⏰ Deleted At", value: "2026-11-04T13:00:00.000Z", short: true },
                         ],
-                        footer: "Reddit Mod Action Bot - Post Deletion Monitor",
+                        footer: "Mod Action Notifications - Post Deletion Monitor",
                         ts: Math.floor(NOW.getTime() / 1000),
                     },
                 ],

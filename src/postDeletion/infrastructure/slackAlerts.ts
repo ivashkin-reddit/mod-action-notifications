@@ -7,7 +7,7 @@ const MS_PER_SECOND = 1000;
 function deletedPostMessage({ post, authorName, subredditName, deletedAt, reason }: DeletedPostAlert): SlackMessage {
     return {
         text: `🗑️ User Deleted High-Score Post: ${String(post.score)} upvotes`,
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: ":wastebasket:",
         attachments: [
             {
@@ -25,7 +25,7 @@ function deletedPostMessage({ post, authorName, subredditName, deletedAt, reason
                     { title: "🔗 Link (may be dead)", value: `https://reddit.com${post.permalink}`, short: false },
                     { title: "⏰ Deleted At", value: deletedAt, short: true },
                 ],
-                footer: "Reddit Mod Action Bot - Post Deletion Monitor",
+                footer: "Mod Action Notifications - Post Deletion Monitor",
                 ts: Math.floor(Date.now() / MS_PER_SECOND),
             },
         ],

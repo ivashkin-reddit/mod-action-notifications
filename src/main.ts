@@ -104,7 +104,7 @@ Devvit.addSchedulerJob({
 
 const testForm = Devvit.createForm(
     {
-        title: "Reddit Mod Action Bot",
+        title: "Mod Action Notifications",
         description: "Test your bot configuration and send a test alert to Slack",
         fields: [
             {

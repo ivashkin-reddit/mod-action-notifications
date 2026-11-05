@@ -25,7 +25,7 @@ describe("the old reported content alert", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "📣 Old Reported Content Alert: 2 reported items over 24h old",
-                username: "Reddit Mod Bot",
+                username: "Mod Action Notifications",
                 icon_emoji: ":loudspeaker:",
                 attachments: [
                     {
@@ -40,7 +40,7 @@ describe("the old reported content alert", (): void => {
                                 short: false,
                             },
                         ],
-                        footer: "Reddit Mod Action Bot - Reports Monitor",
+                        footer: "Mod Action Notifications - Reports Monitor",
                         ts: NOW_SECONDS,
                     },
                 ],

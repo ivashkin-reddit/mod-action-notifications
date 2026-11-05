@@ -99,7 +99,7 @@ describe("the daily summary", (): void => {
             expect(app.slack.messages.slice(-1)).toStrictEqual([
                 {
                     text: "📊 Daily summary for 2026-11-04 (UTC)",
-                    username: "Reddit Mod Bot",
+                    username: "Mod Action Notifications",
                     icon_emoji: ":bar_chart:",
                     channel: "#mod-log",
                     attachments: [
@@ -112,7 +112,7 @@ describe("the daily summary", (): void => {
                                 "• *Problems now:* None",
                             ].join("\n"),
                             mrkdwn_in: ["text"],
-                            footer: "Reddit Mod Action Bot - Daily Summary",
+                            footer: "Mod Action Notifications - Daily Summary",
                             ts: Math.floor((NOW.getTime() + TO_NEXT_MORNING) / 1000),
                         },
                     ],

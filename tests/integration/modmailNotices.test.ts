@@ -46,7 +46,7 @@ describe("a problem moderators must act on", (): void => {
             expect(notices(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([
                 {
                     subredditId: "t5_testsub",
-                    subject: "Mod Action Bot: Slack is refusing alerts",
+                    subject: "Mod Action Notifications: Slack is refusing alerts",
                     bodyMarkdown: [
                         "Slack is refusing alerts (HTTP 404: error), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.",
                         "This started at 2026-11-04 12:00 UTC. **Show Bot Status**, in the subreddit's mod tools, shows how the bot is doing now.",
@@ -68,7 +68,7 @@ describe("a problem moderators must act on", (): void => {
 
         expect(notices(app.context.reddit.modMail.createModNotification.mock.calls)[1]).toStrictEqual({
             subredditId: "t5_testsub",
-            subject: "Mod Action Bot: resolved: Slack is refusing alerts",
+            subject: "Mod Action Notifications: resolved: Slack is refusing alerts",
             bodyMarkdown: "Slack is taking alerts again.",
         });
     });
@@ -85,8 +85,8 @@ describe("a problem moderators must act on", (): void => {
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
 
         expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([
-            "Mod Action Bot: Slack is refusing alerts",
-            "Mod Action Bot: Slack is refusing alerts",
+            "Mod Action Notifications: Slack is refusing alerts",
+            "Mod Action Notifications: Slack is refusing alerts",
         ]);
     });
 
@@ -103,8 +103,8 @@ describe("a problem moderators must act on", (): void => {
         await app.fire("ModAction", removedPost({ id: "ModAction_4" }));
 
         expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([
-            "Mod Action Bot: Slack is refusing alerts",
-            "Mod Action Bot: resolved: Slack is refusing alerts",
+            "Mod Action Notifications: Slack is refusing alerts",
+            "Mod Action Notifications: resolved: Slack is refusing alerts",
         ]);
     });
 });
@@ -124,7 +124,7 @@ describe("a problem that may pass by itself", (): void => {
 
         expect(atFirst).toStrictEqual([]);
         expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([
-            "Mod Action Bot: Slack is not taking alerts",
+            "Mod Action Notifications: Slack is not taking alerts",
         ]);
     });
 
@@ -143,7 +143,7 @@ describe("a problem that may pass by itself", (): void => {
 
         expect(atFifteenMinutes).toStrictEqual([]);
         expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([
-            "Mod Action Bot: The modqueue monitor is failing",
+            "Mod Action Notifications: The modqueue monitor is failing",
         ]);
     });
 });

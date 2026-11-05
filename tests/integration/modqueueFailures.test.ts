@@ -48,7 +48,7 @@ describe("a failing modqueue monitor run", (): void => {
 
             const alert = {
                 text: "⚠️ Critical: Modqueue Monitoring Failed 3 Times",
-                username: "Reddit Mod Bot",
+                username: "Mod Action Notifications",
                 icon_emoji: ":warning:",
                 attachments: [
                     {
@@ -63,7 +63,7 @@ describe("a failing modqueue monitor run", (): void => {
                                 short: false,
                             },
                         ],
-                        footer: "Reddit Mod Action Bot - Scheduler Monitor",
+                        footer: "Mod Action Notifications - Scheduler Monitor",
                         ts: NOW_SECONDS,
                     },
                 ],

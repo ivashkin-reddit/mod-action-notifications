@@ -1,8 +1,8 @@
-# Reddit Mod Action Slack Bot
+# Mod Action Notifications
 
 Your subreddit's moderation activity, in your team's Slack.
 
-The Reddit Mod Action Slack Bot is a moderation tool for subreddit moderation teams that coordinate in Slack. It posts the moderator actions you choose to a Slack channel as they happen. It warns you about anything that needs a second look: an action by an account that isn't on your mod list, a moderator acting unusually fast, a modqueue that's backing up, or a popular post deleted by its author. Your team can keep up with the subreddit without refreshing the mod log.
+Mod Action Notifications is a moderation tool for subreddit moderation teams that coordinate in Slack. It posts the moderator actions you choose to a Slack channel as they happen. It warns you about anything that needs a second look: an action by an account that isn't on your mod list, a moderator acting unusually fast, a modqueue that's backing up, or a popular post deleted by its author. Your team can keep up with the subreddit without refreshing the mod log.
 
 It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of its own, and the only service it sends anything to is your Slack workspace.
 

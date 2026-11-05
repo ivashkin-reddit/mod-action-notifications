@@ -19,7 +19,7 @@ describe("the Test Slack Connection menu item", (): void => {
 
         const { definition } = app.shownForm();
 
-        expect(definition.title).toBe("Reddit Mod Action Bot");
+        expect(definition.title).toBe("Mod Action Notifications");
         expect(definition.acceptLabel).toBe("Send Test Alert");
         expect(definition.fields.map((field): string => field.name)).toStrictEqual(["info"]);
     });
@@ -34,8 +34,8 @@ describe("the Test Slack Connection menu item", (): void => {
 
         expect(app.slack.messages).toStrictEqual([
             {
-                text: "🧪 Test message from Reddit Mod Action Bot",
-                username: "Reddit Mod Bot (Test)",
+                text: "🧪 Test message from Mod Action Notifications",
+                username: "Mod Action Notifications (Test)",
                 icon_emoji: ":robot_face:",
                 attachments: [
                     {
@@ -44,7 +44,7 @@ describe("the Test Slack Connection menu item", (): void => {
                             { title: "Status", value: "Bot is working correctly!", short: true },
                             { title: "Timestamp", value: NOW.toISOString(), short: true },
                         ],
-                        footer: "Reddit Mod Action Bot - Test Message",
+                        footer: "Mod Action Notifications - Test Message",
                     },
                 ],
             },

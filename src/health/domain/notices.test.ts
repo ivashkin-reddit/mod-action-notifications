@@ -39,7 +39,7 @@ describe("a modmail notice of a condition", (): void => {
 
         const notice = problemNotice({ condition: "monitor-failing", since: SINCE + 59_999, detail: "reddit 503" });
 
-        expect(notice.subject).toBe("Mod Action Bot: The modqueue monitor is failing");
+        expect(notice.subject).toBe("Mod Action Notifications: The modqueue monitor is failing");
         expect(notice.body.split("\n\n")).toStrictEqual([
             "The modqueue monitor is failing (reddit 503), so no modqueue alerts are sent until it recovers.",
             "This started at 2026-11-04 12:00 UTC. **Show Bot Status**, in the subreddit's mod tools, shows how the bot is doing now.",
@@ -51,7 +51,7 @@ describe("a modmail notice of a condition", (): void => {
         expect.hasAssertions();
 
         expect(resolvedNotice("outbox-full")).toStrictEqual({
-            subject: "Mod Action Bot: resolved: The alert queue is full",
+            subject: "Mod Action Notifications: resolved: The alert queue is full",
             body: "The alert queue has emptied: no more alerts are dropped for want of room.",
         });
     });

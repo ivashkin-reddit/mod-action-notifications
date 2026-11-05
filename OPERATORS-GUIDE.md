@@ -1,6 +1,6 @@
 # Operators Guide
 
-This guide is for the people who deploy the Reddit Mod Action Slack Bot, configure it for a subreddit, and keep it running. It explains how the app works, how to deploy and upgrade it, what it stores, and how to troubleshoot it. The [README](./README.md) describes what the app does. [AGENTS.md](./AGENTS.md) covers the architecture and conventions for contributors.
+This guide is for the people who deploy Mod Action Notifications, configure it for a subreddit, and keep it running. It explains how the app works, how to deploy and upgrade it, what it stores, and how to troubleshoot it. The [README](./README.md) describes what the app does. [AGENTS.md](./AGENTS.md) covers the architecture and conventions for contributors.
 
 ## How it works
 
@@ -56,6 +56,7 @@ After installing, follow the [README's Getting started](./README.md#getting-star
 ### Before the first release
 
 - **Domain approval.** The app fetches `hooks.slack.com`. Reddit reviews requested domains when you first playtest or upload, and alerts can't reach Slack until it's approved.
+- **Display name.** In the app's Developer Settings on developers.reddit.com, set the display name to Mod Action Notifications. The `name` in [devvit.json](./devvit.json), `ukpolitics-man`, is the app's Reddit account and URL slug: changing it would make a new app, without the installations or data of this one.
 - **Legal links.** Apps that fetch external domains must link to their terms and privacy policy in the app's details form on developers.reddit.com. Use [TERMS-AND-CONDITIONS.md](./TERMS-AND-CONDITIONS.md) and [PRIVACY-POLICY.md](./PRIVACY-POLICY.md).
 
 ### Permissions

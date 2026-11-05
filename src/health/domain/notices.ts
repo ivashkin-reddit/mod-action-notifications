@@ -42,7 +42,7 @@ function minuteOf(ms: number): string {
 
 export function problemNotice(problem: InForce): Notice {
     return {
-        subject: `Mod Action Bot: ${conditionTitle(problem.condition)}`,
+        subject: `Mod Action Notifications: ${conditionTitle(problem.condition)}`,
         body: [
             conditionSummary(problem),
             `This started at ${minuteOf(problem.since)}. **Show Bot Status**, in the subreddit's mod tools, shows how the bot is doing now.`,
@@ -52,5 +52,8 @@ export function problemNotice(problem: InForce): Notice {
 }
 
 export function resolvedNotice(condition: Condition): Notice {
-    return { subject: `Mod Action Bot: resolved: ${conditionTitle(condition)}`, body: resolvedText(condition) };
+    return {
+        subject: `Mod Action Notifications: resolved: ${conditionTitle(condition)}`,
+        body: resolvedText(condition),
+    };
 }

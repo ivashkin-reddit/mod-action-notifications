@@ -13,7 +13,7 @@ function slackTimestamp(): number {
 function queueTooLongMessage({ size, posts, comments, threshold }: QueueTooLongAlert): SlackMessage {
     return {
         text: `⚠️ Modqueue Alert: ${String(size)} items pending`,
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: ":warning:",
         attachments: [
             {
@@ -24,7 +24,7 @@ function queueTooLongMessage({ size, posts, comments, threshold }: QueueTooLongA
                     { title: "💬 Comments", value: comments.toString(), short: true },
                     { title: "🎯 Threshold", value: threshold.toString(), short: true },
                 ],
-                footer: "Reddit Mod Action Bot - Modqueue Monitor",
+                footer: "Mod Action Notifications - Modqueue Monitor",
                 ts: slackTimestamp(),
             },
         ],
@@ -49,7 +49,7 @@ const UNMODERATED_STYLE: AgedContentStyle = {
         `⏰ Unmoderated Content Alert: ${total} items over ${ageHours}h old`,
     icon: ":alarm_clock:",
     color: "#ff6600",
-    footer: "Reddit Mod Action Bot - Unmoderated Monitor",
+    footer: "Mod Action Notifications - Unmoderated Monitor",
 };
 
 const REPORTED_STYLE: AgedContentStyle = {
@@ -57,13 +57,13 @@ const REPORTED_STYLE: AgedContentStyle = {
         `📣 Old Reported Content Alert: ${total} reported items over ${ageHours}h old`,
     icon: ":loudspeaker:",
     color: "#cc3300",
-    footer: "Reddit Mod Action Bot - Reports Monitor",
+    footer: "Mod Action Notifications - Reports Monitor",
 };
 
 function agedContentMessage(style: AgedContentStyle, { oldest, total, ageHours, now }: AgedContentAlert): SlackMessage {
     return {
         text: style.headline(String(total), String(ageHours)),
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: style.icon,
         attachments: [
             {
@@ -85,7 +85,7 @@ function agedContentMessage(style: AgedContentStyle, { oldest, total, ageHours, 
 function monitorFailingMessage({ failures, error }: MonitorFailingAlert): SlackMessage {
     return {
         text: `⚠️ Critical: Modqueue Monitoring Failed ${String(failures)} Times`,
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: ":warning:",
         attachments: [
             {
@@ -96,7 +96,7 @@ function monitorFailingMessage({ failures, error }: MonitorFailingAlert): SlackM
                     { title: "🔍 Error", value: error === "" ? "Unknown error" : escapeText(error), short: false },
                     { title: "⚙️ Action Required", value: "Check bot configuration and permissions", short: false },
                 ],
-                footer: "Reddit Mod Action Bot - Scheduler Monitor",
+                footer: "Mod Action Notifications - Scheduler Monitor",
                 ts: slackTimestamp(),
             },
         ],

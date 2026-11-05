@@ -1,7 +1,7 @@
 {
-  "name": "reddit-mod-action-slack-bot",
+  "name": "mod-action-notifications",
   "version": "1.0.0",
-  "description": "A Devvit bot that sends Reddit mod actions to Slack",
+  "description": "A Devvit app that tells a subreddit's mod team in Slack about moderation activity",
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",

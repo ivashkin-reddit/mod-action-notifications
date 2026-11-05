@@ -38,7 +38,7 @@ describe("the modqueue monitor", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "⚠️ Modqueue Alert: 3 items pending",
-                username: "Reddit Mod Bot",
+                username: "Mod Action Notifications",
                 icon_emoji: ":warning:",
                 attachments: [
                     {
@@ -49,7 +49,7 @@ describe("the modqueue monitor", (): void => {
                             { title: "💬 Comments", value: "1", short: true },
                             { title: "🎯 Threshold", value: "3", short: true },
                         ],
-                        footer: "Reddit Mod Action Bot - Modqueue Monitor",
+                        footer: "Mod Action Notifications - Modqueue Monitor",
                         ts: NOW_SECONDS,
                     },
                 ],
@@ -160,7 +160,7 @@ describe("the modqueue monitor", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "⏰ Unmoderated Content Alert: 6 items over 24h old",
-                username: "Reddit Mod Bot",
+                username: "Mod Action Notifications",
                 icon_emoji: ":alarm_clock:",
                 attachments: [
                     {
@@ -178,7 +178,7 @@ describe("the modqueue monitor", (): void => {
                                 short: false,
                             },
                         ],
-                        footer: "Reddit Mod Action Bot - Unmoderated Monitor",
+                        footer: "Mod Action Notifications - Unmoderated Monitor",
                         ts: NOW_SECONDS,
                     },
                 ],

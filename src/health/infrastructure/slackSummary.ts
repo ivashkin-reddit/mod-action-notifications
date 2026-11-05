@@ -7,7 +7,7 @@ const MS_PER_SECOND = 1000;
 function summaryMessage({ day, lines }: DailySummary): SlackMessage {
     return {
         text: `📊 Daily summary for ${day} (UTC)`,
-        username: "Reddit Mod Bot",
+        username: "Mod Action Notifications",
         icon_emoji: ":bar_chart:",
         attachments: [
             {
@@ -19,7 +19,7 @@ function summaryMessage({ day, lines }: DailySummary): SlackMessage {
                     )
                     .join("\n"),
                 mrkdwn_in: ["text"],
-                footer: "Reddit Mod Action Bot - Daily Summary",
+                footer: "Mod Action Notifications - Daily Summary",
                 ts: Math.floor(Date.now() / MS_PER_SECOND),
             },
         ],

@@ -1,6 +1,6 @@
 # Terms & Conditions
 
-**App:** Reddit Mod Action Slack Bot (Devvit app `ukpolitics-man`)  
+**App:** Mod Action Notifications (Devvit app `ukpolitics-man`)  
 **Developer:** u/ivashkin  
 **Effective:** 5 November 2026
 
