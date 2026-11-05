@@ -72,6 +72,7 @@ describe("the conditions a drain reports", (): void => {
         await drive(outbox.send({ text: "one too many" }));
 
         expect(health.raise.mock.calls[0]).toStrictEqual(["outbox-full", ""]);
+        expect(health.note.mock.calls[0]).toStrictEqual(["alert-dropped", 1]);
     });
 
     it("include an alert dropped after waiting a day", TEST_OPTIONS, async (): Promise<void> => {
@@ -83,6 +84,7 @@ describe("the conditions a drain reports", (): void => {
         await drive(outbox.deliverQueued());
 
         expect(health.raise.mock.calls).toStrictEqual([["alerts-expired", ""]]);
+        expect(health.note.mock.calls).toStrictEqual([["alert-dropped", 1]]);
     });
 
     it(

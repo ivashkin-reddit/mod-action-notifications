@@ -168,6 +168,20 @@ describe("the problems Show Bot Status shows", (): void => {
         },
     );
 
+    // Another version of the app may have kept a condition this one does not know.
+    it("leave out a problem this version does not know", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.context.redis.hSetNX(
+            "health:conditions",
+            "retired-condition",
+            JSON.stringify({ since: 0, detail: "" }),
+        );
+
+        await expect(status(app)).resolves.toMatchObject({ "Current problems": "None" });
+    });
+
     it("say so when Redis cannot be read", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

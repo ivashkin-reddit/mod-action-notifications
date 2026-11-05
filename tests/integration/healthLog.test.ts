@@ -176,6 +176,24 @@ describe("an error that names the webhook URL", (): void => {
     );
 });
 
+describe("recording an event", (): void => {
+    it("never stops an alert, and says so when Redis fails", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        const failure = new Error("redis down");
+        app.context.redis.hSet.mockRejectedValueOnce(failure);
+
+        await app.fire("ModAction", removedPost());
+
+        expect(app.slack.messages).toHaveLength(1);
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith("[health] Could not record an event:", {
+            event: "mod-action",
+            error: failure,
+        });
+    });
+});
+
 describe("recording a condition", (): void => {
     it("never stops an alert, and says so when Redis fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

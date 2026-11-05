@@ -1,6 +1,6 @@
 import type { TriggerContext } from "@devvit/public-api";
 import type { EventStore } from "../application/ports.js";
-import { dayOf, isHealthEvent } from "../domain/events.js";
+import { dayOf } from "../domain/events.js";
 import type { Counts, HealthEvent, LastSeen } from "../domain/events.js";
 
 /** When each event last happened: a hash of ms since the epoch, by event, kept a week from the last. */
@@ -17,14 +17,11 @@ function countKey(day: string): string {
 
 type EventRedis = Readonly<Pick<TriggerContext["redis"], "hSet" | "hIncrBy" | "hGetAll" | "expire">>;
 
-/** The hash's numbers by event, leaving out fields this version does not know. */
+/** The hash's numbers by event. A field this version does not know is never read. */
 function byEvent(fields: Readonly<Record<string, string>>): Partial<Record<HealthEvent, number>> {
     return Object.fromEntries(
         Object.entries(fields)
-            .filter(
-                ([event, value]: readonly [string, string]): boolean =>
-                    isHealthEvent(event) && Number.isFinite(Number(value)),
-            )
+            .filter(([, value]: readonly [string, string]): boolean => Number.isFinite(Number(value)))
             .map(([event, value]: readonly [string, string]): readonly [string, number] => [event, Number(value)]),
     );
 }

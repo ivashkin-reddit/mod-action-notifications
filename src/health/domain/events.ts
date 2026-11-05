@@ -8,21 +8,6 @@ export type HealthEvent =
     | "monitor-success"
     | "monitor-failure";
 
-const EVENTS: readonly string[] = [
-    "mod-action",
-    "post-delete",
-    "comment-delete",
-    "alert-delivered",
-    "alert-dropped",
-    "monitor-success",
-    "monitor-failure",
-];
-
-/** Whether the text names an event: what Redis holds may come from another version. */
-export function isHealthEvent(text: string): text is HealthEvent {
-    return EVENTS.includes(text);
-}
-
 /** When each event last happened, in ms since the epoch; absent for one not seen lately. */
 export type LastSeen = Readonly<Partial<Record<HealthEvent, number>>>;
 
