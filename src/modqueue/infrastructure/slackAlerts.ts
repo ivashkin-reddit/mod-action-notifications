@@ -1,11 +1,6 @@
-import { inChannel } from "../../slack/index.js";
+import { escapeText, inChannel } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
-import type {
-    ModqueueAlerts,
-    MonitorFailingAlert,
-    QueueTooLongAlert,
-    WaitingTooLongAlert,
-} from "../application/ports.js";
+import type { AgedContentAlert, ModqueueAlerts, MonitorFailingAlert, QueueTooLongAlert } from "../application/ports.js";
 import { hoursWaiting } from "../domain/monitoring.js";
 import type { QueueItem } from "../domain/monitoring.js";
 
@@ -41,14 +36,38 @@ function waitingItemLine(item: QueueItem, now: number): string {
     return `• ${type} (${String(hoursWaiting(item, now))}h old): https://reddit.com${item.permalink}`;
 }
 
-function waitingTooLongMessage({ oldest, total, ageHours, now }: WaitingTooLongAlert): SlackMessage {
+/** How an age alert looks: its headline (given the count and the age limit), icon, colour and footer. */
+type AgedContentStyle = Readonly<{
+    headline: (total: string, ageHours: string) => string;
+    icon: string;
+    color: string;
+    footer: string;
+}>;
+
+const UNMODERATED_STYLE: AgedContentStyle = {
+    headline: (total: string, ageHours: string): string =>
+        `⏰ Unmoderated Content Alert: ${total} items over ${ageHours}h old`,
+    icon: ":alarm_clock:",
+    color: "#ff6600",
+    footer: "Reddit Mod Action Bot - Unmoderated Monitor",
+};
+
+const REPORTED_STYLE: AgedContentStyle = {
+    headline: (total: string, ageHours: string): string =>
+        `📣 Old Reported Content Alert: ${total} reported items over ${ageHours}h old`,
+    icon: ":loudspeaker:",
+    color: "#cc3300",
+    footer: "Reddit Mod Action Bot - Reports Monitor",
+};
+
+function agedContentMessage(style: AgedContentStyle, { oldest, total, ageHours, now }: AgedContentAlert): SlackMessage {
     return {
-        text: `⏰ Unmoderated Content Alert: ${String(total)} items over ${String(ageHours)}h old`,
+        text: style.headline(String(total), String(ageHours)),
         username: "Reddit Mod Bot",
-        icon_emoji: ":alarm_clock:",
+        icon_emoji: style.icon,
         attachments: [
             {
-                color: "#ff6600",
+                color: style.color,
                 fields: [
                     {
                         title: `📌 Oldest Items (showing ${String(oldest.length)} of ${String(total)})`,
@@ -56,7 +75,7 @@ function waitingTooLongMessage({ oldest, total, ageHours, now }: WaitingTooLongA
                         short: false,
                     },
                 ],
-                footer: "Reddit Mod Action Bot - Unmoderated Monitor",
+                footer: style.footer,
                 ts: slackTimestamp(),
             },
         ],
@@ -74,7 +93,7 @@ function monitorFailingMessage({ failures, error }: MonitorFailingAlert): SlackM
                 fields: [
                     { title: "❌ Status", value: "Scheduler job has failed repeatedly", short: true },
                     { title: "🔢 Failure Count", value: failures.toString(), short: true },
-                    { title: "🔍 Error", value: error === "" ? "Unknown error" : error, short: false },
+                    { title: "🔍 Error", value: error === "" ? "Unknown error" : escapeText(error), short: false },
                     { title: "⚙️ Action Required", value: "Check bot configuration and permissions", short: false },
                 ],
                 footer: "Reddit Mod Action Bot - Scheduler Monitor",
@@ -90,8 +109,11 @@ export function createSlackModqueueAlerts(send: SlackSender, alertChannel: strin
         queueTooLong: async (alert: QueueTooLongAlert): Promise<void> => {
             await send(inChannel(queueTooLongMessage(alert), alertChannel));
         },
-        waitingTooLong: async (alert: WaitingTooLongAlert): Promise<void> => {
-            await send(inChannel(waitingTooLongMessage(alert), alertChannel));
+        waitingTooLong: async (alert: AgedContentAlert): Promise<void> => {
+            await send(inChannel(agedContentMessage(UNMODERATED_STYLE, alert), alertChannel));
+        },
+        reportedContentOld: async (alert: AgedContentAlert): Promise<void> => {
+            await send(inChannel(agedContentMessage(REPORTED_STYLE, alert), alertChannel));
         },
         monitorFailing: async (alert: MonitorFailingAlert): Promise<void> => {
             await send(inChannel(monitorFailingMessage(alert), alertChannel));

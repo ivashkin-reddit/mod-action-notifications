@@ -53,13 +53,14 @@ describe("installing or upgrading the app", (): void => {
         expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
     });
 
-    it("cancels the job and forgets it when both monitor thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
+    it("cancels the job and forgets it when all monitor thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
         await app.fire("AppInstall", { type: "AppInstall" });
         app.settings.modqueueThreshold = 0;
         app.settings.unmoderagedAgeHours = 0;
+        app.settings.reportedContentAgeHours = 0;
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
@@ -71,19 +72,73 @@ describe("installing or upgrading the app", (): void => {
     it("forgets the job even when cancelling it fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0 });
+        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        app.context.scheduler.jobs = [{ ...MONITOR_JOB, id: "job-gone" }];
         app.context.redis.seed(JOB_ID_KEY, "job-gone");
         app.context.scheduler.cancelJob.mockRejectedValue(new Error("no such job"));
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
+        expect(app.context.scheduler.cancelJob).toHaveBeenCalledExactlyOnceWith("job-gone");
         expect(app.context.redis.keys()).toStrictEqual([]);
     });
 
-    it("schedules nothing when both thresholds are 0 and no job exists", TEST_OPTIONS, async (): Promise<void> => {
+    // The scheduler, not the remembered ID, says what runs: the remembered job may have been cancelled, or a setup
+    // interrupted between scheduling a job and remembering it.
+    it("replaces a remembered job that is no longer scheduled", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0 });
+        const app = await loadApp(devvit);
+        app.context.redis.seed(JOB_ID_KEY, "job-gone");
+
+        await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+        expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+        await expect(app.context.redis.get(JOB_ID_KEY)).resolves.toBe("job-1");
+    });
+
+    it("keeps one monitor job, cancelling extras left by overlapping setups", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.scheduler.jobs = [
+            { ...MONITOR_JOB, id: "job-a" },
+            { ...MONITOR_JOB, id: "job-b" },
+        ];
+
+        await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+        expect(app.context.scheduler.jobs).toStrictEqual([{ ...MONITOR_JOB, id: "job-a" }]);
+        expect(app.context.scheduler.runJob).not.toHaveBeenCalled();
+        await expect(app.context.redis.get(JOB_ID_KEY)).resolves.toBe("job-a");
+    });
+
+    it("replaces a monitor job scheduled on another cron", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.scheduler.jobs = [{ ...MONITOR_JOB, id: "job-hourly", cron: "0 * * * *" }];
+
+        await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+        expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+    });
+
+    it("leaves scheduled jobs of other names alone", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        app.context.scheduler.jobs = [{ id: "job-other", name: "otherJob", cron: "*/15 * * * *" }];
+
+        await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+        expect(app.context.scheduler.cancelJob).not.toHaveBeenCalled();
+    });
+
+    it("schedules nothing when all thresholds are 0 and no job exists", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
 
         await app.fire("AppInstall", { type: "AppInstall" });
 
@@ -149,10 +204,10 @@ describe("the Setup Modqueue Monitoring menu item", (): void => {
         expect(app.toasts[0]?.text).toBe("✅ Modqueue monitoring enabled (Job ID: unknown)");
     });
 
-    it("reports monitoring as disabled when both thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
+    it("reports monitoring as disabled when all thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0 });
+        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
 
         await app.pressMenuItem("Setup Modqueue Monitoring");
 

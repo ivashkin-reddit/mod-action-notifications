@@ -1,6 +1,6 @@
-import { deservesAlert, isWorthRemembering, rememberedPost } from "../domain/posts.js";
-import type { PostDeletion, RememberedPost, SeenPost } from "../domain/posts.js";
-import type { PostDeletionAlerts, RememberedPosts } from "./ports.js";
+import { deservesAlert } from "../domain/posts.js";
+import type { PostDeletion } from "../domain/posts.js";
+import type { PostDeletionAlerts, PostLookup } from "./ports.js";
 
 export interface PostDeletionConfig {
     /** Whether alerts have somewhere to go. */
@@ -10,65 +10,46 @@ export interface PostDeletionConfig {
 }
 
 export interface PostDeletionPorts {
-    readonly posts: RememberedPosts;
+    readonly posts: PostLookup;
     readonly alerts: PostDeletionAlerts;
 }
 
-/** Remembers a created or updated post whose score makes a deletion alert possible. Never rejects. */
-export async function rememberPostScore(
-    config: PostDeletionConfig,
-    post: SeenPost | undefined,
-    posts: RememberedPosts,
-): Promise<void> {
-    if (config.upvoteThreshold <= 0 || post === undefined || post.id === "") {
-        return;
-    }
-    if (!isWorthRemembering(post.score, config.upvoteThreshold)) {
-        return;
-    }
-    // A post that cannot be remembered only means no alert if it is deleted.
-    await posts.remember(rememberedPost(post)).catch((): undefined => undefined);
-}
-
-/** The remembered post a user deleted, when it scored high enough to alert on. */
-async function deletedHighScorePost(
+async function alertIfHighScore(
     deletion: PostDeletion,
     config: PostDeletionConfig,
-    posts: RememberedPosts,
-): Promise<RememberedPost | undefined> {
-    if (deletion.postId === "") {
-        console.error("PostDelete event missing postId");
-        return undefined;
+    ports: PostDeletionPorts,
+): Promise<void> {
+    // Votes fire no trigger, so the score that counts is the one Reddit shows as the post is deleted.
+    const post = await ports.posts.deletedPost(deletion.postId);
+    if (!deservesAlert(post.score, config.upvoteThreshold)) {
+        return;
     }
-    if (!deletion.deletedByUser) {
-        return undefined;
-    }
-    const post = await posts.recall(deletion.postId);
-    return post !== undefined && deservesAlert(post, config.upvoteThreshold) ? post : undefined;
+    await ports.alerts.highScorePostDeleted({
+        post,
+        authorName: deletion.authorName,
+        subredditName: deletion.subredditName ?? post.subredditName,
+        deletedAt: (deletion.deletedAt ?? new Date()).toISOString(),
+        reason: deletion.reason,
+    });
 }
 
-/** Alerts moderators when a user deletes a remembered post that had a high score. Never rejects. */
+/** Alerts moderators when a user deletes their own post that had a high score. Never rejects. */
 export async function alertOnUserDeletion(
     config: PostDeletionConfig,
     deletion: PostDeletion,
     ports: PostDeletionPorts,
 ): Promise<void> {
-    if (config.upvoteThreshold <= 0 || !config.alertsConfigured) {
+    if (config.upvoteThreshold <= 0 || !config.alertsConfigured || !deletion.deletedByUser) {
+        return;
+    }
+    if (deletion.postId === "") {
+        console.error("PostDelete event missing postId");
         return;
     }
     try {
-        const post = await deletedHighScorePost(deletion, config, ports.posts);
-        if (post === undefined) {
-            return;
-        }
-        await ports.alerts.highScorePostDeleted({
-            post,
-            subredditName: post.subredditName === "" ? (deletion.subredditName ?? "Unknown") : post.subredditName,
-            deletedAt: (deletion.deletedAt ?? new Date()).toISOString(),
-            reason: deletion.reason,
-        });
-        await ports.posts.forget(deletion.postId);
+        await alertIfHighScore(deletion, config, ports);
     } catch (error) {
+        // The post could not be read: without its score there is no alert to send.
         console.error("Failed to handle post delete:", error);
     }
 }

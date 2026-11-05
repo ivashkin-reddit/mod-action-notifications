@@ -1,6 +1,6 @@
 import { isMonitoringEnabled, MONITOR_CRON } from "../domain/monitoring.js";
 import type { MonitorThresholds } from "../domain/monitoring.js";
-import type { MonitorScheduler, MonitorStore } from "./ports.js";
+import type { MonitorScheduler, MonitorStore, ScheduledMonitorJob } from "./ports.js";
 
 export interface MonitorJobPorts {
     readonly store: MonitorStore;
@@ -13,23 +13,18 @@ export interface MonitoringSetup {
     readonly jobId?: string;
 }
 
-async function cancelMonitoring(existingJobId: string | undefined, ports: MonitorJobPorts): Promise<void> {
-    if (existingJobId === undefined || existingJobId === "") {
-        return;
-    }
-    try {
-        await ports.scheduler.cancel(existingJobId);
-    } catch {
-        // The job is already gone; forget it either way.
-    }
-    await ports.store.forgetMonitorJob();
+async function cancelJobs(jobs: readonly ScheduledMonitorJob[], scheduler: MonitorScheduler): Promise<void> {
+    await Promise.all(
+        jobs.map(async (job: ScheduledMonitorJob): Promise<void> => {
+            // A job that cannot be cancelled has already gone.
+            await scheduler.cancel(job.id).catch((): undefined => undefined);
+        }),
+    );
 }
 
-async function scheduleMonitoring(ports: MonitorJobPorts): Promise<MonitoringSetup> {
+async function scheduleMonitor(scheduler: MonitorScheduler): Promise<string> {
     try {
-        const jobId = await ports.scheduler.schedule(MONITOR_CRON);
-        await ports.store.rememberMonitorJob(jobId);
-        return { enabled: true, jobId };
+        return await scheduler.schedule(MONITOR_CRON);
     } catch (scheduleError) {
         console.error("Failed to schedule modqueue monitor job", scheduleError);
         throw scheduleError;
@@ -37,21 +32,27 @@ async function scheduleMonitoring(ports: MonitorJobPorts): Promise<MonitoringSet
 }
 
 /**
- * Schedules the monitor when one of its alerts is on and it is not scheduled yet, and cancels it when both are
- * off. Rejects, after logging, when scheduling fails.
+ * Leaves the scheduler running exactly what the thresholds call for: one monitor job on MONITOR_CRON while either
+ * alert is on, none while both are off. It reads the scheduler rather than the remembered job ID, so it also
+ * replaces a job that no longer exists, and cancels jobs left by an interrupted or overlapping setup or scheduled
+ * on an older cron. Rejects, after logging, when scheduling fails.
  */
 export async function setupMonitoring(thresholds: MonitorThresholds, ports: MonitorJobPorts): Promise<MonitoringSetup> {
-    const existingJobId = await ports.store.monitorJobId();
+    const enabled = isMonitoringEnabled(thresholds);
+    const jobs = await ports.scheduler.jobs();
+    const kept = enabled ? jobs.find((job: ScheduledMonitorJob): boolean => job.cron === MONITOR_CRON) : undefined;
+    await cancelJobs(
+        jobs.filter((job: ScheduledMonitorJob): boolean => job !== kept),
+        ports.scheduler,
+    );
 
-    if (!isMonitoringEnabled(thresholds)) {
-        await cancelMonitoring(existingJobId, ports);
+    if (!enabled) {
+        await ports.store.forgetMonitorJob();
         return { enabled: false };
     }
-
-    if (existingJobId !== undefined && existingJobId !== "") {
-        return { enabled: true, jobId: existingJobId };
-    }
-    return await scheduleMonitoring(ports);
+    const jobId = kept?.id ?? (await scheduleMonitor(ports.scheduler));
+    await ports.store.rememberMonitorJob(jobId);
+    return { enabled: true, jobId };
 }
 
 export type MonitorJobStatus =

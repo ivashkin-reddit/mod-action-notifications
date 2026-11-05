@@ -90,7 +90,12 @@ describe("the Show Bot Status menu item", (): void => {
     it("shows monitoring off and the webhook missing", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "", modqueueThreshold: 0, unmoderagedAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            slackWebhookUrl: "",
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+        });
 
         await expect(statusToast(app)).resolves.toBe(
             "Modqueue Monitoring: OFF • Slack Webhook: Missing • Modqueue Monitor: Not scheduled",

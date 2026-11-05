@@ -6,10 +6,12 @@ export interface QueueItem {
 }
 
 export interface MonitorThresholds {
-    /** Alert when the queue holds at least this many items; 0 turns the alert off. */
+    /** Alert when the modqueue holds at least this many items; 0 turns the alert off. */
     readonly queueSizeThreshold: number;
-    /** Alert when items have waited at least this many hours; 0 turns the alert off. */
+    /** Alert when content has waited at least this many hours without a moderator reviewing it; 0 turns it off. */
     readonly unmoderatedAgeHours: number;
+    /** Alert when reported content is at least this many hours old; 0 turns the alert off. */
+    readonly reportedAgeHours: number;
 }
 
 const SECONDS_PER_HOUR = 3600;
@@ -21,7 +23,7 @@ export const MONITOR_CRON = "*/15 * * * *";
 /** Each kind of queue alert is sent at most once an hour. */
 export const ALERT_PERIOD_SECONDS = SECONDS_PER_HOUR;
 
-/** The unmoderated-content alert lists this many of the oldest items. */
+/** The unmoderated and reported content alerts list this many of the oldest items. */
 export const OLDEST_ITEMS_LISTED = 5;
 
 /** Moderators are alerted when the monitor fails this many times in a row. */
@@ -32,7 +34,7 @@ export const FAILURE_MEMORY_SECONDS = SECONDS_PER_HOUR;
 
 /** The monitor is scheduled only while at least one of its alerts is on. */
 export function isMonitoringEnabled(thresholds: MonitorThresholds): boolean {
-    return thresholds.queueSizeThreshold > 0 || thresholds.unmoderatedAgeHours > 0;
+    return thresholds.queueSizeThreshold > 0 || thresholds.unmoderatedAgeHours > 0 || thresholds.reportedAgeHours > 0;
 }
 
 export function isQueueTooLong(size: number, queueSizeThreshold: number): boolean {
@@ -49,8 +51,8 @@ export function hoursWaiting(item: QueueItem, now: number): number {
     return Math.floor((now - item.createdAt.getTime()) / MS_PER_HOUR);
 }
 
-/** Items that have waited at least `ageHours` at `now`, oldest first. */
-export function waitingTooLong(items: readonly QueueItem[], ageHours: number, now: number): readonly QueueItem[] {
+/** Items created at least `ageHours` before `now`, oldest first. */
+export function atLeastHoursOld(items: readonly QueueItem[], ageHours: number, now: number): readonly QueueItem[] {
     const ageThresholdMs = ageHours * MS_PER_HOUR;
     return items
         .filter((item: QueueItem): boolean => now - item.createdAt.getTime() >= ageThresholdMs)

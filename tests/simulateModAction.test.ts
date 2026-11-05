@@ -166,4 +166,21 @@ describe("the Simulate Mod Action menu item", (): void => {
             new Error("Slack webhook URL is not configured"),
         );
     });
+
+    it("reports a simulation Slack does not accept", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.slack.respond(404);
+
+        await app.fillForm("Simulate Mod Action", {});
+
+        expect(app.toasts).toStrictEqual([
+            { text: "❌ Could not send simulation. Check logs.", appearance: "neutral" },
+        ]);
+        expect(console.error).toHaveBeenCalledWith(
+            "Failed to send simulated action",
+            new Error("Slack did not accept the simulated alert"),
+        );
+    });
 });

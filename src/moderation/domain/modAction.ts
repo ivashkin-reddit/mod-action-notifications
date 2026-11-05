@@ -47,6 +47,20 @@ export function isBlank(value: string | undefined): value is "" | undefined {
     return value === undefined || value === "";
 }
 
+/** Who took an action, as alerts tell them apart. */
+export type Actor = "moderator" | "unknown-moderator" | "reddit";
+
+/**
+ * Reddit's own accounts, which act in mod logs without being on any mod list: u/reddit (Crowd Control and the ban
+ * evasion, harassment and mature content filters) and Anti-Evil Operations (Reddit admins' removals). Lower-cased.
+ */
+const REDDIT_ACCOUNTS: readonly string[] = ["reddit", "anti-evil operations"];
+
+/** Whether the name is one of Reddit's own accounts, ignoring case. */
+export function isRedditAccount(name: string | undefined): boolean {
+    return name !== undefined && REDDIT_ACCOUNTS.includes(name.toLowerCase());
+}
+
 /** The action's type, or "unknown" for an event that names none. */
 export function actionTypeOf(modAction: ModAction): string {
     return modAction.type === "" ? "unknown" : modAction.type;

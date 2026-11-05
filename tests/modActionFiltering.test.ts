@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "./support/app.js";
 import { removedPost } from "./support/events.js";
-import { WEBHOOK_URL } from "./support/fakeContext.js";
+import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./support/fakeContext.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { lastLine, lines, MINUTE, onlyMessage } from "./support/messages.js";
 
@@ -99,6 +99,35 @@ describe("which mod actions are sent", (): void => {
             "Failed to load configuration - check settings format and values:",
             new Error("settings unavailable"),
         );
+    });
+
+    it("keeps using the settings it last read when they cannot be read", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.fire("ModAction", removedPost());
+        vi.mocked(app.context.settings.get).mockRejectedValue(new Error("settings unavailable"));
+
+        await app.fire("ModAction", removedPost());
+
+        expect(app.slack.requests.map((request): string => request.url)).toStrictEqual([WEBHOOK_URL, WEBHOOK_URL]);
+    });
+
+    // One app process can serve several subreddits: another's webhook must never receive this one's actions.
+    it("never falls back to another installation's settings", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.fire("ModAction", removedPost());
+        const { context: otherInstallation } = createFakeContext(
+            { ...defaultSettings(), slackWebhookUrl: "https://hooks.slack.com/services/T111/B111/YYYY" },
+            "t5_other",
+        );
+        otherInstallation.settings.get.mockRejectedValue(new Error("settings unavailable"));
+
+        await app.fire("ModAction", removedPost(), otherInstallation);
+
+        expect(app.slack.requests.map((request): string => request.url)).toStrictEqual([WEBHOOK_URL]);
     });
 });
 

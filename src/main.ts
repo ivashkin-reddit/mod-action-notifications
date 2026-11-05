@@ -7,21 +7,22 @@ import { Devvit } from "@devvit/public-api";
 import type { Context } from "@devvit/public-api";
 import {
     alertOnModAction,
+    deliverQueuedAlerts,
     alertOnPostDeletion,
     botStatus,
-    rememberPost,
     runModqueueMonitor,
     sendSimulatedModAction,
     setUpModqueueMonitor,
     testSlackConnection,
 } from "./composition.js";
-import type { AppContext, BotStatus } from "./composition.js";
+import type { AppContext, BotStatus, ConnectionTest } from "./composition.js";
 import { simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
-import type { PostChangeEvent, PostDeleteEvent } from "./postDeletion/index.js";
+import type { PostDeleteEvent } from "./postDeletion/index.js";
 import { settingsDefinitions } from "./settings/index.js";
+import { OUTBOX_JOB_NAME } from "./slack/index.js";
 
 /** The Devvit APIs a menu item or form handler calls. */
 type MenuContext = AppContext & Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
@@ -47,6 +48,17 @@ function describeMonitorJob(status: MonitorJobStatus): string {
         }
     }
 }
+
+const CONNECTION_TEST_TOASTS: Readonly<
+    Record<ConnectionTest, Readonly<{ text: string; appearance: "neutral" | "success" }>>
+> = {
+    "delivered": { text: "🧪 Test alert sent! Check your Slack channel and bot logs.", appearance: "success" },
+    "not-configured": { text: "⚠️ No Slack webhook URL is set. Add one in the app's settings.", appearance: "neutral" },
+    "failed": {
+        text: "❌ Slack did not accept the test alert. Check the webhook URL and the bot logs.",
+        appearance: "neutral",
+    },
+};
 
 function describeStatus({ monitoringEnabled, webhookConfigured, monitorJob }: BotStatus): string {
     return [
@@ -105,25 +117,19 @@ Devvit.addTrigger({
     },
 });
 
-Devvit.addTrigger({
-    event: "PostCreate",
-    onEvent: async (event: PostChangeEvent, context: AppContext): Promise<void> => {
-        await rememberPost(event, context);
-    },
-});
-
-Devvit.addTrigger({
-    event: "PostUpdate",
-    onEvent: async (event: PostChangeEvent, context: AppContext): Promise<void> => {
-        await rememberPost(event, context);
-    },
-});
-
 // The modqueue monitor. A failing run rejects, so the scheduler records it.
 Devvit.addSchedulerJob({
     name: MONITOR_JOB_NAME,
     onRun: async (_event: unknown, context: AppContext): Promise<void> => {
         await runModqueueMonitor(context);
+    },
+});
+
+// Delivers alerts a drain of the Slack outbox left queued. A failing run rejects, so the scheduler records it.
+Devvit.addSchedulerJob({
+    name: OUTBOX_JOB_NAME,
+    onRun: async (_event: unknown, context: AppContext): Promise<void> => {
+        await deliverQueuedAlerts(context);
     },
 });
 
@@ -147,12 +153,7 @@ const testForm = Devvit.createForm(
         cancelLabel: "Close",
     },
     async (_event: unknown, context: MenuContext): Promise<void> => {
-        // Delivery failures are logged, not reported: the toast confirms only that the test was sent.
-        await testSlackConnection(context);
-        context.ui.showToast({
-            text: "🧪 Test alert sent! Check your Slack channel and bot logs.",
-            appearance: "success",
-        });
+        context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
     },
 );
 

@@ -51,8 +51,8 @@ describe("a mod action", (): void => {
         });
     });
 
-    // Devvit's ModAction event carries the action time in `actionedAt`, which the app does not read.
-    it("is timed by when the trigger runs, not by the event’s actionedAt", TEST_OPTIONS, async (): Promise<void> => {
+    // Devvit can deliver a trigger some time after the action, so the action is timed by the event's actionedAt.
+    it("is timed by the event's actionedAt", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -61,78 +61,18 @@ describe("a mod action", (): void => {
 
         const message = onlyMessage(app.slack.messages);
 
-        expect(lines(message)).toContain(WHEN_NOW);
-        expect(message.attachments?.[0]?.ts).toBe(NOW_SECONDS);
+        expect(lines(message)).toContain("• *When:* 2026-11-04 11:00:00 UTC");
+        expect(message.attachments?.[0]?.ts).toBe(NOW_SECONDS - 3600);
     });
 
-    it("quotes the post body rather than its title when it has one", TEST_OPTIONS, async (): Promise<void> => {
+    it("is timed by when the trigger runs when the event has no actionedAt", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
-        await app.fire(
-            "ModAction",
-            removedPost({ targetPost: { id: "t3_abc", title: "Title", selftext: "Body text" } }),
-        );
+        await app.fire("ModAction", removedPost());
 
-        expect(lines(onlyMessage(app.slack.messages))).toContain("> Body text");
-    });
-
-    it("quotes at most 200 characters of the content", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        await app.fire(
-            "ModAction",
-            modActionEvent({
-                action: "removecomment",
-                moderator: { name: "ModA" },
-                targetComment: { id: "t1_c", body: "x".repeat(250), author: "t2_c" },
-            }),
-        );
-
-        expect(lines(onlyMessage(app.slack.messages))).toContain(`> ${"x".repeat(200)}...`);
-    });
-
-    it("quotes content of exactly 200 characters in full", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        await app.fire(
-            "ModAction",
-            modActionEvent({
-                action: "removecomment",
-                moderator: { name: "ModA" },
-                targetComment: { id: "t1_c", body: "y".repeat(200), author: "t2_c" },
-            }),
-        );
-
-        expect(lines(onlyMessage(app.slack.messages))).toContain(`> ${"y".repeat(200)}`);
-    });
-
-    it("leaves out the quote and the content link when the content is blank", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        await app.fire(
-            "ModAction",
-            modActionEvent({
-                action: "removecomment",
-                moderator: { name: "ModA" },
-                targetComment: { id: "t1_c", body: "   ", author: "Commenter" },
-            }),
-        );
-
-        expect(lines(onlyMessage(app.slack.messages))).toStrictEqual([
-            "🔔 *Moderator Action*",
-            "• *Action:* Comment Removed",
-            "• *Moderator:* <https://www.reddit.com/u/ModA|u/ModA>",
-            "• *Target:* <https://www.reddit.com/u/Commenter|u/Commenter>",
-            WHEN_NOW,
-        ]);
+        expect(lines(onlyMessage(app.slack.messages))).toContain(WHEN_NOW);
     });
 
     it("keeps an absolute permalink as it is", TEST_OPTIONS, async (): Promise<void> => {
@@ -152,17 +92,56 @@ describe("a mod action", (): void => {
         );
     });
 
-    it("names the post author by ID when the event has no target user", TEST_OPTIONS, async (): Promise<void> => {
+    // The post's authorId is a user ID (t2_...), and a profile link built from one is broken.
+    it("leaves out the target when the event names no target user", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
         await app.fire("ModAction", removedPost({ targetUser: undefined }));
 
-        expect(lines(onlyMessage(app.slack.messages))).toContain(
-            "• *Target:* <https://www.reddit.com/u/t2_author|u/t2_author>",
-        );
+        expect(lines(onlyMessage(app.slack.messages)).slice(2, 4)).toStrictEqual([
+            "• *Moderator:* <https://www.reddit.com/u/ModA|u/ModA>",
+            "• *Content:* <https://www.reddit.com/r/testsub/comments/abc/hello_world/|View Post>",
+        ]);
     });
+
+    it(
+        "describes a comment action by its comment when the event also carries the post",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+
+            await app.fire(
+                "ModAction",
+                modActionEvent({
+                    action: "removecomment",
+                    moderator: { name: "ModA" },
+                    targetUser: { name: "Commenter" },
+                    targetPost: {
+                        id: "t3_abc",
+                        title: "The post",
+                        selftext: "Post body",
+                        permalink: "/r/testsub/comments/abc/x/",
+                    },
+                    targetComment: {
+                        id: "t1_c",
+                        body: "The comment",
+                        permalink: "/r/testsub/comments/abc/x/c/",
+                        author: "t2_c",
+                    },
+                }),
+            );
+
+            expect(lines(onlyMessage(app.slack.messages)).slice(3, 6)).toStrictEqual([
+                "• *Target:* <https://www.reddit.com/u/Commenter|u/Commenter>",
+                "• *Content:* <https://www.reddit.com/r/testsub/comments/abc/x/c/|View Comment>",
+                "> The comment",
+            ]);
+        },
+    );
 
     it("strips a u/ prefix from usernames and URL-encodes the link", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

@@ -2,6 +2,7 @@ import type { SettingsFormField, TriggerContext } from "@devvit/public-api";
 
 const DEFAULT_MODQUEUE_THRESHOLD = 50;
 const DEFAULT_UNMODERATED_AGE_HOURS = 24;
+const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 const DECIMAL = 10;
 
@@ -102,9 +103,18 @@ export const settingsDefinitions: SettingsFormField[] = [
         type: "number",
         // Misspelt, but it is the stored setting name.
         name: "unmoderagedAgeHours",
-        label: "Unmoderated Post Age Alert (Hours)",
-        helpText: "Alert when posts/comments remain unmoderated for this many hours (0 to disable)",
+        label: "Unmoderated Content Age Alert (Hours)",
+        helpText:
+            "Alert when posts/comments have waited this many hours without a moderator reviewing them (0 to disable)",
         defaultValue: DEFAULT_UNMODERATED_AGE_HOURS,
+    },
+    {
+        type: "number",
+        name: "reportedContentAgeHours",
+        label: "Old Reported Content Alert (Hours)",
+        helpText:
+            "Alert when reported posts/comments at least this many hours old are waiting for review (0 to disable)",
+        defaultValue: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     },
     {
         type: "boolean",
@@ -139,6 +149,8 @@ export interface AppConfig {
     readonly modqueueThreshold: number;
     /** 0 turns the unmoderated-age alert off. */
     readonly unmoderatedAgeHours: number;
+    /** 0 turns the old-reported-content alert off. */
+    readonly reportedContentAgeHours: number;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
@@ -158,6 +170,7 @@ const DEFAULT_CONFIG: AppConfig = {
     alertChannel: "",
     modqueueThreshold: DEFAULT_MODQUEUE_THRESHOLD,
     unmoderatedAgeHours: DEFAULT_UNMODERATED_AGE_HOURS,
+    reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
 };
@@ -217,6 +230,10 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
             await settings.get("unmoderagedAgeHours"),
             DEFAULT_UNMODERATED_AGE_HOURS,
         ),
+        reportedContentAgeHours: nonNegativeInteger(
+            await settings.get("reportedContentAgeHours"),
+            DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+        ),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         postDeletionUpvoteThreshold: nonNegativeInteger(
             await settings.get("postDeletionUpvoteThreshold"),
@@ -225,18 +242,25 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     };
 }
 
+/** Reads one installation's settings; `installation` names it (its subreddit ID). */
+export type ConfigLoader = (settings: SettingsReader, installation: string) => Promise<AppConfig>;
+
 /**
  * Returns a loader that reads and validates the settings each time it is called. When they cannot be read, it
- * logs and returns the configuration it last read (the defaults, before the first successful read).
+ * logs and returns the configuration it last read for that installation (the defaults, before the first successful
+ * read). One app process can serve several installations, so one's settings, webhook URL included, must never
+ * stand in for another's.
  */
-export function createConfigLoader(): (settings: SettingsReader) => Promise<AppConfig> {
-    let config = DEFAULT_CONFIG;
-    return async (settings: SettingsReader): Promise<AppConfig> => {
+export function createConfigLoader(): ConfigLoader {
+    const lastRead = new Map<string, AppConfig>();
+    return async (settings: SettingsReader, installation: string): Promise<AppConfig> => {
         try {
-            config = await readConfig(settings);
+            const config = await readConfig(settings);
+            lastRead.set(installation, config);
+            return config;
         } catch (error) {
             console.error("Failed to load configuration - check settings format and values:", error);
+            return lastRead.get(installation) ?? DEFAULT_CONFIG;
         }
-        return config;
     };
 }

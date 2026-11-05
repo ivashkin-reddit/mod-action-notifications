@@ -2,7 +2,7 @@ import { vi } from "vitest";
 import type { Mock } from "vitest";
 
 /** A field of a Slack attachment. */
-export type SlackField = Readonly<{ title: string; value: string | number; short: boolean }>;
+export type SlackField = Readonly<{ title: string; value: string; short: boolean }>;
 
 /** The Slack incoming-webhook payload the app sends. */
 export interface SlackMessage {
@@ -29,8 +29,14 @@ export interface SlackRequest {
     readonly sentAt: number;
 }
 
-/** What the webhook does with one request: answer with an HTTP status, or fail with a network error. */
-export type Outcome = number | Readonly<Error>;
+/** A rate-limited answer: 429, with the Retry-After header Slack sends. */
+export type RateLimited = Readonly<{ retryAfterSeconds: number }>;
+
+/**
+ * What the webhook does with one request: answer with an HTTP status, answer 429 with a Retry-After, or fail with a
+ * network error.
+ */
+export type Outcome = number | RateLimited | Readonly<Error>;
 
 type FetchInit = Readonly<{ method?: string; headers?: unknown; body?: unknown }>;
 
@@ -38,6 +44,7 @@ interface FakeResponse {
     readonly ok: boolean;
     readonly status: number;
     readonly statusText: string;
+    readonly headers: Readonly<{ get: (name: string) => string | null }>;
     readonly text: () => Promise<string>;
 }
 
@@ -50,6 +57,7 @@ export interface FakeSlack {
 }
 
 const OK = 200;
+const TOO_MANY_REQUESTS = 429;
 const FIRST_NON_SUCCESS = 300;
 
 function isSlackMessage(value: unknown): value is SlackMessage {
@@ -64,12 +72,15 @@ function slackMessageIn(body: unknown): SlackMessage {
     return parsed;
 }
 
-function responseFor(status: number): FakeResponse {
+function responseFor(outcome: number | RateLimited): FakeResponse {
+    const status = typeof outcome === "number" ? outcome : TOO_MANY_REQUESTS;
+    const retryAfter = typeof outcome === "number" ? null : String(outcome.retryAfterSeconds);
     const ok = status >= OK && status < FIRST_NON_SUCCESS;
     return {
         ok,
         status,
         statusText: `status ${String(status)}`,
+        headers: { get: (name: string): string | null => (name.toLowerCase() === "retry-after" ? retryAfter : null) },
         text: async (): Promise<string> => await Promise.resolve(ok ? "ok" : "error"),
     };
 }
@@ -80,7 +91,7 @@ function responseFor(status: number): FakeResponse {
  */
 export function createFakeSlack(): FakeSlack {
     const requests: SlackRequest[] = [];
-    const outcomes: (number | Error)[] = [];
+    const outcomes: (number | RateLimited | Error)[] = [];
     return {
         requests,
         get messages(): readonly SlackMessage[] {
@@ -95,10 +106,10 @@ export function createFakeSlack(): FakeSlack {
                 sentAt: Date.now(),
             });
             const outcome = outcomes.shift() ?? OK;
-            if (typeof outcome === "number") {
-                return await Promise.resolve(responseFor(outcome));
+            if (outcome instanceof Error) {
+                throw outcome;
             }
-            throw outcome;
+            return await Promise.resolve(responseFor(outcome));
         }),
         respond: (...queued: readonly Outcome[]): void => {
             outcomes.push(...queued);

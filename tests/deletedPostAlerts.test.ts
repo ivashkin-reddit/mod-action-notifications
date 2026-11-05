@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "./support/app.js";
-import { bigPost, DeletionReason, DeletionSource, postCreateEvent, userDeletion } from "./support/events.js";
+import { bigPost, DeletionReason, DeletionSource, userDeletion } from "./support/events.js";
+import type { Settings } from "./support/fakeContext.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
 import { lastField } from "./support/messages.js";
 
@@ -10,18 +11,17 @@ const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 
 const TEST_OPTIONS = { timeout: 5000 };
-const CACHE_KEY = "post_score:t3_big";
 
-describe("a user deleting a remembered post", (): void => {
-    it("alerts Slack when the post had at least the threshold score", TEST_OPTIONS, async (): Promise<void> => {
+describe("a user deleting their own post", (): void => {
+    it("alerts Slack when the post's score has reached the threshold", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion());
 
-        // The reason is Devvit's numeric DeletionReason, sent as it is.
+        expect(app.context.reddit.getPostById).toHaveBeenCalledExactlyOnceWith("t3_big");
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "🗑️ User Deleted High-Score Post: 150 upvotes",
@@ -32,10 +32,10 @@ describe("a user deleting a remembered post", (): void => {
                         color: "#cc0000",
                         fields: [
                             { title: "📝 Title", value: "Big post", short: false },
-                            { title: "👤 Author", value: "/u/Unknown", short: true },
+                            { title: "👤 Author", value: "/u/Poster", short: true },
                             { title: "⬆️ Score", value: "150", short: true },
-                            { title: "🗑️ Reason", value: DeletionReason.OTHER, short: true },
-                            { title: "📍 Subreddit", value: "/r/Unknown", short: true },
+                            { title: "🗑️ Reason", value: "Other", short: true },
+                            { title: "📍 Subreddit", value: "/r/testsub", short: true },
                             {
                                 title: "🔗 Link (may be dead)",
                                 value: "https://reddit.com/r/testsub/comments/big/big_post/",
@@ -51,24 +51,84 @@ describe("a user deleting a remembered post", (): void => {
         ]);
     });
 
-    it("forgets the post once it has alerted", TEST_OPTIONS, async (): Promise<void> => {
+    it("keeps nothing in Redis", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion());
-        await app.fire("PostDelete", userDeletion());
 
-        expect(app.slack.requests).toHaveLength(1);
         expect(app.context.redis.keys()).toStrictEqual([]);
+    });
+
+    it("is not alerted while the score is below the threshold", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.posts = [bigPost(99)];
+
+        await app.fire("PostDelete", userDeletion());
+
+        expect(app.slack.requests).toStrictEqual([]);
+    });
+
+    it(
+        "names an unknown author, and the post's own subreddit, when the event names neither",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.context.reddit.posts = [{ ...bigPost(150), subredditName: "elsewhere" }];
+
+            await app.fire("PostDelete", userDeletion({ author: undefined, subreddit: undefined }));
+
+            const fields = app.slack.messages[0]?.attachments?.[0]?.fields ?? [];
+
+            expect(fields.filter((field): boolean => field.short).map((field): string => field.value)).toStrictEqual([
+                "Unknown",
+                "150",
+                "Other",
+                "/r/elsewhere",
+                "2026-11-04T13:00:00.000Z",
+            ]);
+        },
+    );
+
+    it("escapes Slack's markup characters in the title", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.posts = [{ ...bigPost(150), title: "<!here> big & bold" }];
+
+        await app.fire("PostDelete", userDeletion());
+
+        expect(app.slack.messages[0]?.attachments?.[0]?.fields?.[0]?.value).toBe("&lt;!here&gt; big &amp; bold");
+    });
+
+    it.each([
+        [DeletionReason.SPAM, "Spam"],
+        [DeletionReason.UNSPECIFIED_DELETION_REASON, "Unspecified"],
+        [DeletionReason.UNRECOGNIZED, "Unknown"],
+    ])("names the deletion reason %s %j", TEST_OPTIONS, async (reason, name): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.posts = [bigPost(150)];
+
+        await app.fire("PostDelete", userDeletion({ reason }));
+
+        const fields = app.slack.messages[0]?.attachments?.[0]?.fields ?? [];
+
+        expect(fields.find((field): boolean => field.title === "🗑️ Reason")?.value).toBe(name);
     });
 
     it("sends the alert to the alert channel", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, { alertChannel: "alerts", notificationChannel: "mod-log" });
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion());
 
@@ -79,7 +139,7 @@ describe("a user deleting a remembered post", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion({ deletedAt: undefined }));
 
@@ -89,44 +149,40 @@ describe("a user deleting a remembered post", (): void => {
             short: true,
         });
     });
+});
 
-    it("is not alerted below the threshold, and the post stays remembered", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(99) }));
-
-        await app.fire("PostDelete", userDeletion());
-
-        expect(app.slack.requests).toStrictEqual([]);
-        expect(app.context.redis.keys()).toStrictEqual([CACHE_KEY]);
-    });
-
+describe("a deletion that is not alerted", (): void => {
     it.each([
         ["a moderator", DeletionSource.MODERATOR],
         ["an admin", DeletionSource.ADMIN],
-    ])("is not alerted when %s deletes the post", TEST_OPTIONS, async (_label, source): Promise<void> => {
+    ])("is one by %s, and the post is not looked up", TEST_OPTIONS, async (_label, source): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion({ source }));
 
         expect(app.slack.requests).toStrictEqual([]);
+        expect(app.context.reddit.getPostById).not.toHaveBeenCalled();
     });
 
-    it("is not alerted for a post the app never saw", TEST_OPTIONS, async (): Promise<void> => {
+    it.each([
+        ["deletion alerts are off", { postDeletionUpvoteThreshold: 0 }],
+        ["no webhook is set", { slackWebhookUrl: "" }],
+    ])("is one made while %s", TEST_OPTIONS, async (_label: string, settings: Readonly<Settings>): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit);
+        const app = await loadApp(devvit, settings);
+        app.context.reddit.posts = [bigPost(5000)];
 
         await app.fire("PostDelete", userDeletion());
 
         expect(app.slack.requests).toStrictEqual([]);
+        expect(app.context.reddit.getPostById).not.toHaveBeenCalled();
     });
 
-    it("is not alerted when the event has no post ID", TEST_OPTIONS, async (): Promise<void> => {
+    it("is one whose event has no post ID, which is logged", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -137,44 +193,21 @@ describe("a user deleting a remembered post", (): void => {
         expect(console.error).toHaveBeenCalledWith("PostDelete event missing postId");
     });
 
-    it("is not alerted when deletion alerts are off", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { postDeletionUpvoteThreshold: 0 });
-        app.context.redis.seed(
-            CACHE_KEY,
-            JSON.stringify({ score: 5000, title: "T", authorName: "A", permalink: "/p/", subredditName: "s" }),
-        );
-
-        await app.fire("PostDelete", userDeletion());
-
-        expect(app.slack.requests).toStrictEqual([]);
-    });
-
-    it("is not alerted without a webhook", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { slackWebhookUrl: "" });
-        await app.fire("PostCreate", postCreateEvent({ post: bigPost(150) }));
-
-        await app.fire("PostDelete", userDeletion());
-
-        expect(app.slack.requests).toStrictEqual([]);
-    });
-
-    it(
-        "logs a remembered post it cannot read, and the trigger still succeeds",
+    it.each([
+        ["Reddit cannot return the post", "t3_big", new Error("post t3_big not found")],
+        ["the ID is not a post's", "t1_comment", new Error("t1_comment is not a post ID")],
+    ])(
+        "is logged when %s, and the trigger still succeeds",
         TEST_OPTIONS,
-        async (): Promise<void> => {
+        async (_label: string, postId: string, error: Readonly<Error>): Promise<void> => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
-            app.context.redis.seed(CACHE_KEY, "not json");
 
-            await app.fire("PostDelete", userDeletion());
+            await app.fire("PostDelete", userDeletion({ postId }));
 
             expect(app.slack.requests).toStrictEqual([]);
-            expect(console.error).toHaveBeenCalledWith("Failed to handle post delete:", expect.any(SyntaxError));
+            expect(console.error).toHaveBeenCalledWith("Failed to handle post delete:", error);
         },
     );
 });

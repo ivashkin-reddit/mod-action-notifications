@@ -5,11 +5,11 @@ import type { ModAction, ModActionTarget } from "../domain/modAction.js";
 export type ModActionEvent = Readonly<{
     id?: string | undefined;
     action?: string | undefined;
+    actionedAt?: Date | undefined;
     subreddit?: Readonly<{ name: string }> | undefined;
     moderator?: Readonly<{ name: string }> | undefined;
     targetUser?: Readonly<{ name: string }> | undefined;
-    targetPost?:
-        Readonly<{ id: string; authorId: string; permalink: string; selftext: string; title: string }> | undefined;
+    targetPost?: Readonly<{ id: string; permalink: string; selftext: string; title: string }> | undefined;
     targetComment?: Readonly<{ id: string; author: string; permalink: string; body: string }> | undefined;
 }>;
 
@@ -18,34 +18,42 @@ function orIfBlank(value: string | undefined, fallback: string): string {
     return isBlank(value) ? fallback : value;
 }
 
+/**
+ * What the action was done to. A comment action's event can carry the comment's post as well, so the comment comes
+ * first. The target user names the author; without one, a comment falls back to its author field, while a post's
+ * holds only a user ID (`authorId`), which is not a username.
+ */
 function targetOf(event: ModActionEvent): ModActionTarget | undefined {
-    const { targetPost, targetComment, targetUser } = event;
-    if (targetPost !== undefined && targetPost.id !== "") {
-        return {
-            author: orIfBlank(targetUser?.name, targetPost.authorId),
-            permalink: targetPost.permalink,
-            body: orIfBlank(targetPost.selftext, targetPost.title),
-            isComment: false,
-        };
-    }
+    const { targetPost, targetComment } = event;
+    const username = event.targetUser?.name;
     if (targetComment !== undefined && targetComment.id !== "") {
         return {
-            author: orIfBlank(targetUser?.name, targetComment.author),
+            author: orIfBlank(username, targetComment.author),
             permalink: targetComment.permalink,
             body: targetComment.body,
             isComment: true,
         };
     }
-    const username = targetUser?.name;
-    return isBlank(username)
-        ? undefined
-        : { author: username, permalink: undefined, body: undefined, isComment: false };
+    const author = isBlank(username) ? undefined : username;
+    if (targetPost !== undefined && targetPost.id !== "") {
+        return {
+            author,
+            permalink: targetPost.permalink,
+            body: orIfBlank(targetPost.selftext, targetPost.title),
+            isComment: false,
+        };
+    }
+    return author === undefined ? undefined : { author, permalink: undefined, body: undefined, isComment: false };
+}
+
+/** When the action was taken: the event's `actionedAt`, or now for an event without a valid one. */
+function actionTime(actionedAt: Date | undefined): Date {
+    return actionedAt === undefined || Number.isNaN(actionedAt.getTime()) ? new Date() : actionedAt;
 }
 
 /**
  * Translates a ModAction trigger event into a ModAction. Devvit's event carries no ban length, note or details, so
- * a ban's length comes from the mod log. The event's `actionedAt` is not read: the action is timed by when the
- * trigger runs.
+ * a ban's length comes from the mod log.
  */
 export function modActionFromTriggerEvent(event: ModActionEvent): ModAction {
     const type = event.action ?? "";
@@ -58,7 +66,7 @@ export function modActionFromTriggerEvent(event: ModActionEvent): ModAction {
         target: targetOf(event),
         description: "",
         details: undefined,
-        occurredAt: new Date(),
+        occurredAt: actionTime(event.actionedAt),
         isAutoModerator: (moderatorName ?? "").toLowerCase() === "automoderator",
         banDuration: undefined,
         banDurationLabel: undefined,

@@ -1,52 +1,98 @@
 import type { SlackMessage, SlackSender } from "./message.js";
 
+const MS_PER_SECOND = 1000;
+/** A direct send retries this many times. */
 const MAX_RETRIES = 3;
 const FIRST_RETRY_DELAY_MS = 1000;
 const BACKOFF_FACTOR = 2;
 const FIRST_SERVER_ERROR = 500;
 const TOO_MANY_REQUESTS = 429;
+const DECIMAL = 10;
 /** Devvit's HTTP plugin reports a request that ran out of time with this in its message. */
 const DEADLINE_EXCEEDED = "deadline exceeded";
 
-/** Waits 1, 2, then 4 seconds before the first, second and third retry. */
-async function backOff(retryCount: number): Promise<void> {
+export async function wait(ms: number): Promise<void> {
     await new Promise<void>((resolve): void => {
-        setTimeout(resolve, FIRST_RETRY_DELAY_MS * BACKOFF_FACTOR ** retryCount);
+        setTimeout(resolve, ms);
     });
 }
+
+/** How long to wait before retry `retryCount` (0 for the first): 1, 2, then 4 seconds. */
+export function backoffMs(retryCount: number): number {
+    return FIRST_RETRY_DELAY_MS * BACKOFF_FACTOR ** retryCount;
+}
+
+/** Why an attempt failed. */
+export type Failure =
+    | Readonly<{ kind: "response"; status: number; statusText: string; responseText: string }>
+    | Readonly<{ kind: "error"; error: unknown; ranOutOfTime: boolean }>;
+
+/** How one attempt to post a message went. */
+export type Delivery =
+    | Readonly<{ outcome: "delivered" }>
+    /** Slack may take it later: a server error, rate limiting (with Slack's Retry-After, if given) or no response. */
+    | Readonly<{ outcome: "retry"; failure: Failure; retryAfterMs: number | undefined }>
+    /** Slack refused it, and would again: a client error such as a revoked webhook. */
+    | Readonly<{ outcome: "rejected"; failure: Failure }>;
 
 /** The parts of Slack's response the app reads. */
 type SlackResponse = Readonly<Pick<Response, "ok" | "status" | "statusText" | "text">>;
 
-/** Whether to retry after Slack answered: on a server error or rate limiting, while retries remain. */
-async function retriesAfterResponse(response: SlackResponse, retryCount: number): Promise<boolean> {
+/** Retry-After in ms, when the header gives a number of seconds. */
+function retryAfterMs(header: string | null): number | undefined {
+    const seconds = header === null ? Number.NaN : Number.parseInt(header, DECIMAL);
+    return Number.isNaN(seconds) || seconds < 0 ? undefined : seconds * MS_PER_SECOND;
+}
+
+async function deliveryOf(response: SlackResponse, retryAfter: number | undefined): Promise<Delivery> {
     if (response.ok) {
         // Read the body only to finish the request; its content does not matter.
         await response.text().catch((): null => null);
-        return false;
+        return { outcome: "delivered" };
     }
-    const responseText = await response.text();
-    const retryable = response.status >= FIRST_SERVER_ERROR || response.status === TOO_MANY_REQUESTS;
-    if (retryable && retryCount < MAX_RETRIES) {
-        return true;
-    }
-    console.error("Slack webhook request failed - verify webhook URL is correct:", {
+    const failure: Failure = {
+        kind: "response",
         status: response.status,
         statusText: response.statusText,
-        responseText,
-        troubleshooting: "Check: 1) Webhook URL is valid, 2) Slack workspace permissions, 3) Network connectivity",
-    });
-    return false;
+        responseText: await response.text(),
+    };
+    return response.status >= FIRST_SERVER_ERROR || response.status === TOO_MANY_REQUESTS
+        ? { outcome: "retry", failure, retryAfterMs: retryAfter }
+        : { outcome: "rejected", failure };
 }
 
-/** Whether to retry after the request failed: unless it ran out of time, while retries remain. */
-function retriesAfterFailure(error: unknown, message: SlackMessage, retryCount: number): boolean {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const ranOutOfTime = errorMessage.includes(DEADLINE_EXCEEDED);
-    if (retryCount < MAX_RETRIES && !ranOutOfTime) {
-        return true;
+/** Posts the message to the webhook once. Never rejects. */
+export async function attemptDelivery(webhookUrl: string, message: SlackMessage): Promise<Delivery> {
+    try {
+        const response = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(message),
+        });
+        return await deliveryOf(response, retryAfterMs(response.headers.get("retry-after")));
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+            outcome: "retry",
+            failure: { kind: "error", error, ranOutOfTime: errorMessage.includes(DEADLINE_EXCEEDED) },
+            retryAfterMs: undefined,
+        };
     }
-    if (ranOutOfTime || errorMessage.includes("timeout")) {
+}
+
+/** Logs why the message did not reach Slack, with what to check. */
+export function logFailure(failure: Failure, message: SlackMessage): void {
+    if (failure.kind === "response") {
+        console.error("Slack webhook request failed - verify webhook URL is correct:", {
+            status: failure.status,
+            statusText: failure.statusText,
+            responseText: failure.responseText,
+            troubleshooting: "Check: 1) Webhook URL is valid, 2) Slack workspace permissions, 3) Network connectivity",
+        });
+        return;
+    }
+    const errorMessage = failure.error instanceof Error ? failure.error.message : String(failure.error);
+    if (failure.ranOutOfTime || errorMessage.includes("timeout")) {
         console.error(
             "Slack webhook request timed out - Slack may be experiencing delays or webhook URL may be incorrect",
             {
@@ -55,52 +101,48 @@ function retriesAfterFailure(error: unknown, message: SlackMessage, retryCount: 
                 troubleshooting: "Verify webhook URL in settings and check Slack status at status.slack.com",
             },
         );
-    } else {
-        console.error("Error sending Slack message - check webhook URL and network connectivity:", error);
+        return;
     }
-    return false;
+    console.error("Error sending Slack message - check webhook URL and network connectivity:", failure.error);
 }
 
-/** Sends the message once; whether to retry. */
-async function sendOnce(webhookUrl: string, message: SlackMessage, retryCount: number): Promise<boolean> {
-    try {
-        const response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(message),
-        });
-        return await retriesAfterResponse(response, retryCount);
-    } catch (error) {
-        return retriesAfterFailure(error, message, retryCount);
-    }
+/** Whether a direct send retries after this attempt: Slack may take it later, and the request did not time out. */
+function retriesDirectly(delivery: Delivery, retryCount: number): boolean {
+    return (
+        delivery.outcome === "retry" &&
+        !(delivery.failure.kind === "error" && delivery.failure.ranOutOfTime) &&
+        retryCount < MAX_RETRIES
+    );
 }
 
 /**
  * Posts the message, retrying server errors, rate limiting and network errors up to three times with exponential
- * backoff. Never rejects: a delivery failure must not break the trigger that sent it.
+ * backoff; true when Slack accepted it. Never rejects.
  */
-async function postToSlack(webhookUrl: string, message: SlackMessage, retryCount: number): Promise<void> {
-    if (await sendOnce(webhookUrl, message, retryCount)) {
-        await backOff(retryCount);
-        await postToSlack(webhookUrl, message, retryCount + 1);
+async function postToSlack(webhookUrl: string, message: SlackMessage, retryCount: number): Promise<boolean> {
+    const delivery = await attemptDelivery(webhookUrl, message);
+    if (delivery.outcome === "delivered") {
+        return true;
     }
+    if (!retriesDirectly(delivery, retryCount)) {
+        logFailure(delivery.failure, message);
+        return false;
+    }
+    await wait(backoffMs(retryCount));
+    return await postToSlack(webhookUrl, message, retryCount + 1);
 }
 
-/** A sender that posts to the webhook URL, an https URL. */
+/**
+ * A sender that posts straight to the webhook, an https URL, retrying as postToSlack does: for a moderator waiting
+ * on the result. Alerts go through the outbox instead.
+ */
 export function createWebhookSender(webhookUrl: string): SlackSender {
-    return async (message: SlackMessage): Promise<void> => {
-        await postToSlack(webhookUrl, message, 0);
-    };
+    return async (message: SlackMessage): Promise<boolean> => await postToSlack(webhookUrl, message, 0);
 }
 
-/** Sends a test message to the webhook's own channel, or logs that no webhook is configured (''). */
-export async function sendTestMessage(webhookUrl: string): Promise<void> {
-    if (webhookUrl === "") {
-        console.error("Cannot test: Slack webhook URL not configured");
-        return;
-    }
-
-    await postToSlack(
+/** Sends a test message to the webhook's own channel, at an https URL; true when Slack accepted it. */
+export async function sendTestMessage(webhookUrl: string): Promise<boolean> {
+    return await postToSlack(
         webhookUrl,
         {
             text: "🧪 Test message from Reddit Mod Action Bot",

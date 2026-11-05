@@ -54,7 +54,7 @@ describe("the Test Slack Connection menu item", (): void => {
         ]);
     });
 
-    it("confirms the test even when no webhook is configured", TEST_OPTIONS, async (): Promise<void> => {
+    it("says when no webhook is configured", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, { slackWebhookUrl: "" });
@@ -62,11 +62,12 @@ describe("the Test Slack Connection menu item", (): void => {
         await app.fillForm("Test Slack Connection", {});
 
         expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith("Cannot test: Slack webhook URL not configured");
-        expect(app.toasts[0]?.appearance).toBe("success");
+        expect(app.toasts).toStrictEqual([
+            { text: "⚠️ No Slack webhook URL is set. Add one in the app's settings.", appearance: "neutral" },
+        ]);
     });
 
-    it("confirms the test even when Slack rejects it", TEST_OPTIONS, async (): Promise<void> => {
+    it("says when Slack does not accept the test", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -75,6 +76,23 @@ describe("the Test Slack Connection menu item", (): void => {
         await app.fillForm("Test Slack Connection", {});
 
         expect(app.slack.requests).toHaveLength(1);
+        expect(app.toasts).toStrictEqual([
+            {
+                text: "❌ Slack did not accept the test alert. Check the webhook URL and the bot logs.",
+                appearance: "neutral",
+            },
+        ]);
+    });
+
+    it("retries a test Slack could not take at once", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.slack.respond(503);
+
+        await app.fillForm("Test Slack Connection", {});
+
+        expect(app.slack.requests.map((request): number => request.sentAt - NOW.getTime())).toStrictEqual([0, 1000]);
         expect(app.toasts[0]?.appearance).toBe("success");
     });
 });

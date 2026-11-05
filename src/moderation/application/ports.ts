@@ -1,6 +1,6 @@
 import type { BanLogEntry } from "../domain/banDuration.js";
-import type { DisciplineRecord, DisciplineSubject } from "../domain/discipline.js";
-import type { ModAction, RelatedAction } from "../domain/modAction.js";
+import type { DisciplineEvent, DisciplineSubject } from "../domain/discipline.js";
+import type { Actor, ModAction } from "../domain/modAction.js";
 
 /** A moderator of a subreddit. */
 export interface ModeratorRef {
@@ -10,15 +10,23 @@ export interface ModeratorRef {
 
 /** What mod-action alerts keep between actions. Each method rejects when storage fails. */
 export interface ModerationRecords {
-    /** The moderator's recent action times (ms since the epoch); [] when none are kept or they cannot be parsed. */
-    readonly recentActionTimes: (moderator: ModeratorRef) => Promise<readonly number[]>;
-    /** Keeps the moderator's recent action times for an hour. */
-    readonly keepRecentActionTimes: (moderator: ModeratorRef, times: readonly number[]) => Promise<void>;
-    /** Remembers the ban or mute for 90 days, replacing one already remembered. */
-    readonly rememberDiscipline: (subject: DisciplineSubject, record: DisciplineRecord) => Promise<void>;
-    /** The remembered ban or mute: undefined when there is none, null when it cannot be parsed. */
-    readonly rememberedDiscipline: (subject: DisciplineSubject) => Promise<RelatedAction | null | undefined>;
-    readonly forgetDiscipline: (subject: DisciplineSubject) => Promise<void>;
+    /**
+     * Counts one of the moderator's actions, taken at `action.at` (ms since the epoch), and returns how many of
+     * their actions were taken within `windowMs` up to then, this one included. Safe to call for actions arriving
+     * at once: each is counted. An action counted again under the same ID counts once.
+     */
+    readonly countAction: (
+        moderator: ModeratorRef,
+        action: Readonly<{ id: string | undefined; at: number }>,
+        windowMs: number,
+    ) => Promise<number>;
+    /**
+     * Records a ban or mute imposed or lifted, for 90 days. Safe for events arriving at once or out of order; an
+     * event recorded twice is kept once.
+     */
+    readonly recordDiscipline: (subject: DisciplineSubject, event: DisciplineEvent) => Promise<void>;
+    /** The subject's recorded events, in no particular order; [] when none. */
+    readonly disciplineEvents: (subject: DisciplineSubject) => Promise<readonly DisciplineEvent[]>;
 }
 
 /** What mod-action alerts look up on Reddit. */
@@ -30,13 +38,13 @@ export interface ModerationLookups {
 }
 
 export interface ReportOptions {
-    /** Send as a security alert: the action came from someone not on the mod list. */
-    readonly unknownModerator: boolean;
+    /** Who took the action; an unknown moderator's action is sent as a security alert. */
+    readonly actor: Actor;
     /** A channel to send to instead of the configured one; '' for none. */
     readonly channel: string;
 }
 
 export interface ModActionAlerts {
-    /** Tells moderators about the action. Never rejects. */
-    readonly report: (modAction: ModAction, options: ReportOptions) => Promise<void>;
+    /** Tells moderators about the action: true when Slack accepted the alert. Never rejects. */
+    readonly report: (modAction: ModAction, options: ReportOptions) => Promise<boolean>;
 }

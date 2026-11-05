@@ -67,6 +67,18 @@ describe("the modqueue monitor", (): void => {
         expect(app.slack.requests).toStrictEqual([]);
     });
 
+    // Two monitor jobs can run at once (one left over from an interrupted setup, say).
+    it("sends the size alert once when two runs overlap", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 1 });
+        app.context.reddit.modQueue = freshQueue(1);
+
+        await Promise.all([app.runJob("modqueueMonitor"), app.runJob("modqueueMonitor")]);
+
+        expect(app.slack.requests).toHaveLength(1);
+    });
+
     it("sends the size alert at most once an hour", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
@@ -132,7 +144,7 @@ describe("the modqueue monitor", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 24 });
-        app.context.reddit.modQueue = [
+        app.context.reddit.unmoderated = [
             queuedPost("a", 30),
             queuedComment("b", 25),
             queuedPost("c", 2),
@@ -177,29 +189,35 @@ describe("the modqueue monitor", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 24 });
-        app.context.reddit.modQueue = [queuedPost("a", 23), queuedComment("b", 1)];
+        app.context.reddit.unmoderated = [queuedPost("a", 23), queuedComment("b", 1)];
 
         await app.runJob("modqueueMonitor");
 
         expect(app.slack.requests).toStrictEqual([]);
     });
 
-    it("skips the age check when the age limit is 0", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+    it(
+        "skips the age check, without reading the listing, when the age limit is 0",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0 });
-        app.context.reddit.modQueue = [queuedPost("a", 1000)];
+            const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0 });
+            app.context.reddit.unmoderated = [queuedPost("a", 1000)];
 
-        await app.runJob("modqueueMonitor");
+            await app.runJob("modqueueMonitor");
 
-        expect(app.slack.requests).toStrictEqual([]);
-    });
+            expect(app.slack.requests).toStrictEqual([]);
+            expect(app.context.reddit.unmoderatedAll).not.toHaveBeenCalled();
+        },
+    );
 
     it("throttles the size and age alerts separately, each to once an hour", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, { modqueueThreshold: 1, unmoderagedAgeHours: 1 });
         app.context.reddit.modQueue = [queuedPost("a", 5)];
+        app.context.reddit.unmoderated = [queuedPost("a", 5)];
 
         await app.runJob("modqueueMonitor");
         await app.runJob("modqueueMonitor");
@@ -220,6 +238,7 @@ describe("the modqueue monitor", (): void => {
 
         const app = await loadApp(devvit, { modqueueThreshold: 1, unmoderagedAgeHours: 1, alertChannel: "#alerts" });
         app.context.reddit.modQueue = [queuedPost("a", 5)];
+        app.context.reddit.unmoderated = [queuedPost("a", 5)];
 
         await app.runJob("modqueueMonitor");
 

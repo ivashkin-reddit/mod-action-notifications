@@ -4,13 +4,14 @@ A Reddit Devvit application that brings your subreddit's modlog activity straigh
 
 **Developer:** u/ivashkin  
 **License:** MIT  
-**Platform:** Reddit Devvit v0.12.1
+**Platform:** Reddit Devvit 0.15
 
 ## What You Get
 
 - Live Slack alerts for the mod actions you choose (removals, bans, flair edits, and more).
 - Automatic ban-duration context so unban events can be paired with the original discipline.
-- Optional warnings whenever unknown accounts act on the subreddit, or when the modqueue grows too large or too old.
+- Optional warnings whenever unknown accounts act on the subreddit. Actions by Reddit's own accounts (u/reddit for Crowd Control and Reddit's filters, Anti-Evil Operations for admin removals) are labelled as Reddit actions rather than security alerts.
+- Modqueue monitoring: alerts when the modqueue grows too large, when content waits too long without a moderator reviewing it, and when reported content is old.
 - Opt-in AutoModerator alerts if you want visibility into bot decisions.
 - Heads-up when users delete high-score posts, plus an in-app simulator so you can preview formatting safely.
 
@@ -68,7 +69,9 @@ After installation, configure the app through Reddit:
 2. Paste your Slack Incoming Webhook URL
 3. Choose which mod actions should trigger alerts (defaults cover removals and bans)
 4. Optionally set different channels for regular notifications vs. elevated alerts
-5. Configure modqueue monitoring thresholds if desired
+5. Configure modqueue monitoring thresholds if desired. Setting all three to 0 turns monitoring off; after turning it on or off, run the **Setup Modqueue Monitoring** menu item to schedule or cancel the monitor
+
+The channel settings rely on Slack letting a message choose its channel, which only legacy incoming webhooks allow. A webhook created by a Slack app always posts to the channel picked when it was created, so with one, create a webhook per channel instead.
 
 Once saved, perform any moderator action from the enabled list to confirm Slack is receiving notifications. Use the **Test Slack Connection** menu item for a test notification.
 
@@ -76,10 +79,11 @@ Once saved, perform any moderator action from the enabled list to confirm Slack 
 
 Fine-tune the bot to match your team's workflow:
 
-- **Modqueue Monitoring:** Adjust thresholds for queue size and oldest item age
+- **Modqueue Monitoring:** Adjust thresholds for modqueue size, how long content may wait unreviewed (Reddit's unmoderated listing), and how old reported content may be
 - **AutoModerator Alerts:** Toggle on/off to control bot action visibility
 - **Excluded Moderators:** Hide notifications from specific accounts (useful for bots)
-- **Alert Channels:** Route high-priority alerts to a separate Slack channel
+- **Alert Channels:** Route high-priority alerts to a separate Slack channel (legacy incoming webhooks only; see above)
+- **Mod Notes:** Reddit's mod-action events carry no note, so a note appears only on bans, read from the mod log
 - **Action Filters:** Enable/disable specific mod actions (bans, removals, approvals, etc.)
 
 ## Development
@@ -90,8 +94,11 @@ Fine-tune the bot to match your team's workflow:
 # Install dependencies
 npm install
 
-# Type check
-npm run type-check
+# Run the checks CI runs
+npm run typecheck
+npm run lint
+npm run coverage
+npm run format:check
 
 # Upload to test subreddit
 devvit upload
@@ -116,7 +123,7 @@ devvit logs <your-subreddit>
 This app:
 
 - ✅ Only collects data necessary for Slack notifications
-- ✅ Automatically deletes all data after 7-90 days (Redis TTL)
+- ✅ Automatically deletes stored data within 1 hour to 90 days (Redis TTL; see the Privacy Policy)
 - ✅ Does not share data with third parties (except Slack for notifications)
 - ✅ Respects Reddit user deletions and privacy rights
 - ✅ Stores webhook URLs securely in Reddit's infrastructure
@@ -146,7 +153,7 @@ See [PRIVACY-POLICY.md](./PRIVACY-POLICY.md) for complete details.
 **High latency?**
 
 - Reddit API and Slack may experience occasional delays
-- Devvit platform has rate limits that may queue notifications
+- Slack takes about one message a second from a webhook, so during a burst of mod actions alerts are queued and delivered in order at that pace; anything one delivery run cannot send follows within a minute or so
 
 ## Contributing
 
@@ -155,7 +162,7 @@ Contributions are welcome! Please:
 1. Fork this repository
 2. Create a feature branch
 3. Make your changes with clear commit messages
-4. Test thoroughly with `npm run type-check`
+4. Make sure the checks in `.github/workflows/test.yml` pass locally
 5. Submit a pull request
 
 ## License

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "./support/app.js";
 import { removedPost } from "./support/events.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
+import type { SlackMessage } from "./support/fakeSlack.js";
 import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "./support/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -10,6 +11,16 @@ const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 
 const TEST_OPTIONS = { timeout: 5000 };
+const ACTIVITY_KEY = "mod_actions:moderator_actions:testsub:moda";
+
+/** Each message's status line, if it has one. */
+function statusLines(
+    app: Readonly<{ slack: Readonly<{ messages: readonly SlackMessage[] }> }>,
+): (string | undefined)[] {
+    return app.slack.messages.map((message: SlackMessage): string | undefined =>
+        lines(message).find((line: string): boolean => line.startsWith("• *Status:*")),
+    );
+}
 
 describe("an activity spike", (): void => {
     it("is flagged on a moderator’s fifth action within a minute", TEST_OPTIONS, async (): Promise<void> => {
@@ -22,11 +33,7 @@ describe("an activity spike", (): void => {
             await app.advance(10_000);
         }
 
-        const statusLines = app.slack.messages.map((message): string | undefined =>
-            lines(message).find((line): boolean => line.startsWith("• *Status:*")),
-        );
-
-        expect(statusLines).toStrictEqual([
+        expect(statusLines(app)).toStrictEqual([
             undefined,
             undefined,
             undefined,
@@ -35,18 +42,58 @@ describe("an activity spike", (): void => {
         ]);
     });
 
-    it("keeps each moderator’s recent actions in Redis for an hour", TEST_OPTIONS, async (): Promise<void> => {
+    it("keeps each moderator’s recent actions in Redis for an hour, by ID", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
-        await app.fire("ModAction", removedPost());
+        await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 
-        const key = "mod_actions:moderator_activity:testsub:moda";
+        expect(app.context.redis.keys()).toStrictEqual([ACTIVITY_KEY]);
+        await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toStrictEqual([
+            { member: "ModAction_1", score: NOW.getTime() },
+        ]);
+        expect(app.context.redis.ttlSeconds(ACTIVITY_KEY)).toBe(3600);
+    });
 
-        expect(app.context.redis.keys()).toStrictEqual([key]);
-        expect(JSON.parse(String(await app.context.redis.get(key)))).toStrictEqual([NOW.getTime()]);
-        expect(app.context.redis.ttlSeconds(key)).toBe(3600);
+    // Devvit runs triggers concurrently, and a burst of actions is what a spike is.
+    it("counts every one of a burst of actions that arrive at once", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await Promise.all(
+            Array.from({ length: 5 }, async (_unused: unknown, index: number): Promise<void> => {
+                await app.fire("ModAction", removedPost({ id: `ModAction_${String(index)}` }));
+            }),
+        );
+
+        expect(statusLines(app)).toContain("• *Status:* Activity spike 5 actions / 1 min");
+    });
+
+    it("counts an action delivered twice once", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        for (let count = 0; count < 5; count += 1) {
+            await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
+        }
+
+        expect(statusLines(app)).toStrictEqual([undefined, undefined, undefined, undefined, undefined]);
+    });
+
+    // A backlog Devvit delivers at once is not a burst: actions count by when they were taken.
+    it("counts actions by when they were taken, not when they arrive", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        for (let minutesAgo = 20; minutesAgo >= 0; minutesAgo -= 5) {
+            await app.fire("ModAction", removedPost({ actionedAt: new Date(NOW.getTime() - minutesAgo * MINUTE) }));
+        }
+
+        expect(statusLines(app)).toStrictEqual([undefined, undefined, undefined, undefined, undefined]);
     });
 
     it("counts an action exactly a minute old but not one older", TEST_OPTIONS, async (): Promise<void> => {
@@ -88,31 +135,29 @@ describe("an activity spike", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        const key = "mod_actions:moderator_activity:testsub:moda";
-        app.context.redis.seed(key, JSON.stringify(Array<number>(150).fill(NOW.getTime() - 1000)));
+
+        for (let count = 0; count < 105; count += 1) {
+            await app.fire("ModAction", removedPost());
+        }
+
+        await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toHaveLength(
+            100,
+        );
+        expect(lastLine(app.slack.messages[104])).toBe("• *Status:* Activity spike 100 actions / 1 min");
+    });
+
+    // Earlier versions kept a JSON list of times under mod_actions:moderator_activity:*; it expires within the hour.
+    it("ignores the activity list an earlier version kept", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        const legacyTimes = JSON.stringify(Array<number>(4).fill(NOW.getTime()));
+        app.context.redis.seed("mod_actions:moderator_activity:testsub:moda", legacyTimes);
 
         await app.fire("ModAction", removedPost());
 
-        const stored: unknown = JSON.parse(String(await app.context.redis.get(key)));
-
-        expect(stored).toStrictEqual([...Array<number>(99).fill(NOW.getTime() - 1000), NOW.getTime()]);
-        expect(lastLine(onlyMessage(app.slack.messages))).toBe("• *Status:* Activity spike 100 actions / 1 min");
+        expect(lastLine(onlyMessage(app.slack.messages))).toBe(WHEN_NOW);
     });
-
-    it.each([["not json"], ['{"count":4}'], ['["a", "b", "c", "d"]']])(
-        "starts counting afresh when the stored activity is unusable: %s",
-        TEST_OPTIONS,
-        async (stored): Promise<void> => {
-            expect.hasAssertions();
-
-            const app = await loadApp(devvit);
-            app.context.redis.seed("mod_actions:moderator_activity:testsub:moda", stored);
-
-            await app.fire("ModAction", removedPost());
-
-            expect(lastLine(onlyMessage(app.slack.messages))).toBe(WHEN_NOW);
-        },
-    );
 
     it("is not tracked when the event names no subreddit", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
@@ -129,10 +174,10 @@ describe("an activity spike", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.redis.get.mockRejectedValue(new Error("redis down"));
+        app.context.redis.zAdd.mockRejectedValue(new Error("redis down"));
 
         await app.fire("ModAction", removedPost());
 
-        expect(app.slack.requests).toHaveLength(1);
+        expect(lastLine(onlyMessage(app.slack.messages))).toBe(WHEN_NOW);
     });
 });

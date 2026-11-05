@@ -1,12 +1,11 @@
 import {
     DeletionReason,
     EventSource as DeletionSource,
-    PostCreate,
     PostDelete,
-    PostUpdate,
 } from "@devvit/protos/types/devvit/events/v1alpha/events.js";
 import { ModAction } from "@devvit/protos/types/devvit/reddit/v2alpha/modaction.js";
 import { SUBREDDIT } from "./fakeContext.js";
+import type { FakePost } from "./fakeContext.js";
 
 /** DeletionSource is Devvit's EventSource, renamed: the WebWorker lib already has a global EventSource. */
 export { DeletionReason, DeletionSource };
@@ -30,17 +29,6 @@ export type ModActionFields = Readonly<{
     targetComment?: Readonly<{ id?: string; body?: string; permalink?: string; author?: string }> | undefined;
 }>;
 
-export type PostFields = Readonly<{
-    id?: string;
-    title?: string;
-    score?: number;
-    permalink?: string;
-    authorId?: string;
-    subredditId?: string;
-}>;
-
-export type PostChangeFields = Readonly<{ post?: PostFields | undefined; author?: Named; subreddit?: Named }>;
-
 export type PostDeleteFields = Readonly<{
     postId?: string;
     source?: DeletionSource;
@@ -52,14 +40,6 @@ export type PostDeleteFields = Readonly<{
 
 export function modActionEvent(fields: ModActionFields): ModAction & Readonly<{ type: "ModAction" }> {
     return { type: "ModAction", ...ModAction.fromPartial({ subreddit: { name: SUBREDDIT }, ...fields }) };
-}
-
-export function postCreateEvent(fields: PostChangeFields): PostCreate & Readonly<{ type: "PostCreate" }> {
-    return { type: "PostCreate", ...PostCreate.fromPartial({ subreddit: { name: SUBREDDIT }, ...fields }) };
-}
-
-export function postUpdateEvent(fields: PostChangeFields): PostUpdate & Readonly<{ type: "PostUpdate" }> {
-    return { type: "PostUpdate", ...PostUpdate.fromPartial({ subreddit: { name: SUBREDDIT }, ...fields }) };
 }
 
 export function postDeleteEvent(fields: PostDeleteFields): PostDelete & Readonly<{ type: "PostDelete" }> {
@@ -89,15 +69,14 @@ export function bannedUser(fields: ModActionFields = {}): ReturnType<typeof modA
     return modActionEvent({ action: "banuser", moderator: { name: "ModA" }, targetUser: { name: "Troll" }, ...fields });
 }
 
-/** A post with the given score, as a PostCreate or PostUpdate event carries it. */
-export function bigPost(score: number): PostFields {
+/** Poster's post t3_big with the given score, as Reddit returns it. */
+export function bigPost(score: number): FakePost {
     return {
         id: "t3_big",
         title: "Big post",
         score,
         permalink: "/r/testsub/comments/big/big_post/",
-        authorId: "t2_poster",
-        subredditId: "t5_testsub",
+        subredditName: SUBREDDIT,
     };
 }
 

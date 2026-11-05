@@ -16,8 +16,11 @@ export type App = Readonly<{
     context: FakeContext;
     slack: FakeSlack;
     toasts: readonly Toast[];
-    /** Delivers a trigger event to the handler registered for it. */
-    fire: (event: string, payload: unknown) => Promise<void>;
+    /**
+     * Delivers a trigger event to the handler registered for it, in this installation or in `installation` (another
+     * context from createFakeContext).
+     */
+    fire: (event: string, payload: unknown, installation?: unknown) => Promise<void>;
     /** Runs a scheduler job the way the scheduler would. */
     runJob: (name: string) => Promise<void>;
     /** Presses a menu item by its label. */
@@ -86,8 +89,8 @@ function actions(registrations: Registrations, context: unknown, shownForms: rea
         await invoke(named(registrations.forms, "form", key).onSubmit, { values }, context);
     };
     return {
-        fire: async (event: string, payload: unknown): Promise<void> => {
-            await invoke(named(registrations.triggers, "trigger", event), payload, context);
+        fire: async (event: string, payload: unknown, installation?: unknown): Promise<void> => {
+            await invoke(named(registrations.triggers, "trigger", event), payload, installation ?? context);
         },
         runJob: async (name: string): Promise<void> => {
             await invoke(named(registrations.schedulerJobs, "scheduler job", name), { name }, context);

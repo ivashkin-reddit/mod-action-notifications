@@ -18,13 +18,31 @@ export interface SlackAttachment {
 
 export interface SlackField {
     readonly title: string;
-    /** Slack displays text. A number is sent as it is (the deleted-post alert's reason). */
-    readonly value: string | number;
+    readonly value: string;
     readonly short: boolean;
 }
 
-/** Delivers a message to Slack. Never rejects: delivery failures are retried, then logged. */
-export type SlackSender = (message: SlackMessage) => Promise<void>;
+/**
+ * Delivers a message to Slack: true when Slack accepted it. Never rejects: delivery failures are retried, then
+ * logged.
+ */
+export type SlackSender = (message: SlackMessage) => Promise<boolean>;
+
+/**
+ * `text` as Slack shows it literally. Slack reads `&`, `<` and `>` as markup (`<!channel>` notifies everyone in the
+ * channel, `<url|label>` is a link), so text the app did not write escapes them.
+ */
+export function escapeText(text: string): string {
+    return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
+}
+
+/** `text` as a Slack block quote, every line of it: an unquoted line would read as part of the message. */
+export function quote(text: string): string {
+    return escapeText(text)
+        .split("\n")
+        .map((line: string): string => `> ${line}`)
+        .join("\n");
+}
 
 /**
  * The message, sent to the named channel: `name` with or without its leading #. For '' the message is unchanged,

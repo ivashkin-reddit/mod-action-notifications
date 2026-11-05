@@ -1,5 +1,5 @@
 import type { Comment, Post, TriggerContext } from "@devvit/public-api";
-import type { Modqueue } from "../application/ports.js";
+import type { ModerationQueues } from "../application/ports.js";
 import type { QueueItem } from "../domain/monitoring.js";
 
 type QueuedContent = Readonly<Pick<Comment | Post, "createdAt" | "permalink">>;
@@ -13,15 +13,17 @@ function queueItemOf(content: QueuedContent): QueueItem {
     };
 }
 
-/** Opens the current subreddit's modqueue; rejects when the subreddit cannot be read. */
-export async function openRedditModqueue(
+/** Opens the current subreddit's moderation listings; rejects when the subreddit cannot be read. */
+export async function openRedditQueues(
     reddit: Readonly<Pick<TriggerContext["reddit"], "getCurrentSubreddit">>,
-): Promise<Modqueue> {
+): Promise<ModerationQueues> {
     const subreddit = await reddit.getCurrentSubreddit();
     return {
-        items: async (): Promise<readonly QueueItem[]> => {
-            const listing = subreddit.getModQueue({ type: "all" });
-            return (await listing.all()).map(queueItemOf);
-        },
+        modqueue: async (): Promise<readonly QueueItem[]> =>
+            (await subreddit.getModQueue({ type: "all" }).all()).map(queueItemOf),
+        unmoderated: async (): Promise<readonly QueueItem[]> =>
+            (await subreddit.getUnmoderated({ type: "all" }).all()).map(queueItemOf),
+        reported: async (): Promise<readonly QueueItem[]> =>
+            (await subreddit.getReports({ type: "all" }).all()).map(queueItemOf),
     };
 }

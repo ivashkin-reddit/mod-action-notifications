@@ -1,10 +1,10 @@
-import { inChannel } from "../../slack/index.js";
+import { escapeText, inChannel } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { DeletedPostAlert, PostDeletionAlerts } from "../application/ports.js";
 
 const MS_PER_SECOND = 1000;
 
-function deletedPostMessage({ post, subredditName, deletedAt, reason }: DeletedPostAlert): SlackMessage {
+function deletedPostMessage({ post, authorName, subredditName, deletedAt, reason }: DeletedPostAlert): SlackMessage {
     return {
         text: `🗑️ User Deleted High-Score Post: ${String(post.score)} upvotes`,
         username: "Reddit Mod Bot",
@@ -13,8 +13,12 @@ function deletedPostMessage({ post, subredditName, deletedAt, reason }: DeletedP
             {
                 color: "#cc0000",
                 fields: [
-                    { title: "📝 Title", value: post.title, short: false },
-                    { title: "👤 Author", value: `/u/${post.authorName}`, short: true },
+                    { title: "📝 Title", value: escapeText(post.title), short: false },
+                    {
+                        title: "👤 Author",
+                        value: authorName === "" ? "Unknown" : `/u/${escapeText(authorName)}`,
+                        short: true,
+                    },
                     { title: "⬆️ Score", value: post.score.toString(), short: true },
                     { title: "🗑️ Reason", value: reason, short: true },
                     { title: "📍 Subreddit", value: `/r/${subredditName}`, short: true },

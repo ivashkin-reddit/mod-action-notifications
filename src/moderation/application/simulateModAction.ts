@@ -69,7 +69,7 @@ function simulatedModAction(request: SimulationRequest, subredditName: string | 
 
 /**
  * Sends the alert a mod action like the one requested would produce, without touching stored data or checking the
- * mod list. Rejects when alerts have nowhere to go.
+ * mod list. Rejects when alerts have nowhere to go or the alert was not delivered.
  */
 export async function simulateModAction(
     request: SimulationRequest,
@@ -79,8 +79,11 @@ export async function simulateModAction(
     if (!context.alertsConfigured) {
         throw new Error("Slack webhook URL is not configured");
     }
-    await alerts.report(simulatedModAction(request, context.subredditName), {
-        unknownModerator: false,
+    const delivered = await alerts.report(simulatedModAction(request, context.subredditName), {
+        actor: "moderator",
         channel: request.slackChannel,
     });
+    if (!delivered) {
+        throw new Error("Slack did not accept the simulated alert");
+    }
 }

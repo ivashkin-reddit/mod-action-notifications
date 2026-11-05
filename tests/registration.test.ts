@@ -46,6 +46,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "alertChannel", type: "string", defaultValue: undefined },
                 { name: "modqueueThreshold", type: "number", defaultValue: 50 },
                 { name: "unmoderagedAgeHours", type: "number", defaultValue: 24 },
+                { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
             ]);
@@ -105,14 +106,7 @@ describe("what the app registers with Devvit", (): void => {
             .sort(byText);
 
         expect(registered).toStrictEqual([...devvitJson.blocks.triggers].sort(byText));
-        expect(registered).toStrictEqual([
-            "onAppInstall",
-            "onAppUpgrade",
-            "onModAction",
-            "onPostCreate",
-            "onPostDelete",
-            "onPostUpdate",
-        ]);
+        expect(registered).toStrictEqual(["onAppInstall", "onAppUpgrade", "onModAction", "onPostDelete"]);
     });
 
     // Devvit 0.15 grants a Blocks app only the permissions devvit.json declares, whatever Devvit.configure says.
@@ -133,13 +127,18 @@ describe("what the app registers with Devvit", (): void => {
         expect(blocks.entry).toBe("src/main.ts");
     });
 
-    it("registers the modqueue monitor as its only scheduler job", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+    // Scheduler job names are stored with every scheduled job: renaming one orphans the jobs already scheduled.
+    it(
+        "registers the modqueue monitor and the Slack outbox as its scheduler jobs",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const app = await loadApp(devvit);
+            const app = await loadApp(devvit);
 
-        expect(Object.keys(app.registrations.schedulerJobs)).toStrictEqual(["modqueueMonitor"]);
-    });
+            expect(Object.keys(app.registrations.schedulerJobs)).toStrictEqual(["modqueueMonitor", "slackOutbox"]);
+        },
+    );
 
     it("adds four subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
