@@ -38,10 +38,11 @@ Devvit.addSettings(settingsDefinitions(ENABLED_ACTIONS_CHOICES));
 Devvit.addTrigger({
     event: "AppInstall",
     onEvent: async (_event: unknown, context: AppContext): Promise<void> => {
+        console.info(`[setup] Installed version ${context.appVersion}`);
         try {
             await setUpModqueueMonitor(context);
         } catch (error) {
-            console.error("Failed to auto-setup modqueue monitoring on install:", error);
+            console.error("[setup] Could not set up the modqueue monitor on install:", error);
         }
     },
 });
@@ -49,10 +50,11 @@ Devvit.addTrigger({
 Devvit.addTrigger({
     event: "AppUpgrade",
     onEvent: async (_event: unknown, context: AppContext): Promise<void> => {
+        console.info(`[setup] Upgraded to version ${context.appVersion}`);
         try {
             await setUpModqueueMonitor(context);
         } catch (error) {
-            console.error("Failed to setup modqueue monitoring on upgrade:", error);
+            console.error("[setup] Could not set up the modqueue monitor on upgrade:", error);
         }
     },
 });

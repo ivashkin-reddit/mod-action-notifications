@@ -66,7 +66,7 @@ async function invokedByModerator(context: InvokerContext): Promise<boolean> {
  */
 export async function forModerators(context: MenuContext, action: () => Promise<void> | void): Promise<void> {
     const allowed = await invokedByModerator(context).catch((error: unknown): boolean => {
-        console.error("Failed to check that the user moderates the subreddit; refusing:", error);
+        console.warn("[menu] Could not check that the user moderates the subreddit, so refused them:", error);
         return false;
     });
     if (!allowed) {
@@ -156,7 +156,7 @@ export async function sendSimulation(values: SimulateFormValues, context: MenuCo
         await sendSimulatedModAction(values, context);
         context.ui.showToast({ text: "✅ Simulation delivered to Slack!", appearance: "success" });
     } catch (error) {
-        console.error("Failed to send simulated action", error);
+        console.warn("[menu] Could not send the simulated mod action:", error);
         context.ui.showToast({ text: "❌ Could not send simulation. Check logs.", appearance: "neutral" });
     }
 }
@@ -174,7 +174,7 @@ export async function setUpFromMenu(context: MenuContext): Promise<void> {
                 : { text: "⚠️ Modqueue monitoring disabled (thresholds set to 0)", appearance: "neutral" },
         );
     } catch (error) {
-        console.error("Failed to setup modqueue monitoring:", error);
+        console.error("[setup] Could not set up the modqueue monitor:", error);
         context.ui.showToast({ text: "❌ Failed to setup modqueue monitoring", appearance: "neutral" });
     }
 }

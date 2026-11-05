@@ -183,7 +183,7 @@ describe("the alert about a deleted post", (): void => {
         await app.fire("PostDelete", userDeletion());
 
         expect(console.error).toHaveBeenCalledWith(
-            "Failed to take deleted content out of queued Slack alerts:",
+            "[deletions] Could not take a deleted post or comment out of queued alerts:",
             failure,
         );
         expect(JSON.stringify(app.slack.messages)).toContain("Big post");

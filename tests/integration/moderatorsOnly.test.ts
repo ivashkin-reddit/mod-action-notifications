@@ -77,8 +77,8 @@ describe("a menu item", (): void => {
 
             expect(app.toasts).toStrictEqual([REFUSAL]);
             expect(app.context.scheduler.runJob).not.toHaveBeenCalled();
-            expect(console.error).toHaveBeenCalledWith(
-                "Failed to check that the user moderates the subreddit; refusing:",
+            expect(console.warn).toHaveBeenCalledWith(
+                "[menu] Could not check that the user moderates the subreddit, so refused them:",
                 failure,
             );
         },

@@ -28,7 +28,7 @@ async function withBanFromModLog(modAction: ModAction, lookups: ModerationLookup
         const entry = matchBanLogEntry(await lookups.recentBans(modAction.subredditName), modAction);
         return entry === undefined ? modAction : withBanLogEntry(modAction, entry);
     } catch (error) {
-        console.error("Failed to read the mod log for a ban's length; alerting without it:", error);
+        console.warn("[modaction] Could not read the mod log for a ban's length, so alerting without it:", error);
         return modAction;
     }
 }
@@ -49,14 +49,17 @@ async function withDiscipline(modAction: ModAction, records: ModerationRecords):
         step.change === "lifted"
             ? liftedBy(
                   await records.disciplineEvents(subject).catch((error: unknown): readonly DisciplineEvent[] => {
-                      console.error("Failed to read a user's bans and mutes; alerting without the one lifted:", error);
+                      console.warn(
+                          "[modaction] Could not read the user's bans and mutes, so alerting without the one lifted:",
+                          error,
+                      );
                       return [];
                   }),
                   event.at,
               )
             : undefined;
     await records.recordDiscipline(subject, event).catch((error: unknown): void => {
-        console.error("Failed to record a ban or mute; a later unban or unmute will not name it:", error);
+        console.warn("[modaction] Could not record a ban or mute, so a later unban or unmute will not name it:", error);
     });
     return step.change === "lifted" ? { ...modAction, relatedAction } : modAction;
 }
@@ -73,7 +76,10 @@ async function withActivity(modAction: ModAction, records: ModerationRecords): P
     const actionCount = await records
         .countAction(moderator, { id: modAction.id, at: modAction.occurredAt.getTime() }, ACTIVITY_WINDOW_MS)
         .catch((error: unknown): undefined => {
-            console.error("Failed to count a moderator's action; alerting without spike detection:", error);
+            console.warn(
+                "[modaction] Could not count the moderator's action, so alerting without spike detection:",
+                error,
+            );
             return undefined;
         });
     return actionCount === undefined ? modAction : { ...modAction, activitySpike: activitySpike(actionCount) };
@@ -90,10 +96,13 @@ async function isUnknownModerator(
             return false;
         }
     } catch (error) {
-        console.error("Failed to fetch moderator list:", error);
+        console.warn("[modaction] Could not fetch the mod list, so treating the action as a moderator's:", error);
         return false;
     }
-    console.warn("Mod action by unknown moderator", { moderator: moderatorName, action: actionType });
+    console.warn("[modaction] An account not on the mod list took an action, alerted as a security alert", {
+        moderator: moderatorName,
+        action: actionType,
+    });
     return true;
 }
 
@@ -123,7 +132,7 @@ async function isFirstDelivery(modAction: ModAction, records: ModerationRecords)
         return true;
     }
     return await records.claimReport(modAction.id).catch((error: unknown): boolean => {
-        console.error("Failed to record a reported mod action; reporting it anyway:", error);
+        console.warn("[modaction] Could not record that the action was alerted, so it may be alerted again:", error);
         return true;
     });
 }

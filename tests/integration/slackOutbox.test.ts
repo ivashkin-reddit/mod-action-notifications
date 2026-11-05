@@ -225,7 +225,10 @@ describe("the Slack outbox", (): void => {
         await app.fire("ModAction", removal(0));
 
         expect(deliveredUsers(app.slack.requests)).toStrictEqual(["User0"]);
-        expect(console.error).toHaveBeenCalledWith("Failed to queue a Slack message; sending it directly:", error);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[outbox] Could not queue an alert, so sent it straight to Slack:",
+            error,
+        );
     });
 
     it("keeps an alert queued, logged, when the queue cannot be read", TEST_OPTIONS, async (): Promise<void> => {
@@ -239,7 +242,10 @@ describe("the Slack outbox", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(app.context.redis.keys()).toContain(QUEUE_KEY);
-        expect(console.error).toHaveBeenCalledWith("Failed to deliver queued Slack messages:", error);
+        expect(console.error).toHaveBeenCalledWith(
+            "[outbox] Could not deliver the queued alerts; they wait for the next drain:",
+            error,
+        );
     });
 
     it(

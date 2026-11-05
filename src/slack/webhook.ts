@@ -99,30 +99,11 @@ export function failureDetail(failure: Failure): string {
     return withoutWebhookSecret(failure.error instanceof Error ? failure.error.message : String(failure.error));
 }
 
-/** Logs why the message did not reach Slack, with what to check. */
-export function logFailure(failure: Failure, message: SlackMessage): void {
-    if (failure.kind === "response") {
-        console.error("Slack webhook request failed - verify webhook URL is correct:", {
-            status: failure.status,
-            statusText: failure.statusText,
-            responseText: failure.responseText,
-            troubleshooting: "Check: 1) Webhook URL is valid, 2) Slack workspace permissions, 3) Network connectivity",
-        });
-        return;
-    }
-    const errorMessage = failureDetail(failure);
-    if (failure.ranOutOfTime || errorMessage.includes("timeout")) {
-        console.error(
-            "Slack webhook request timed out - Slack may be experiencing delays or webhook URL may be incorrect",
-            {
-                channel: message.channel ?? "default",
-                error: errorMessage,
-                troubleshooting: "Verify webhook URL in settings and check Slack status at status.slack.com",
-            },
-        );
-        return;
-    }
-    console.error("Error sending Slack message - check webhook URL and network connectivity:", errorMessage);
+/** Logs why a message sent straight to Slack, for a moderator waiting on it, did not reach Slack. */
+function logFailure(failure: Failure): void {
+    console.warn(
+        `[slack] Slack did not take a message sent straight to it (${failureDetail(failure)}). Check the webhook URL in the app's settings.`,
+    );
 }
 
 /** Whether a direct send retries after this attempt: Slack may take it later, and the request did not time out. */
@@ -144,7 +125,7 @@ async function postToSlack(webhookUrl: string, message: SlackMessage, retryCount
         return true;
     }
     if (!retriesDirectly(delivery, retryCount)) {
-        logFailure(delivery.failure, message);
+        logFailure(delivery.failure);
         return false;
     }
     await wait(backoffMs(retryCount));

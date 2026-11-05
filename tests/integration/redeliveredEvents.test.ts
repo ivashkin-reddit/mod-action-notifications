@@ -84,8 +84,8 @@ describe("a mod action delivered again", (): void => {
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 
         expect(app.slack.messages).toHaveLength(1);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to record a reported mod action; reporting it anyway:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not record that the action was alerted, so it may be alerted again:",
             failure,
         );
     });
@@ -127,8 +127,8 @@ describe("a post deletion delivered again", (): void => {
         await app.fire("PostDelete", userDeletion());
 
         expect(app.slack.messages).toHaveLength(1);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to record an alerted post deletion; alerting anyway:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[postdeletion] Could not record that the deletion was alerted, so it may be alerted again:",
             failure,
         );
     });

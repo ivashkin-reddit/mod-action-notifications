@@ -18,19 +18,15 @@ async function cancelJobs(jobs: readonly ScheduledMonitorJob[], scheduler: Monit
         jobs.map(async (job: ScheduledMonitorJob): Promise<void> => {
             // Setup goes on to leave one job scheduled; a job left behind, if it still exists, the next setup cancels.
             await scheduler.cancel(job.id).catch((error: unknown): void => {
-                console.error("Failed to cancel a modqueue monitor job:", { jobId: job.id, error });
+                console.warn("[setup] Could not cancel a modqueue monitor job:", { jobId: job.id, error });
             });
         }),
     );
 }
 
+/** Schedules the monitor job; rejects when the scheduler cannot, which the caller logs with what it was doing. */
 async function scheduleMonitor(scheduler: MonitorScheduler): Promise<string> {
-    try {
-        return await scheduler.schedule(MONITOR_CRON);
-    } catch (scheduleError) {
-        console.error("Failed to schedule modqueue monitor job", scheduleError);
-        throw scheduleError;
-    }
+    return await scheduler.schedule(MONITOR_CRON);
 }
 
 /**
@@ -70,7 +66,7 @@ async function scheduleOne(scheduler: MonitorScheduler): Promise<string> {
         return (await keepOne(scheduler, true)) ?? scheduled;
     } catch (error) {
         // The job is scheduled; an extra one a concurrent setup left behind, the next setup cancels.
-        console.error("Failed to list monitor jobs after scheduling one:", error);
+        console.warn("[setup] Could not list the monitor jobs after scheduling one:", error);
         return scheduled;
     }
 }
@@ -85,7 +81,7 @@ export async function setupMonitoring(thresholds: MonitorThresholds, ports: Moni
     const kept = await keepOne(ports.scheduler, enabled);
     // Cleanup only: a job ID left behind is never read, and the next setup deletes it.
     await ports.store.forgetLegacyJobId().catch((error: unknown): void => {
-        console.error("Failed to delete the monitor job ID an earlier version kept:", error);
+        console.warn("[setup] Could not delete the monitor job ID an earlier version kept:", error);
     });
 
     if (!enabled) {
@@ -109,7 +105,7 @@ export async function monitorJobStatus(scheduler: MonitorScheduler): Promise<Mon
         }
         return job.cron === undefined ? { state: "active" } : { state: "active", cron: job.cron };
     } catch (error) {
-        console.error("Failed to list scheduled jobs for the bot status:", error);
+        console.warn("[menu] Could not list the scheduled jobs for the bot status:", error);
         return { state: "unknown" };
     }
 }

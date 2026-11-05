@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "../../tests/fixtures/fakeContext.js";
 import type { Settings } from "../../tests/fixtures/fakeContext.js";
-import { createConfigLoader } from "./index.js";
-import type { AppConfig } from "./index.js";
+import { createConfigLoader } from "./config.js";
+import type { AppConfig } from "./config.js";
 
 const TEST_OPTIONS = { timeout: 1000 };
 
@@ -141,20 +141,30 @@ describe("settings that cannot be read", (): void => {
         context.settings.get.mockRejectedValue(failure);
 
         await expect(load(context.settings, "t5_one")).resolves.toMatchObject({ modqueueThreshold: 7 });
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to load configuration - check settings format and values:",
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+            "[settings] Could not read the settings, so using those last read:",
             failure,
         );
+        expect(console.error).not.toHaveBeenCalled();
     });
 
-    it("give the defaults to an installation never read, never another's", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+    it(
+        "give the defaults, with no alerts, to an installation never read, never another's: an error",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const load = createConfigLoader();
-        const { context } = createFakeContext(defaultSettings());
-        await load(context.settings, "t5_one");
-        context.settings.get.mockRejectedValue(new Error("settings unavailable"));
+            const load = createConfigLoader();
+            const { context } = createFakeContext(defaultSettings());
+            await load(context.settings, "t5_one");
+            const failure = new Error("settings unavailable");
+            context.settings.get.mockRejectedValue(failure);
 
-        await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ slackWebhookUrl: "" });
-    });
+            await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ slackWebhookUrl: "" });
+            expect(console.error).toHaveBeenCalledExactlyOnceWith(
+                "[settings] Could not read the settings, so no alerts are sent until they can be:",
+                failure,
+            );
+        },
+    );
 });

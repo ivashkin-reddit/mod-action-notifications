@@ -75,6 +75,8 @@ export type AppContext = Readonly<{
     scheduler: Readonly<Pick<TriggerContext["scheduler"], "runJob" | "cancelJob" | "listJobs">>;
     /** Identifies the installation: one app process can serve several. */
     subredditId: string;
+    /** The version of the app that is running. */
+    appVersion: string;
     subredditName?: string | undefined;
 }>;
 
@@ -180,9 +182,16 @@ export async function alertOnModAction(event: ModActionEvent, context: AppContex
     await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));
 }
 
+/** Schedules the monitor while any of its thresholds is above 0, and cancels it otherwise, logging which. */
 export async function setUpModqueueMonitor(context: AppContext): Promise<MonitoringSetup> {
     const config = await configOf(context);
-    return await setupMonitoring(monitorThresholds(config), monitorJobPorts(context));
+    const setup = await setupMonitoring(monitorThresholds(config), monitorJobPorts(context));
+    console.info(
+        setup.enabled
+            ? "[setup] The modqueue monitor is on"
+            : "[setup] The modqueue monitor is off: all its thresholds are 0",
+    );
+    return setup;
 }
 
 export async function runModqueueMonitor(context: AppContext): Promise<void> {
@@ -221,7 +230,7 @@ export async function forgetDeletedContent(contentId: string, context: AppContex
     try {
         await forgetContent({ redis: context.redis, scheduler: context.scheduler }, contentId);
     } catch (error) {
-        console.error("Failed to take deleted content out of queued Slack alerts:", error);
+        console.error("[deletions] Could not take a deleted post or comment out of queued alerts:", error);
     }
 }
 

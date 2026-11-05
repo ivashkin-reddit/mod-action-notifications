@@ -46,7 +46,10 @@ describe("sending through the outbox", (): void => {
         await drive(outbox.send({ text: "hello" }));
 
         expect(texts(slack.messages)).toStrictEqual(["hello"]);
-        expect(console.error).toHaveBeenCalledWith("Failed to queue a Slack message; sending it directly:", failure);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[outbox] Could not queue an alert, so sent it straight to Slack:",
+            failure,
+        );
     });
 
     it(

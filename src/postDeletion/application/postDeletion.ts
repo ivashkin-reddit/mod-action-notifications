@@ -20,7 +20,10 @@ export interface PostDeletionPorts {
  */
 async function isFirstDelivery(postId: string, claims: DeletionAlertClaims): Promise<boolean> {
     return await claims.claim(postId).catch((error: unknown): boolean => {
-        console.error("Failed to record an alerted post deletion; alerting anyway:", error);
+        console.warn(
+            "[postdeletion] Could not record that the deletion was alerted, so it may be alerted again:",
+            error,
+        );
         return true;
     });
 }
@@ -55,13 +58,13 @@ export async function alertOnUserDeletion(
         return;
     }
     if (deletion.postId === "") {
-        console.error("PostDelete event missing postId");
+        console.warn("[postdeletion] A PostDelete event named no post");
         return;
     }
     try {
         await alertIfHighScore(deletion, config, ports);
     } catch (error) {
         // The post could not be read: without its score there is no alert to send.
-        console.error("Failed to handle post delete:", error);
+        console.error("[postdeletion] Could not check a deleted post:", error);
     }
 }

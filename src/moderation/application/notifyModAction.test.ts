@@ -72,7 +72,10 @@ describe("notifying moderators of a mod action", (): void => {
         await notifyModAction(modAction(), CONFIG, ports);
 
         expect(actors(ports.reports)).toStrictEqual(["moderator"]);
-        expect(console.error).toHaveBeenCalledWith("Failed to fetch moderator list:", FAILURE);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not fetch the mod list, so treating the action as a moderator's:",
+            FAILURE,
+        );
     });
 
     it("counts and records an action it does not report", TEST_OPTIONS, async (): Promise<void> => {
@@ -137,8 +140,8 @@ describe("an action delivered again", (): void => {
         await notifyModAction(modAction(), CONFIG, ports);
 
         expect(ports.reports).toHaveLength(1);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to record a reported mod action; reporting it anyway:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not record that the action was alerted, so it may be alerted again:",
             FAILURE,
         );
     });
@@ -176,8 +179,8 @@ describe("a ban without a length", (): void => {
         await notifyModAction(ban, CONFIG, ports);
 
         expect(ports.reports[0]?.modAction.banDuration).toBeUndefined();
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to read the mod log for a ban's length; alerting without it:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not read the mod log for a ban's length, so alerting without it:",
             FAILURE,
         );
     });
@@ -231,8 +234,8 @@ describe("an unban", (): void => {
         await notifyModAction(unban, CONFIG, ports);
 
         expect(ports.reports[1]?.modAction.relatedAction).toBeUndefined();
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to read a user's bans and mutes; alerting without the one lifted:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not read the user's bans and mutes, so alerting without the one lifted:",
             FAILURE,
         );
     });
@@ -246,8 +249,8 @@ describe("an unban", (): void => {
         await notifyModAction(unban, CONFIG, ports);
 
         expect(ports.reports).toHaveLength(1);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to record a ban or mute; a later unban or unmute will not name it:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not record a ban or mute, so a later unban or unmute will not name it:",
             FAILURE,
         );
     });
@@ -274,8 +277,8 @@ describe("a moderator's activity", (): void => {
         await notifyModAction(modAction(), CONFIG, ports);
 
         expect(ports.reports[0]?.modAction.activitySpike).toBeUndefined();
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to count a moderator's action; alerting without spike detection:",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not count the moderator's action, so alerting without spike detection:",
             FAILURE,
         );
     });

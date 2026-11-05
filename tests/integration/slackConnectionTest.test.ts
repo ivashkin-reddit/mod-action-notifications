@@ -82,6 +82,9 @@ describe("the Test Slack Connection menu item", (): void => {
                 appearance: "neutral",
             },
         ]);
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+            "[slack] Slack did not take a message sent straight to it (HTTP 404: error). Check the webhook URL in the app's settings.",
+        );
     });
 
     it("retries a test Slack could not take at once", TEST_OPTIONS, async (): Promise<void> => {

@@ -59,14 +59,14 @@ async function countFailure(ports: CheckModqueuePorts, errorMessage: string): Pr
         await ports.store.clearFailures();
     } catch (trackingError) {
         // The run has already failed, and its condition says so; failing to count it is logged beside that.
-        console.error("Failed to track scheduler failures:", trackingError);
+        console.warn("[modqueue] Could not count the failed monitor run:", trackingError);
     }
 }
 
 /** Clears the failure count after a run that succeeded; a count left behind expires within the hour. */
 async function clearFailuresAfterSuccess(store: MonitorStore): Promise<void> {
     await store.clearFailures().catch((error: unknown): void => {
-        console.error("Failed to clear the modqueue monitor's failure count:", error);
+        console.warn("[modqueue] Could not clear the monitor's failure count:", error);
     });
 }
 

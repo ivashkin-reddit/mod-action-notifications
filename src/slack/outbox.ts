@@ -227,13 +227,13 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
             } catch (error) {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself.
-                console.error("Failed to queue a Slack message; sending it directly:", error);
+                console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
                 await createWebhookSender(outbox.webhookUrl)(message);
                 return;
             }
             await deliverQueued(outbox).catch((error: unknown): void => {
                 // The message stays queued for the next drain.
-                console.error("Failed to deliver queued Slack messages:", error);
+                console.error("[outbox] Could not deliver the queued alerts; they wait for the next drain:", error);
             });
         },
         deliverQueued: async (): Promise<void> => {

@@ -161,8 +161,8 @@ describe("the Simulate Mod Action menu item", (): void => {
         expect(app.toasts).toStrictEqual([
             { text: "❌ Could not send simulation. Check logs.", appearance: "neutral" },
         ]);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to send simulated action",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[menu] Could not send the simulated mod action:",
             new Error("Slack webhook URL is not configured"),
         );
     });
@@ -178,8 +178,8 @@ describe("the Simulate Mod Action menu item", (): void => {
         expect(app.toasts).toStrictEqual([
             { text: "❌ Could not send simulation. Check logs.", appearance: "neutral" },
         ]);
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to send simulated action",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[menu] Could not send the simulated mod action:",
             new Error("Slack did not accept the simulated alert"),
         );
     });

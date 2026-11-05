@@ -208,7 +208,7 @@ describe("a deletion that is not alerted", (): void => {
         await app.fire("PostDelete", userDeletion({ postId: "" }));
 
         expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith("PostDelete event missing postId");
+        expect(console.warn).toHaveBeenCalledWith("[postdeletion] A PostDelete event named no post");
     });
 
     it.each([
@@ -225,7 +225,7 @@ describe("a deletion that is not alerted", (): void => {
             await app.fire("PostDelete", userDeletion({ postId }));
 
             expect(app.slack.requests).toStrictEqual([]);
-            expect(console.error).toHaveBeenCalledWith("Failed to handle post delete:", error);
+            expect(console.error).toHaveBeenCalledWith("[postdeletion] Could not check a deleted post:", error);
         },
     );
 });

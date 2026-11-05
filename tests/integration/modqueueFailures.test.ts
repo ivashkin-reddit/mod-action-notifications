@@ -168,6 +168,9 @@ describe("a failing modqueue monitor run", (): void => {
 
         await app.runJob("modqueueMonitor");
 
-        expect(console.error).toHaveBeenCalledWith("Failed to track scheduler failures:", new Error("redis down"));
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modqueue] Could not count the failed monitor run:",
+            new Error("redis down"),
+        );
     });
 });

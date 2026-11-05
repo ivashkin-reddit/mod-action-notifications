@@ -160,8 +160,8 @@ describe("installing or upgrading the app", (): void => {
     });
 
     it.each([
-        ["AppInstall", "Failed to auto-setup modqueue monitoring on install:"],
-        ["AppUpgrade", "Failed to setup modqueue monitoring on upgrade:"],
+        ["AppInstall", "[setup] Could not set up the modqueue monitor on install:"],
+        ["AppUpgrade", "[setup] Could not set up the modqueue monitor on upgrade:"],
     ])("%s logs a scheduling failure and still succeeds", TEST_OPTIONS, async (trigger, logMessage): Promise<void> => {
         expect.hasAssertions();
 
@@ -171,8 +171,7 @@ describe("installing or upgrading the app", (): void => {
 
         await app.fire(trigger, { type: trigger });
 
-        expect(console.error).toHaveBeenCalledWith("Failed to schedule modqueue monitor job", error);
-        expect(console.error).toHaveBeenCalledWith(logMessage, error);
+        expect(console.error).toHaveBeenCalledExactlyOnceWith(logMessage, error);
         expect(app.context.redis.keys()).toStrictEqual([]);
     });
 });
@@ -222,7 +221,10 @@ describe("setups that run at once", (): void => {
         expect(app.toasts).toStrictEqual([
             { text: "✅ Modqueue monitoring enabled (Job ID: job-1)", appearance: "success" },
         ]);
-        expect(console.error).toHaveBeenCalledWith("Failed to list monitor jobs after scheduling one:", failure);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[setup] Could not list the monitor jobs after scheduling one:",
+            failure,
+        );
     });
 });
 
@@ -288,6 +290,6 @@ describe("the Setup Modqueue Monitoring menu item", (): void => {
         await app.pressMenuItem("Setup Modqueue Monitoring");
 
         expect(app.toasts).toStrictEqual([{ text: "❌ Failed to setup modqueue monitoring", appearance: "neutral" }]);
-        expect(console.error).toHaveBeenCalledWith("Failed to setup modqueue monitoring:", error);
+        expect(console.error).toHaveBeenCalledWith("[setup] Could not set up the modqueue monitor:", error);
     });
 });

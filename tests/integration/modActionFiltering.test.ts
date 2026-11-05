@@ -101,7 +101,7 @@ describe("which mod actions are sent", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(console.error).toHaveBeenCalledWith(
-            "Failed to load configuration - check settings format and values:",
+            "[settings] Could not read the settings, so no alerts are sent until they can be:",
             new Error("settings unavailable"),
         );
     });
@@ -167,10 +167,13 @@ describe("an action by someone not on the mod list", (): void => {
             "🚨 *Security Alert*",
             "• *Status:* Unknown moderator (alert)",
         ]);
-        expect(console.warn).toHaveBeenCalledWith("Mod action by unknown moderator", {
-            moderator: "Intruder",
-            action: "removelink",
-        });
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] An account not on the mod list took an action, alerted as a security alert",
+            {
+                moderator: "Intruder",
+                action: "removelink",
+            },
+        );
     });
 
     it("goes to the notification channel when no alert channel is set", TEST_OPTIONS, async (): Promise<void> => {
@@ -213,7 +216,10 @@ describe("an action by someone not on the mod list", (): void => {
         await app.fire("ModAction", removedPost({ moderator: { name: "Intruder" } }));
 
         expect(onlyMessage(app.slack.messages).text).toBe("🗑️ Post Removed");
-        expect(console.error).toHaveBeenCalledWith("Failed to fetch moderator list:", new Error("reddit down"));
+        expect(console.warn).toHaveBeenCalledWith(
+            "[modaction] Could not fetch the mod list, so treating the action as a moderator's:",
+            new Error("reddit down"),
+        );
     });
 });
 
