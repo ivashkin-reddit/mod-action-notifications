@@ -31,7 +31,7 @@ function outboxJobs(
 
 /** The health log's line for Slack refusing alerts, with what Slack answered. */
 function refusing(detail: string): string {
-    return `[health] Slack is refusing alerts (${detail}), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.`;
+    return `[health] Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.`;
 }
 
 /** The health log's line for Slack not taking alerts, with why. */
@@ -56,8 +56,8 @@ describe("delivering an alert to Slack", (): void => {
         expect(console.error).not.toHaveBeenCalled();
     });
 
-    it.each([[500], [503], [429]])(
-        "retries after a second when Slack answers %i",
+    it.each([[500], [503], [429], ["ratelimited"], ["rate_limited"], ["internal_error"], ["service_unavailable"]])(
+        "retries after a second when Slack answers %s",
         TEST_OPTIONS,
         async (status): Promise<void> => {
             expect.hasAssertions();
@@ -85,28 +85,69 @@ describe("delivering an alert to Slack", (): void => {
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0, 1000, 3000, 7000]);
-            expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("HTTP 503: error"));
+            expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("HTTP 503"));
             expect(console.error).not.toHaveBeenCalled();
             expect(outboxJobs(app)).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 7000 + 30_000)]);
         },
     );
 
-    it.each([[400], [403], [404]])(
-        "drops the alert, logging Slack as refusing alerts, when Slack answers %i",
+    // Slack answers an error with HTTP 200, and says what is wrong in its error code.
+    it.each([["not_in_channel"], ["channel_not_found"], ["is_archived"], ["invalid_auth"], ["token_revoked"]])(
+        "drops the alert, logging Slack as refusing alerts, when Slack answers %s",
         TEST_OPTIONS,
-        async (status): Promise<void> => {
+        async (error: string): Promise<void> => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
-            app.slack.respond(status);
+            app.slack.respond(error);
 
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0]);
-            expect(console.error).toHaveBeenCalledExactlyOnceWith(refusing(`HTTP ${String(status)}: error`));
+            expect(console.error).toHaveBeenCalledExactlyOnceWith(refusing(error));
             expect(outboxJobs(app)).toStrictEqual([RECOVERY]);
         },
     );
+
+    it(
+        "drops the alert when something before Slack refuses it, logging the HTTP status",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.slack.respond(404);
+
+            await app.fire("ModAction", removal);
+
+            expect(sendTimes(app.slack.requests)).toStrictEqual([0]);
+            expect(console.error).toHaveBeenCalledExactlyOnceWith(refusing("HTTP 404"));
+        },
+    );
+
+    // Slack took the call only if its answer says so: a success without its answer may not have reached it.
+    it("retries a success that is not Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.slack.respond({ status: 200, body: "<html>OK</html>" });
+
+        await app.fire("ModAction", removal);
+
+        expect(sendTimes(app.slack.requests)).toStrictEqual([0, 1000]);
+        expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it("waits as long as Slack's Retry-After says when it rate limits", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.slack.respond({ retryAfterSeconds: 3 });
+
+        await app.fire("ModAction", removal);
+
+        expect(sendTimes(app.slack.requests)).toStrictEqual([0, 3000]);
+    });
 
     it("retries a network error", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

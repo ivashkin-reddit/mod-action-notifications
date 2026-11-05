@@ -18,31 +18,44 @@ function fakeOutbox(): OutboxFakes & Readonly<{ outbox: SlackOutbox }> {
 
 // The outbox reports lasting delivery problems as conditions, which the health log reports once each.
 describe("the conditions a drain reports", (): void => {
-    it("include Slack refusing an alert, with Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
+    it("include Slack refusing an alert, with its error code", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const { health, outbox, slack } = fakeOutbox();
-        slack.respond(404);
+        slack.respond("not_in_channel");
 
         await drive(outbox.send({ text: "hello" }));
 
-        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404: error"]]);
+        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "not_in_channel"]]);
     });
 
-    // An answer from something between the app and Slack, such as an HTML error page, must not fill the log.
-    it("give at most 100 characters of Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
+    // An answer from something between the app and Slack, such as an HTML error page, says nothing worth logging.
+    it("give only the HTTP status of an answer that is not Slack's", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const { health, outbox, slack } = fakeOutbox();
-        slack.respond({ status: 404, body: `${"x".repeat(100)}and more` });
+        slack.respond({ status: 404, body: "<html>Not Found</html>" });
 
         await drive(outbox.send({ text: "hello" }));
 
-        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", `HTTP 404: ${"x".repeat(100)}`]]);
+        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404"]]);
+    });
+
+    it("give at most 100 characters of an error code", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { health, outbox, slack } = fakeOutbox();
+        slack.respond({ status: 400, body: JSON.stringify({ ok: false, error: `${"x".repeat(100)}and more` }) });
+
+        await drive(outbox.send({ text: "hello" }));
+
+        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "x".repeat(100)]]);
     });
 
     it.each([
-        ["a server error", [503, 503, 503, 503], "HTTP 503: error"],
+        ["a server error", [503], "HTTP 503"],
+        ["a failure Slack names", ["service_unavailable"], "service_unavailable"],
+        ["rate limiting", [{ retryAfterSeconds: 1 }], "ratelimited"],
         ["a network error", [new Error("ECONNRESET")], "ECONNRESET"],
         ["a request that ran out of time", [new Error("context deadline exceeded")], "context deadline exceeded"],
     ] as const)(

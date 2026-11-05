@@ -1,8 +1,8 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import { alertsConfigured, configOf, modActionPresentation, monitorThresholds } from "./composition.js";
-import type { AppContext } from "./composition.js";
+import { configOf, modActionPresentation, monitorThresholds, slackSetup } from "./composition.js";
+import type { AppContext, SlackSetup } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
-import type { MonitorState, StatusInput, StatusLine } from "./health/index.js";
+import type { MonitorState, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
     simulateModAction,
@@ -13,8 +13,7 @@ import type { SimulateFormValues } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
-import type { AppConfig } from "./settings/index.js";
-import { createWebhookSender, queueState, sendTestMessage } from "./slack/delivery.js";
+import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
 
 /**
  * The composition root's menu actions: what each menu item and form does for the moderator who invoked it, and the
@@ -94,13 +93,6 @@ function readFailed(error: unknown): undefined {
     return undefined;
 }
 
-function webhookState(config: AppConfig): StatusInput["webhook"] {
-    if (config.slackWebhookUrlInvalid) {
-        return "invalid";
-    }
-    return alertsConfigured(config) ? "set" : "missing";
-}
-
 /**
  * What the bot's status form says, from the settings, the scheduler and Redis: the data ui.showForm passes to
  * statusForm, which Devvit requires to be plain JSON.
@@ -113,7 +105,7 @@ export async function botStatus(context: MenuContext): Promise<{ lines: { label:
     const lines = statusLines({
         now,
         version: context.appVersion,
-        webhook: webhookState(config),
+        slack: slackSetup(config),
         monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
         problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
         queue: await queueState(context.redis).catch(readFailed),
@@ -150,26 +142,31 @@ export function statusForm(data: Readonly<Record<string, unknown>>): Form {
     };
 }
 
-/** How sending a test message went. */
-type ConnectionTest = "delivered" | "not-configured" | "failed";
+/** How sending a test message went, or what kept it from being sent. */
+type ConnectionTest = "delivered" | Exclude<SlackSetup, "set-up"> | "failed";
 
 const CONNECTION_TEST_TOASTS: Readonly<
     Record<ConnectionTest, Readonly<{ text: string; appearance: "neutral" | "success" }>>
 > = {
     "delivered": { text: "🧪 Test alert sent! Check your Slack channel and bot logs.", appearance: "success" },
-    "not-configured": { text: "⚠️ No Slack webhook URL is set. Add one in the app's settings.", appearance: "neutral" },
+    "token-missing": { text: "⚠️ No Slack bot token is set. The app's developer sets it.", appearance: "neutral" },
+    "channel-missing": {
+        text: "⚠️ No Notification Channel is set. Set it in the app's settings.",
+        appearance: "neutral",
+    },
     "failed": {
-        text: "❌ Slack did not accept the test alert. Check the webhook URL and the bot logs.",
+        text: "❌ Slack did not accept the test alert. Check the Notification Channel, and that the Slack app is in it.",
         appearance: "neutral",
     },
 };
 
 async function testSlackConnection(context: AppContext): Promise<ConnectionTest> {
     const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        return "not-configured";
+    const setup = slackSetup(config);
+    if (setup !== "set-up") {
+        return setup;
     }
-    return (await sendTestMessage(config.slackWebhookUrl)) ? "delivered" : "failed";
+    return (await sendTestMessage(config.slackBotToken, config.notificationChannel)) ? "delivered" : "failed";
 }
 
 /** Sends a test message to Slack, and says how it went. */
@@ -177,11 +174,12 @@ export async function sendTestAlert(context: MenuContext): Promise<void> {
     context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
 }
 
-/** Rejects when no webhook is set or Slack did not accept the alert. */
+/** Rejects when Slack is not set up or did not accept the alert. */
 async function sendSimulatedModAction(values: SimulateFormValues, context: AppContext): Promise<void> {
     const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        throw new Error("Slack webhook URL is not configured");
+    const setup = slackSetup(config);
+    if (setup !== "set-up") {
+        throw new Error(`Slack is not set up: ${setup}`);
     }
     const channel = slackChannelFromForm(values);
     const presentation = modActionPresentation(config);
@@ -189,7 +187,7 @@ async function sendSimulatedModAction(values: SimulateFormValues, context: AppCo
         simulationRequestFromForm(values),
         context.subredditName,
         // A moderator waits on the result, so the simulation goes straight to Slack, to the channel the form names.
-        createSlackSimulationAlerts(createWebhookSender(config.slackWebhookUrl), {
+        createSlackSimulationAlerts(createDirectSender(config.slackBotToken), {
             ...presentation,
             notificationChannel: channel === "" ? presentation.notificationChannel : channel,
         }),

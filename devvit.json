@@ -8,7 +8,7 @@
   "permissions": {
     "http": {
       "enable": true,
-      "domains": ["hooks.slack.com"]
+      "domains": ["slack.com"]
     },
     "redis": true,
     "reddit": true

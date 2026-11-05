@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
-import { WEBHOOK_URL } from "../fixtures/fakeContext.js";
+import { BOT_TOKEN } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -12,27 +12,28 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 const DAY_SECONDS = 86_400;
 const DAY = DAY_SECONDS * 1000;
-const NO_WEBHOOK = "[health] No Slack webhook URL is set, so no alerts are sent. Set one in the app's settings.";
+const NO_TOKEN =
+    "[health] No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.";
 
 // A problem that lasts is logged when it starts, not each time the app meets it: Devvit keeps only 5,000 log entries.
-describe("a missing webhook", (): void => {
+describe("a missing bot token", (): void => {
     it("is logged once, however many mod actions find it", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
-        expect(console.warn).toHaveBeenCalledExactlyOnceWith(NO_WEBHOOK);
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith(NO_TOKEN);
         expect(console.error).not.toHaveBeenCalled();
     });
 
     it("is logged again each day it lasts, saying since when", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.advance(DAY - 1);
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
@@ -42,8 +43,8 @@ describe("a missing webhook", (): void => {
         await app.fire("ModAction", removedPost({ id: "ModAction_4" }));
 
         expect(vi.mocked(console.warn).mock.calls).toStrictEqual([
-            [NO_WEBHOOK],
-            [NO_WEBHOOK.replace("[health] ", "[health] Since 2026-11-04T12:00:00.000Z: ")],
+            [NO_TOKEN],
+            [NO_TOKEN.replace("[health] ", "[health] Since 2026-11-04T12:00:00.000Z: ")],
         ]);
     });
 
@@ -54,49 +55,57 @@ describe("a missing webhook", (): void => {
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+            const app = await loadApp(devvit, { slackBotToken: undefined });
 
             await app.fire("ModAction", removedPost());
 
             await expect(app.context.redis.hGetAll("health:conditions")).resolves.toStrictEqual({
-                "webhook-missing": JSON.stringify({ since: NOW.getTime(), detail: "" }),
+                "token-missing": JSON.stringify({ since: NOW.getTime(), detail: "" }),
             });
             expect(app.context.redis.ttlSeconds("health:conditions")).toBe(7 * DAY_SECONDS);
-            expect(app.context.redis.ttlSeconds("health:reminder:webhook-missing")).toBe(DAY_SECONDS);
+            expect(app.context.redis.ttlSeconds("health:reminder:token-missing")).toBe(DAY_SECONDS);
         },
     );
 
-    it("is logged as resolved once a webhook is set", TEST_OPTIONS, async (): Promise<void> => {
+    it("is logged as resolved once a bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
-        app.settings.slackWebhookUrl = WEBHOOK_URL;
+        app.settings.slackBotToken = BOT_TOKEN;
 
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
         expect(console.info).toHaveBeenCalledExactlyOnceWith(
-            "[health] A Slack webhook URL is set: alerts are sent again.",
+            "[health] A Slack bot token is set: alerts are sent again.",
         );
     });
 });
 
-// A URL saved before the app checked it on saving.
-describe("a webhook URL that is not a Slack one", (): void => {
-    it("is logged once, as an error, however many mod actions find it", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+describe("a missing notification channel", (): void => {
+    it(
+        "is logged once, however many mod actions find it, and as resolved once one is set",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "https://example.com/hook" });
+            const app = await loadApp(devvit, { notificationChannel: "" });
+            await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
+            await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
+            app.settings.notificationChannel = "C0123MODS";
 
-        await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
-        await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
+            await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
-        expect(console.error).toHaveBeenCalledExactlyOnceWith(
-            "[health] The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
-        );
-        expect(console.warn).not.toHaveBeenCalled();
-    });
+            expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+                "[health] No Notification Channel is set, so no alerts are sent. Set it in the app's settings to the Slack channel's ID.",
+            );
+            expect(console.info).toHaveBeenCalledExactlyOnceWith(
+                "[health] A Notification Channel is set: alerts are sent again.",
+            );
+            expect(app.slack.messages).toHaveLength(1);
+        },
+    );
 });
 
 describe("a Slack that refuses alerts", (): void => {
@@ -104,14 +113,14 @@ describe("a Slack that refuses alerts", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.slack.respond(404, 404);
+        app.slack.respond("not_in_channel", "not_in_channel");
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
 
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
         expect(console.error).toHaveBeenCalledExactlyOnceWith(
-            "[health] Slack is refusing alerts (HTTP 404: error), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.",
+            "[health] Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
         );
         expect(console.info).toHaveBeenCalledExactlyOnceWith("[health] Slack is taking alerts again.");
     });
@@ -143,37 +152,34 @@ function warningsAndErrors(): string {
     return JSON.stringify([vi.mocked(console.warn).mock.calls, vi.mocked(console.error).mock.calls]);
 }
 
-// A webhook URL's path is its secret: anyone who has it can post to the channel.
-describe("an error that names the webhook URL", (): void => {
-    it("is logged without the URL's secret path, when delivering an alert", TEST_OPTIONS, async (): Promise<void> => {
+// Anyone who has the bot token can post as the Slack app: it travels in a header, which no log line names.
+describe("the bot token", (): void => {
+    it("is never logged when an alert fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        const error = new Error(`request to ${WEBHOOK_URL} failed: ECONNREFUSED`);
-        app.slack.respond(error, error, error, error);
+        const error = new Error("request to https://slack.com/api/chat.postMessage failed: ECONNREFUSED");
+        app.slack.respond(error, error, error, error, "invalid_auth");
 
-        await app.fire("ModAction", removedPost());
+        await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
+        await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
 
-        expect(warningsAndErrors()).toContain("request to https://hooks.slack.com/services/… failed: ECONNREFUSED");
-        expect(warningsAndErrors()).not.toContain("T000/B000/XXXX");
+        expect(warningsAndErrors()).toContain("ECONNREFUSED");
+        expect(warningsAndErrors()).toContain("invalid_auth");
+        expect(warningsAndErrors()).not.toContain(BOT_TOKEN);
     });
 
-    it(
-        "is logged without the URL's secret path, when sending a test message",
-        TEST_OPTIONS,
-        async (): Promise<void> => {
-            expect.hasAssertions();
+    it("is never logged when a test message fails", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
 
-            const app = await loadApp(devvit);
-            const error = new Error(`request to ${WEBHOOK_URL} failed: ECONNREFUSED`);
-            app.slack.respond(error, error, error, error);
+        const app = await loadApp(devvit);
+        app.slack.respond("invalid_auth");
 
-            await app.fillForm("Test Slack Connection", {});
+        await app.fillForm("Test Slack Connection", {});
 
-            expect(warningsAndErrors()).toContain("request to https://hooks.slack.com/services/… failed: ECONNREFUSED");
-            expect(warningsAndErrors()).not.toContain("T000/B000/XXXX");
-        },
-    );
+        expect(warningsAndErrors()).toContain("invalid_auth");
+        expect(warningsAndErrors()).not.toContain(BOT_TOKEN);
+    });
 });
 
 describe("recording an event", (): void => {
@@ -206,7 +212,7 @@ describe("recording a condition", (): void => {
 
         expect(app.slack.messages).toHaveLength(1);
         expect(console.warn).toHaveBeenCalledExactlyOnceWith("[health] Could not record a condition:", {
-            condition: "webhook-missing",
+            condition: "token-missing",
             error: failure,
         });
     });

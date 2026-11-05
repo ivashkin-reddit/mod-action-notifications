@@ -70,10 +70,10 @@ describe("a comment deleted while its removal's alert waits for Slack", (): void
         expect(JSON.stringify(delivered)).not.toContain("the_post_title");
     });
 
-    it("leaves the queue while no webhook is set", TEST_OPTIONS, async (): Promise<void> => {
+    it("leaves the queue while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
         await app.context.redis.zAdd(QUEUE_KEY, queuedQuoting("t1_c"));
 
         await app.fire("CommentDelete", commentDeleteEvent({ commentId: "t1_c", postId: "t3_p" }));

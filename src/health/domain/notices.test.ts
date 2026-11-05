@@ -7,8 +7,10 @@ const MINUTE = 60_000;
 const SINCE = Date.UTC(2026, 10, 4, 12);
 
 // At once when alerts are lost or not sent; after half an hour for what often passes by itself.
-const AT_ONCE: readonly Condition[] = ["webhook-invalid", "slack-refusing", "outbox-full", "alerts-expired"];
+const AT_ONCE: readonly Condition[] = ["slack-refusing", "outbox-full", "alerts-expired"];
 const AFTER_HALF_AN_HOUR: readonly Condition[] = ["slack-unreachable", "monitor-failing"];
+// Never for what is set up with the app.
+const NEVER: readonly Condition[] = ["token-missing", "channel-missing"];
 
 describe("a modmail notice of a condition", (): void => {
     it.each(AT_ONCE)("is due at once for %s", TEST_OPTIONS, (condition: Condition): void => {
@@ -28,10 +30,10 @@ describe("a modmail notice of a condition", (): void => {
         },
     );
 
-    it("is never due for a missing webhook, which moderators choose", TEST_OPTIONS, (): void => {
+    it.each(NEVER)("is never due for %s, which is set up with the app", TEST_OPTIONS, (condition: Condition): void => {
         expect.hasAssertions();
 
-        expect(noticeDue("webhook-missing", SINCE, SINCE + 7 * 24 * 60 * MINUTE)).toBe(false);
+        expect(noticeDue(condition, SINCE, SINCE + 7 * 24 * 60 * MINUTE)).toBe(false);
     });
 
     it("names the problem, what to do, and when it started, to the minute in UTC", TEST_OPTIONS, (): void => {

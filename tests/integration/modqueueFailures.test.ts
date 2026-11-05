@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
+import { CHANNEL } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { NOW_SECONDS } from "../fixtures/messages.js";
 
@@ -50,6 +51,7 @@ describe("a failing modqueue monitor run", (): void => {
                 text: "⚠️ Critical: Modqueue Monitoring Failed 3 Times",
                 username: "Mod Action Notifications",
                 icon_emoji: ":warning:",
+                channel: CHANNEL,
                 attachments: [
                     {
                         color: "#ff0000",

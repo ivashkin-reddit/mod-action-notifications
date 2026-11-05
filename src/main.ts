@@ -21,7 +21,7 @@ import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
 Devvit.configure({
     redditAPI: true,
     http: {
-        domains: ["hooks.slack.com"],
+        domains: ["slack.com"],
     },
     redis: true,
 });
@@ -112,7 +112,7 @@ const testForm = Devvit.createForm(
                 label: "Bot Status",
                 type: "paragraph",
                 defaultValue:
-                    'This bot monitors moderator actions and sends notifications to Slack. Click "Send Test Alert" to verify your webhook configuration.',
+                    'This app tells your mod team in Slack about moderator actions. Click "Send Test Alert" to check that it can post to your Notification Channel.',
                 disabled: true,
             },
         ],

@@ -18,7 +18,7 @@ The developer, u/ivashkin, is responsible for the app and for this policy. The s
 ## Where it runs
 
 - **Reddit's Developer Platform (Devvit).** The app's code runs on Reddit's servers. Its records are kept in Devvit's storage for the subreddit's installation, which no other installation can read, and Devvit stores its settings. The developer runs no servers or databases of their own.
-- **The moderators' Slack workspace.** The moderators create a Slack incoming webhook and enter it in the app's settings. Alerts go there, and nowhere else outside Reddit.
+- **The moderators' Slack workspace.** The developer creates a Slack app in it, from the template in the app's repository, and gives the app the Slack app's token. The app posts alerts through Slack's Web API to the channels the moderators choose, and sends nothing anywhere else outside Reddit.
 - **The subreddit's modmail.** Notices about problems with the app itself go there.
 
 ## What it reads from Reddit, and why
@@ -51,7 +51,7 @@ The daily summary, which is off unless the moderators turn it on, holds only cou
 
 Alerts travel over HTTPS. Text from Reddit is escaped, so it cannot notify a whole Slack channel.
 
-Once an alert reaches Slack, it is kept under the workspace's message retention settings and Slack's privacy policy, and the moderators control it. **The app cannot change or delete an alert once it is in Slack**, as an incoming webhook can only post. An alert stays in Slack even if the content it quotes is later deleted on Reddit. The moderators can delete it in Slack.
+Once an alert reaches Slack, it is kept under the workspace's message retention settings and Slack's privacy policy, and the moderators control it. **The app does not change or delete an alert once it is in Slack.** An alert stays in Slack even if the content it quotes is later deleted on Reddit. The moderators can delete it in Slack.
 
 ### The subreddit's modmail
 
@@ -65,16 +65,16 @@ The app sends nothing to any other service. It does not sell, license or share d
 
 Everything the app keeps expires by itself.
 
-| What                                                                    | Personal data in it                                                                                         | Kept for                                               |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Ban and mute history                                                    | Usernames of the user and the moderator, times, ban details and mod notes. The latest 20 per user.          | Until 90 days after the user's most recent ban or mute |
-| Alerts waiting for Slack                                                | What each alert will say                                                                                    | Until delivered, at most a day                         |
-| Moderator activity                                                      | Each moderator's username, with the IDs of their recent actions                                             | 1 hour                                                 |
-| Alerts already sent                                                     | The IDs of the mod actions and posts alerted                                                                | 1 day                                                  |
-| Posts and comments deleted on Reddit                                    | Their IDs                                                                                                   | 1 day                                                  |
-| The app's own workings: alert pacing, its problems, counts and times    | None                                                                                                        | Up to 8 days                                           |
-| Settings: the webhook URL, channels, alert choices, excluded moderators | Usernames of excluded moderators                                                                            | Until changed, or the app is uninstalled               |
-| The app's logs, kept by Reddit                                          | The username of an account not on the mod list, when one takes an action. No lines quote posts or comments. | 7 days, up to 5,000 lines                              |
+| What                                                                 | Personal data in it                                                                                         | Kept for                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Ban and mute history                                                 | Usernames of the user and the moderator, times, ban details and mod notes. The latest 20 per user.          | Until 90 days after the user's most recent ban or mute |
+| Alerts waiting for Slack                                             | What each alert will say                                                                                    | Until delivered, at most a day                         |
+| Moderator activity                                                   | Each moderator's username, with the IDs of their recent actions                                             | 1 hour                                                 |
+| Alerts already sent                                                  | The IDs of the mod actions and posts alerted                                                                | 1 day                                                  |
+| Posts and comments deleted on Reddit                                 | Their IDs                                                                                                   | 1 day                                                  |
+| The app's own workings: alert pacing, its problems, counts and times | None                                                                                                        | Up to 8 days                                           |
+| Settings: channels, alert choices, excluded moderators               | Usernames of excluded moderators                                                                            | Until changed, or the app is uninstalled               |
+| The app's logs, kept by Reddit                                       | The username of an account not on the mod list, when one takes an action. No lines quote posts or comments. | 7 days, up to 5,000 lines                              |
 
 The ban and mute history is kept for longer than the 30 days Reddit recommends for user data, so that an unban months after a long ban still says which ban it lifts.
 
@@ -82,7 +82,7 @@ Uninstalling the app removes its records and settings. Alerts already in Slack a
 
 ## Who can see what
 
-- **The subreddit's moderators** can see the app's settings, its modmail notices, and **Show Bot Status**, which shows counts and times but no user data. The webhook URL is an ordinary setting, as Devvit offers secrets only for app-wide settings that the developer sets: any moderator who can open the app's settings can read it.
+- **The subreddit's moderators** can see the app's settings, its modmail notices, and **Show Bot Status**, which shows counts and times but no user data. The Slack app's token is a secret that only the developer can set: Devvit encrypts it, and moderators cannot read it.
 - **Members of the Slack channel** can read the alerts. The moderators decide who they are.
 - **The developer** can read the app's logs.
 - **Reddit** runs the platform the app runs on, and **Slack** holds the alerts for the workspace, each under its own privacy policy.

@@ -150,10 +150,10 @@ describe("the Simulate Mod Action menu item", (): void => {
         },
     );
 
-    it("reports that it cannot send without a webhook", TEST_OPTIONS, async (): Promise<void> => {
+    it("reports that it cannot send without a bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "" });
+        const app = await loadApp(devvit, { slackBotToken: "" });
 
         await app.fillForm("Simulate Mod Action", {});
 
@@ -163,7 +163,7 @@ describe("the Simulate Mod Action menu item", (): void => {
         ]);
         expect(console.warn).toHaveBeenCalledWith(
             "[menu] Could not send the simulated mod action:",
-            new Error("Slack webhook URL is not configured"),
+            new Error("Slack is not set up: token-missing"),
         );
     });
 

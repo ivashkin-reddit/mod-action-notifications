@@ -63,7 +63,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
 }
 
 /**
- * Sends the summary of the day before, the scheduled job, when the setting is on and a webhook is set. Logs, and
+ * Sends the summary of the day before, the scheduled job, when the setting is on and Slack is set up. Logs, and
  * resolves, when Redis fails.
  */
 export async function sendSummary(context: AppContext): Promise<void> {
@@ -85,7 +85,7 @@ export async function sendSummary(context: AppContext): Promise<void> {
     }
 }
 
-/** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while no webhook is set. */
+/** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while Slack is not set up. */
 export async function deliverQueuedAlerts(context: AppContext): Promise<void> {
     const config = await configOf(context);
     if (alertsConfigured(config)) {

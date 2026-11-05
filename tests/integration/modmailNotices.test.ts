@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import { createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
-import type { ModNotification } from "../fixtures/fakeContext.js";
+import type { ModNotification, Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -38,7 +38,7 @@ describe("a problem moderators must act on", (): void => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
-            app.slack.respond(404, 404);
+            app.slack.respond("not_in_channel", "not_in_channel");
 
             await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
             await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
@@ -48,7 +48,7 @@ describe("a problem moderators must act on", (): void => {
                     subredditId: "t5_testsub",
                     subject: "Mod Action Notifications: Slack is refusing alerts",
                     bodyMarkdown: [
-                        "Slack is refusing alerts (HTTP 404: error), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.",
+                        "Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
                         "This started at 2026-11-04 12:00 UTC. **Show Bot Status**, in the subreddit's mod tools, shows how the bot is doing now.",
                         "_The bot sends this at most once a day for each problem, and says when it is over._",
                     ].join("\n\n"),
@@ -61,7 +61,7 @@ describe("a problem moderators must act on", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
@@ -77,10 +77,10 @@ describe("a problem moderators must act on", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.advance(DAY);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
 
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
 
@@ -94,10 +94,10 @@ describe("a problem moderators must act on", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
 
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_4" }));
@@ -148,16 +148,23 @@ describe("a problem that may pass by itself", (): void => {
     });
 });
 
-describe("a missing webhook", (): void => {
-    it("is not sent to modmail: moderators choose whether to set one", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+describe("a Slack app not set up", (): void => {
+    it.each([
+        ["no bot token", { slackBotToken: undefined }],
+        ["no notification channel", { notificationChannel: undefined }],
+    ])(
+        "is not sent to modmail for %s: it is set up with the app",
+        TEST_OPTIONS,
+        async (_label: string, settings: Readonly<Settings>): Promise<void> => {
+            expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+            const app = await loadApp(devvit, settings);
 
-        await app.fire("ModAction", removedPost());
+            await app.fire("ModAction", removedPost());
 
-        expect(notices(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([]);
-    });
+            expect(notices(app.context.reddit.modMail.createModNotification.mock.calls)).toStrictEqual([]);
+        },
+    );
 });
 
 // Stored data: renaming these keys would lose what installations hold.
@@ -169,7 +176,7 @@ describe("the notices sent", (): void => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
-            app.slack.respond(404);
+            app.slack.respond("not_in_channel");
 
             await app.fire("ModAction", removedPost());
 
@@ -191,7 +198,7 @@ describe("a notice modmail cannot take", (): void => {
 
             const app = await loadApp(devvit);
             const { context: installation } = createFakeContext(defaultSettings(), "not-a-subreddit");
-            app.slack.respond(404);
+            app.slack.respond("not_in_channel");
 
             await app.fire("ModAction", removedPost(), installation);
 
@@ -209,7 +216,7 @@ describe("a notice modmail cannot take", (): void => {
         const app = await loadApp(devvit);
         const failure = new Error("App user not found; did the app get banned?");
         app.context.reddit.modMail.createModNotification.mockRejectedValueOnce(failure);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));

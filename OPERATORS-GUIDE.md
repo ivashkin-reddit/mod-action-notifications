@@ -8,10 +8,10 @@ The app is a Devvit app. Reddit runs it, and it acts only when Reddit calls it:
 
 ```text
 Mod action, post deleted ─┐
-                          ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack webhook
+                          ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
 Every 15 minutes ─────────┘                                         ▲
 Post or comment deleted ─► its text leaves queued alerts ───────────┘
-Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────────────────────► Slack webhook
+Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────────────────────► Slack app
 ```
 
 | Reddit calls it for                              | It does                                                                                         |
@@ -31,6 +31,7 @@ Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────
 
 - Node.js 22.13 or later, 24, or 26.
 - A Reddit account that moderates the subreddit. The Devvit command-line tool comes with the project's dependencies.
+- A Slack workspace where you can install an app. The app posts through a Slack app of your own, which [slack-app/](./slack-app/README.md) holds the template for.
 
 ### Build, check and upload
 
@@ -49,13 +50,14 @@ npx devvit login
 npx devvit playtest <test-subreddit>   # optional: try it live on a test subreddit
 npx devvit upload
 npx devvit install <your-subreddit>
+npx devvit settings set slackBotToken  # the Slack app's bot token
 ```
 
-After installing, follow the [README's Getting started](./README.md#getting-started) to configure it.
+The bot token comes from the Slack app: [slack-app/README.md](./slack-app/README.md) says how to create it, and how to add it to the alert channels. Then follow the [README's Getting started](./README.md#getting-started) to configure the app.
 
 ### Before the first release
 
-- **Domain approval.** The app fetches `hooks.slack.com`. Reddit reviews requested domains when you first playtest or upload, and alerts can't reach Slack until it's approved.
+- **Domain approval.** The app fetches `slack.com`, Slack's Web API. Reddit reviews requested domains when you first playtest or upload, and alerts can't reach Slack until it's approved.
 - **Display name.** In the app's Developer Settings on developers.reddit.com, set the display name to Mod Action Notifications. The `name` in [devvit.json](./devvit.json), `ukpolitics-man`, is the app's Reddit account and URL slug: changing it would make a new app, without the installations or data of this one.
 - **Legal links.** Apps that fetch external domains must link to their terms and privacy policy in the app's details form on developers.reddit.com. Use [TERMS-AND-CONDITIONS.md](./TERMS-AND-CONDITIONS.md) and [PRIVACY-POLICY.md](./PRIVACY-POLICY.md).
 
@@ -65,7 +67,7 @@ After installing, follow the [README's Getting started](./README.md#getting-star
 
 - **Reddit API:** reads the mod list, the mod log's bans, posts, the modqueue, unmoderated and reports listings, and the permissions of the user who opens a menu action. Its only write is a notice to the subreddit's modmail about a problem with the app (see [Reading the logs](#reading-the-logs)). The app never posts, removes or bans.
 - **Redis:** the stores listed under [Data stored](#data-stored).
-- **HTTP:** `hooks.slack.com` only.
+- **HTTP:** `slack.com` only, to post with Slack's `chat.postMessage`.
 - **Triggers:** `onAppInstall`, `onAppUpgrade`, `onModAction`, `onPostDelete`, `onCommentDelete`.
 
 ### Upgrading
@@ -85,34 +87,36 @@ Uninstalling removes the installation's settings and stored data. Reinstalling s
 
 ## Configuration
 
-Moderators set these under the app's settings for the subreddit. The stored names are permanent; renaming one would lose what installations have saved.
+The developer sets the Slack bot token, for every installation at once. Moderators set the rest under the app's settings for the subreddit. The stored names are permanent; renaming one would lose what installations have saved.
 
-| Setting (stored name)                                                                             | Accepted values                       | Effect                                                                                                       |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Slack Webhook URL (`slackWebhookUrl`)                                                             | `https://hooks.slack.com/…`, or blank | Where alerts go. Blank turns off every alert.                                                                |
-| Enabled Mod Actions (`enabledActions`)                                                            | any of 31 action types                | Which actions send an alert.                                                                                 |
-| Excluded Moderators (`excludedModerators`)                                                        | usernames separated by commas         | Their actions never send an alert. Names are matched ignoring case.                                          |
-| Flag Unknown Moderators (`flagUnknownModerators`)                                                 | on or off                             | Actions by accounts not on the mod list become security alerts.                                              |
-| Include Mod Note (`includeModNote`)                                                               | on or off                             | Shows the moderator's note. Reddit's events carry none, so notes appear on bans only, read from the mod log. |
-| Notification Channel (`notificationChannel`)                                                      | a channel name, with or without `#`   | Channel for moderator and Reddit actions.                                                                    |
-| Alert Channel (`alertChannel`)                                                                    | a channel name, with or without `#`   | Channel for security, modqueue and deleted-post alerts. Falls back to the notification channel.              |
-| Modqueue Size Alert Threshold (`modqueueThreshold`)                                               | a whole number of 0 or more           | Alert when the modqueue holds at least this many items.                                                      |
-| Unmoderated Content Age Alert (Hours) (`unmoderagedAgeHours`, spelt this way when it was created) | a whole number of 0 or more           | Alert when unreviewed content is at least this many hours old.                                               |
-| Old Reported Content Alert (Hours) (`reportedContentAgeHours`)                                    | a whole number of 0 or more           | Alert when reported content is at least this many hours old.                                                 |
-| Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                             | Also alert for AutoModerator's actions.                                                                      |
-| Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more           | Alert when a user deletes their own post with at least this score.                                           |
-| Daily Summary (`dailySummary`)                                                                    | on or off                             | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.              |
+| Setting (stored name)                                                                             | Accepted values               | Effect                                                                                                       |
+| ------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Slack Bot Token (`slackBotToken`)                                                                 | `xoxb-…`, or blank            | The Slack app's token, set with `npx devvit settings set slackBotToken`. Blank turns off every alert.        |
+| Enabled Mod Actions (`enabledActions`)                                                            | any of 31 action types        | Which actions send an alert.                                                                                 |
+| Excluded Moderators (`excludedModerators`)                                                        | usernames separated by commas | Their actions never send an alert. Names are matched ignoring case.                                          |
+| Flag Unknown Moderators (`flagUnknownModerators`)                                                 | on or off                     | Actions by accounts not on the mod list become security alerts.                                              |
+| Include Mod Note (`includeModNote`)                                                               | on or off                     | Shows the moderator's note. Reddit's events carry none, so notes appear on bans only, read from the mod log. |
+| Notification Channel (`notificationChannel`)                                                      | a channel ID, or a name       | Channel for moderator and Reddit actions, and the summary. Blank turns off every alert.                      |
+| Alert Channel (`alertChannel`)                                                                    | a channel ID, or a name       | Channel for security, modqueue and deleted-post alerts. Falls back to the notification channel.              |
+| Modqueue Size Alert Threshold (`modqueueThreshold`)                                               | a whole number of 0 or more   | Alert when the modqueue holds at least this many items.                                                      |
+| Unmoderated Content Age Alert (Hours) (`unmoderagedAgeHours`, spelt this way when it was created) | a whole number of 0 or more   | Alert when unreviewed content is at least this many hours old.                                               |
+| Old Reported Content Alert (Hours) (`reportedContentAgeHours`)                                    | a whole number of 0 or more   | Alert when reported content is at least this many hours old.                                                 |
+| Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                     | Also alert for AutoModerator's actions.                                                                      |
+| Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more   | Alert when a user deletes their own post with at least this score.                                           |
+| Daily Summary (`dailySummary`)                                                                    | on or off                     | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.              |
 
 A threshold of 0 turns its alert off. Turning all three modqueue thresholds off turns the monitor off once **Setup Modqueue Monitoring** runs.
 
-**Saving.** The settings form rejects a webhook URL on any other host, and any threshold that isn't a whole number of 0 or more.
+**Saving.** The bot token must start `xoxb-`: a user token would post as the person who made it. The settings form rejects any threshold that isn't a whole number of 0 or more.
 
 **Reading.**
 
-- A value that still can't be used falls back to its default, and a webhook URL on another host is treated as blank.
+- A value that still can't be used falls back to its default.
 - If the settings can't be read at all, the app uses the last settings it read for that subreddit, logging the failure.
 
-**Channels.** The channel settings need a legacy incoming webhook. A webhook created by a Slack app ignores them and posts to the channel it was created for.
+**Channels.** Name a channel by its ID (it starts with `C`, and is at the bottom of the channel's details), or a public channel by its name, with or without `#`. An ID keeps working when the channel is renamed, and a private channel needs one. The Slack app must be added to each channel.
+
+**The bot token** is an app-wide secret: Devvit encrypts it, only the developer can set it, from the command line, and moderators never see it. Every installation uses it, so every subreddit the app is installed on posts to the one Slack workspace.
 
 ## Daily summary
 
@@ -133,7 +137,7 @@ Setup (install, upgrade, or **Setup Modqueue Monitoring**) keeps one summary job
 
 For each mod action, the app works through these steps. Steps 2 to 4 happen even for actions that send no alert, so the context is there when it's needed.
 
-1. **No webhook?** Then nothing happens, and the health log notes that no webhook is set (see [Reading the logs](#reading-the-logs)).
+1. **Slack not set up?** Without a bot token or a notification channel nothing happens, and the health log notes which is missing (see [Reading the logs](#reading-the-logs)).
 2. **Ban length.** For a ban that doesn't say how long it lasts, the app reads the mod log's 10 most recent bans and takes the matching entry. It tries the entry with the action's own ID first, then one for the same user by the same moderator, then one by the same moderator, and last one within two minutes of the action.
 3. **Ban and mute history.** Every ban, mute, unban and unmute is recorded for 90 days, keeping the latest 20 per user. An unban or unmute alert names the latest ban or mute taken before it. This works even when Reddit delivers the events out of order.
 4. **Activity.** Each action counts toward its moderator's activity by the time it was taken, apart from AutoModerator's and Reddit's actions. A moderator's fifth action within a minute marks a spike.
@@ -186,7 +190,7 @@ The monitor runs every 15 minutes while any of its thresholds is above 0 and **S
 
 ## Delivery to Slack
 
-Slack accepts about one message a second from an incoming webhook. Every alert therefore goes through the **outbox**, a queue in Redis:
+Slack takes about one message a second to a channel. Every alert therefore goes through the **outbox**, a queue in Redis, and is posted with Slack's `chat.postMessage`:
 
 - **Ordering.** One delivery run works the queue at a time, oldest alert first. Each run holds a lease that lasts 46.1 seconds.
 - **Pacing.**
@@ -200,16 +204,17 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 - **Limits.**
     - The queue holds at most 500 alerts; beyond that the oldest are dropped.
     - An alert still queued after a day is dropped.
-    - Slack refusing an alert (for example a revoked webhook) drops it.
+    - Slack refusing an alert (for example a revoked token, or a channel the Slack app isn't in) drops it.
 
     Drops are logged as health conditions, once when they start rather than once each.
 
+- **What counts as taken.** Slack has taken an alert only when its answer says `ok`. It answers an error with its own code, such as `not_in_channel`. Rate limiting and failures of Slack's own (`ratelimited`, `internal_error`, `service_unavailable` and the like, or a 5xx) are retried; any other error code means Slack refuses the alert.
 - **Possible duplicates.** Delivery is at least once. If Slack accepted a request but the answer was lost, or a run was cut off mid-request, the alert is sent again.
 - **Deleted content.** An alert that quotes a post or comment, or links to one with a post's title in the link, is queued with a second version without them. Links in that version leave out only the title (`/comments/abc/_/def/`), so they still open the post or comment.
     - When Reddit reports a post or comment deleted, the app keeps its ID for a day and a second, longer than any alert can wait.
     - Queued alerts that quote it switch to their second version at once. If a run is delivering at that moment, it switches them before it finishes, and checks each alert again just before sending it.
     - An alert that arrives after the deletion is stored without the content.
-    - This works whether or not a webhook is set, as alerts wait in the queue while none is.
+    - This works whether or not Slack is set up, as alerts wait in the queue until it is.
     - The deleted-post alert is the exception: it exists to name the post it reports.
 
 **Direct sends.** **Test Slack Connection** and **Simulate Mod Action** skip the queue, because a moderator is waiting for the answer. They retry after 1, 2 and 4 seconds before reporting failure.
@@ -239,11 +244,11 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 | `slack_outbox_last_sent`                                          | when Slack was last sent a message                                                      | 1 minute                          | 1 key            |
 | `slack_outbox_drain_scheduled`, `slack_outbox_recovery_scheduled` | that a follow-up or recovery run is scheduled                                           | until it runs                     | 1 key each       |
 
-**Settings** are stored by Devvit for each installation. The webhook URL is an ordinary setting, because Devvit allows only app-wide secrets, so any moderator who can open the app's settings can read it.
+**Settings** are stored by Devvit for each installation, apart from the bot token, an encrypted app-wide secret that moderators can't read.
 
-**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Once an alert reaches Slack, it stays there under your workspace's message retention. An incoming webhook can't edit or delete what it posted, so content deleted on Reddit after its alert was sent isn't removed from Slack. Content deleted before then leaves the alert, apart from the deleted-post alert's title.
+**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Once an alert reaches Slack, it stays there under your workspace's message retention, and content deleted on Reddit after its alert was sent isn't removed from it. Content deleted before then leaves the alert, apart from the deleted-post alert's title.
 
-**Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They record errors and never quote Reddit content; the one line that names an account is the one reporting an account not on the mod list. An error from a Slack request names the webhook without its secret path.
+**Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They record errors and never quote Reddit content; the one line that names an account is the one reporting an account not on the mod list. The bot token travels only in a request header, so no line names it.
 
 ## Access control
 
@@ -261,7 +266,7 @@ Moderators can't read the app's logs, so this is where they see how it's doing. 
 | Current problems     | Each health condition in force (see [Reading the logs](#reading-the-logs)), with what the app saw and for how long, and what to do; or `None`. |
 | Alerts waiting       | How many alerts wait for Slack, and how long the oldest has waited.                                                                            |
 | Last alert delivered | When Slack last took an alert, or `None in the last week`.                                                                                     |
-| Slack webhook        | `Set`, `Not set`, or `Not a Slack webhook URL`: without a usable one, no alerts are sent.                                                      |
+| Slack app            | `Set up`, or what is missing: the bot token or the notification channel. Without both, no alerts are sent.                                     |
 | Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds are 0; or `Unknown`.     |
 | Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                           |
 | Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.       |
@@ -271,11 +276,12 @@ A line reads `Unknown: Redis could not be read` when Redis fails; the rest still
 
 ### Test Slack Connection
 
-| Result                                    | Meaning                                                                                            |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `🧪 Test alert sent!`                     | Slack accepted the message. If nothing appears, check the channel the webhook posts to.            |
-| `⚠️ No Slack webhook URL is set.`         | Add the webhook URL in the app's settings.                                                         |
-| `❌ Slack did not accept the test alert.` | Slack refused it or couldn't be reached. Check the webhook hasn't been revoked, and read the logs. |
+| Result                                    | Meaning                                                                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `🧪 Test alert sent!`                     | Slack accepted the message, in the notification channel.                                                                      |
+| `⚠️ No Slack bot token is set.`           | The developer sets it: see [slack-app/README.md](./slack-app/README.md).                                                      |
+| `⚠️ No Notification Channel is set.`      | Set it in the app's settings.                                                                                                 |
+| `❌ Slack did not accept the test alert.` | Slack refused it or couldn't be reached. Check the channel, that the Slack app is in it, and the logs for Slack's error code. |
 
 ### Common problems
 
@@ -283,7 +289,8 @@ A line reads `Unknown: Redis could not be read` when Redis fails; the rest still
     - Run **Test Slack Connection**.
     - Check the action types are enabled and the moderator isn't excluded.
     - Check AutoModerator alerts are on, if the actions are AutoModerator's.
-- **Alerts in the wrong channel.** Channel settings only work with legacy incoming webhooks. Without an alert channel, security, modqueue and deleted-post alerts go to the notification channel.
+- **Alerts in the wrong channel.** Without an alert channel, security, modqueue and deleted-post alerts go to the notification channel.
+- **Slack is refusing alerts.** Show Bot Status gives Slack's error code. `not_in_channel`: add the Slack app to the channel. `channel_not_found`: check the channel ID, and that the Slack app is in a private channel. `is_archived`: the channel was archived. `invalid_auth`, `token_revoked` or `account_inactive`: the token needs replacing, as [slack-app/README.md](./slack-app/README.md#replacing-a-token-that-leaked) says.
 - **Alerts arriving slowly during busy periods.** That's the 1.1-second pacing at work. A burst of 60 actions takes about a minute to deliver.
 - **An alert sent twice.** This is rare: Slack accepted it but its answer was lost, so it was resent.
 - **No modqueue alerts.**
@@ -308,19 +315,19 @@ The command keeps following new lines until Ctrl+C. `--json` prints each line as
 - **WARN**: an alert went out without something, or a moderator's menu action failed and they were told.
 - **INFO**: the version installed or upgraded to, whether setup left the modqueue monitor on or off, and problems that have ended.
 
-Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`, `[postdeletion]`, `[deletions]`, `[modqueue]`, `[outbox]`, `[slack]`, `[settings]` or `[menu]`. Lines never quote Reddit content, and leave the secret path out of any webhook URL an error names (`hooks.slack.com/services/…`).
+Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`, `[postdeletion]`, `[deletions]`, `[modqueue]`, `[outbox]`, `[slack]`, `[settings]` or `[menu]`. Lines never quote Reddit content, and never name the bot token.
 
 **Health conditions.** A problem that lasts is a condition. It is logged once when it starts, once a day while it lasts (`Since <time>: …`), and once, at INFO, when it ends. This keeps it from filling the 5,000 entries.
 
-| Condition                              | Level | Starts when                                                        | Ends when                      | Modmail            |
-| -------------------------------------- | ----- | ------------------------------------------------------------------ | ------------------------------ | ------------------ |
-| No Slack webhook URL is set            | WARN  | a mod action finds no webhook set                                  | a mod action finds one         | never              |
-| The webhook URL is not a Slack one     | ERROR | a mod action finds a URL saved before the app checked it on saving | a mod action finds a Slack one | at once            |
-| Slack is refusing alerts               | ERROR | Slack refuses an alert (4xx other than 429), which is dropped      | Slack takes an alert           | at once            |
-| Slack is not taking alerts             | WARN  | a run leaves an alert queued after Slack failed or timed out       | Slack takes an alert           | after half an hour |
-| The alert queue is full                | ERROR | a new alert pushes the oldest of 500 out                           | a run empties the queue        | at once            |
-| Alerts are dropped after waiting a day | ERROR | a run drops an alert queued over a day ago                         | a run empties the queue        | at once            |
-| The modqueue monitor is failing        | ERROR | a monitor run fails                                                | a monitor run succeeds         | after half an hour |
+| Condition                              | Level | Starts when                                                  | Ends when               | Modmail            |
+| -------------------------------------- | ----- | ------------------------------------------------------------ | ----------------------- | ------------------ |
+| No Slack bot token is set              | WARN  | a mod action finds no bot token                              | a mod action finds one  | never              |
+| No Slack channel is set                | WARN  | a mod action finds no notification channel                   | a mod action finds one  | never              |
+| Slack is refusing alerts               | ERROR | Slack refuses an alert with an error code, and it is dropped | Slack takes an alert    | at once            |
+| Slack is not taking alerts             | WARN  | a run leaves an alert queued after Slack failed or timed out | Slack takes an alert    | after half an hour |
+| The alert queue is full                | ERROR | a new alert pushes the oldest of 500 out                     | a run empties the queue | at once            |
+| Alerts are dropped after waiting a day | ERROR | a run drops an alert queued over a day ago                   | a run empties the queue | at once            |
+| The modqueue monitor is failing        | ERROR | a monitor run fails                                          | a monitor run succeeds  | after half an hour |
 
 **Modmail notices.** Slack may be the very thing that is broken, so a condition moderators must act on also goes to the subreddit's modmail, as a notification from the app's account (in modmail's Notifications). The Modmail column says when. A notice gives the problem, what the app saw, what to do and when it started. Each condition is sent at most once a day, so a problem that comes and goes doesn't flood modmail, and again each day it lasts. Its end is sent too, when its start was. A notice modmail can't take (for example if the app's account is banned) is logged as `[health] Could not send moderators a modmail notice:`.
 

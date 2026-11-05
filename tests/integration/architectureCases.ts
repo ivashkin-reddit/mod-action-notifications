@@ -99,12 +99,12 @@ export const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
     {
         rule: "an adapter imports Slack only through its interface",
         file: "src/moderation/infrastructure/slackModActionAlerts.ts",
-        source: 'export * from "../../slack/webhook.js";',
+        source: 'export * from "../../slack/webApi.js";',
     },
     {
         rule: "an adapter does not choose how Slack delivers",
         file: "src/modqueue/infrastructure/slackAlerts.ts",
-        source: 'export { createWebhookSender } from "../../slack/delivery.js";',
+        source: 'export { createDirectSender } from "../../slack/delivery.js";',
     },
     {
         rule: "an adapter does not import another capability",
@@ -143,7 +143,7 @@ export const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
     },
     {
         rule: "production code does not import test support",
-        file: "src/slack/webhook.ts",
+        file: "src/slack/webApi.ts",
         source: 'export * from "../../tests/fixtures/fakeSlack.js";',
     },
     {
@@ -201,7 +201,7 @@ export const ALLOWED_IMPORTS: readonly ImportCase[] = [
     },
     {
         rule: "a shared module's files import each other",
-        file: "src/slack/webhook.ts",
+        file: "src/slack/webApi.ts",
         source: 'export type * from "./message.js";',
     },
     {

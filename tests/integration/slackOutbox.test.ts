@@ -57,7 +57,7 @@ function queued(queuedAt: number, text: string): ZMember {
 }
 
 describe("the Slack outbox", (): void => {
-    // Slack takes about one message a second from a webhook; a burst sent at once is mostly rate-limited away.
+    // Slack takes about one message a second to a channel; a burst sent at once is mostly rate-limited away.
     it(
         "delivers a burst in full, one message at least 1.1 seconds after another",
         TEST_OPTIONS,
@@ -153,10 +153,10 @@ describe("the Slack outbox", (): void => {
         expect(app.slack.requests).toStrictEqual([]);
     });
 
-    it("waits, without delivering, while no webhook is set", TEST_OPTIONS, async (): Promise<void> => {
+    it("waits, without delivering, while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "" });
+        const app = await loadApp(devvit, { slackBotToken: "" });
         await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "queued"));
 
         await app.runJob("slackOutbox");

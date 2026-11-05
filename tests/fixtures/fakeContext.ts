@@ -12,7 +12,9 @@ import type { FakeScheduler } from "./fakeScheduler.js";
  */
 
 export const SUBREDDIT = "testsub";
-export const WEBHOOK_URL = "https://hooks.slack.com/services/T000/B000/XXXX";
+export const BOT_TOKEN = "xoxb-test-token";
+/** The channel alerts go to by default: the Notification Channel, as its ID. */
+export const CHANNEL = "C0123MODS";
 
 const DEFAULT_MODQUEUE_THRESHOLD = 50;
 const DEFAULT_UNMODERATED_AGE_HOURS = 24;
@@ -21,7 +23,8 @@ const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 
 /** Installation settings as a moderator would have saved them. Keys are the setting names the app registers. */
 export interface Settings {
-    slackWebhookUrl?: unknown;
+    /** The app-wide secret, which Devvit reads through the same settings client. */
+    slackBotToken?: unknown;
     enabledActions?: unknown;
     excludedModerators?: unknown;
     flagUnknownModerators?: unknown;
@@ -36,10 +39,11 @@ export interface Settings {
     dailySummary?: unknown;
 }
 
-/** The app's own setting defaults, with a webhook configured. */
+/** The app's own setting defaults, with Slack set up: a bot token and a notification channel. */
 export function defaultSettings(): Settings {
     return {
-        slackWebhookUrl: WEBHOOK_URL,
+        slackBotToken: BOT_TOKEN,
+        notificationChannel: CHANNEL,
         enabledActions: ["removelink", "removecomment", "spamlink", "spamcomment", "banuser", "unbanuser"],
         flagUnknownModerators: true,
         includeModNote: true,

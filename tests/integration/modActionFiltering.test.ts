@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
-import { createFakeContext, defaultSettings, WEBHOOK_URL } from "../fixtures/fakeContext.js";
+import { BOT_TOKEN, CHANNEL, createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
 import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
@@ -14,40 +14,40 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 
 describe("which mod actions are sent", (): void => {
-    it("sends nothing when no webhook is configured", TEST_OPTIONS, async (): Promise<void> => {
+    it("sends nothing when no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
 
         await app.fire("ModAction", removedPost());
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(console.warn).toHaveBeenCalledWith(
-            "[health] No Slack webhook URL is set, so no alerts are sent. Set one in the app's settings.",
+            "[health] No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.",
         );
     });
 
-    it("refuses a webhook URL that is not https", TEST_OPTIONS, async (): Promise<void> => {
+    it("sends nothing when no notification channel is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "http://hooks.slack.com/services/T000/B000/XXXX" });
+        const app = await loadApp(devvit, { notificationChannel: " # " });
 
         await app.fire("ModAction", removedPost());
 
         expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith(
-            "[health] The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
+        expect(console.warn).toHaveBeenCalledWith(
+            "[health] No Notification Channel is set, so no alerts are sent. Set it in the app's settings to the Slack channel's ID.",
         );
     });
 
-    it("trims spaces around the webhook URL", TEST_OPTIONS, async (): Promise<void> => {
+    it("trims spaces around the bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: `  ${WEBHOOK_URL}  ` });
+        const app = await loadApp(devvit, { slackBotToken: `  ${BOT_TOKEN}  ` });
 
         await app.fire("ModAction", removedPost());
 
-        expect(app.slack.requests[0]?.url).toBe(WEBHOOK_URL);
+        expect(app.slack.requests[0]?.headers).toMatchObject({ authorization: `Bearer ${BOT_TOKEN}` });
     });
 
     it("sends nothing for an action type that is not enabled", TEST_OPTIONS, async (): Promise<void> => {
@@ -115,24 +115,27 @@ describe("which mod actions are sent", (): void => {
 
         await app.fire("ModAction", removedPost());
 
-        expect(app.slack.requests.map((request): string => request.url)).toStrictEqual([WEBHOOK_URL, WEBHOOK_URL]);
+        expect(app.slack.messages.map((message): string | undefined => message.channel)).toStrictEqual([
+            CHANNEL,
+            CHANNEL,
+        ]);
     });
 
-    // One app process can serve several subreddits: another's webhook must never receive this one's actions.
+    // One app process can serve several subreddits: another's channel must never receive this one's actions.
     it("never falls back to another installation's settings", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
         await app.fire("ModAction", removedPost());
         const { context: otherInstallation } = createFakeContext(
-            { ...defaultSettings(), slackWebhookUrl: "https://hooks.slack.com/services/T111/B111/YYYY" },
+            { ...defaultSettings(), notificationChannel: "C0999OTHER" },
             "t5_other",
         );
         otherInstallation.settings.get.mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost(), otherInstallation);
 
-        expect(app.slack.requests.map((request): string => request.url)).toStrictEqual([WEBHOOK_URL]);
+        expect(app.slack.messages.map((message): string | undefined => message.channel)).toStrictEqual([CHANNEL]);
     });
 });
 

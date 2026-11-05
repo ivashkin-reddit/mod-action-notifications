@@ -17,7 +17,7 @@ export const NAMING_CONVENTION = [
         modifiers: ["requiresQuotes"],
         format: null,
     },
-    // SLACK_PAYLOAD_FIELDS: Slack's incoming-webhook payload names these fields in snake_case.
+    // SLACK_PAYLOAD_FIELDS: Slack's message payload names these fields in snake_case.
     {
         selector: ["typeProperty", "objectLiteralProperty"],
         filter: { regex: "^(?:icon_emoji|mrkdwn_in)$", match: true },
@@ -31,7 +31,7 @@ export const strictness = defineConfig({
         // Core rules, stricter options.
         "eqeqeq": ["error", "always", { null: "ignore" }],
         "curly": ["error", "all"],
-        // Slack's webhook payload fixes the names of two fields (see SLACK_PAYLOAD_FIELDS above).
+        // Slack's message payload fixes the names of two fields (see SLACK_PAYLOAD_FIELDS above).
         "camelcase": ["error", { properties: "always", allow: ["^icon_emoji$", "^mrkdwn_in$"] }],
         "arrow-body-style": ["error", "as-needed"],
         "func-style": ["error", "declaration", { allowArrowFunctions: true }],

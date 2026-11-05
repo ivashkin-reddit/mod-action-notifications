@@ -20,6 +20,9 @@ export type SettingDefinition = Readonly<{
     defaultValue?: unknown;
     options?: readonly Option[];
     multiSelect?: boolean;
+    /** "app" for a setting the developer sets for every installation; an installation's own otherwise. */
+    scope?: string;
+    isSecret?: boolean;
     /** Checks a value as the settings form saves it: a message rejects the value. */
     onValidate?: (event: Readonly<{ value?: unknown; isEditing: boolean }>, context: unknown) => unknown;
 }>;

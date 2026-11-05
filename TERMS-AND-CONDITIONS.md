@@ -18,9 +18,9 @@ Use the alerts only to moderate the subreddit, and in line with Reddit's [User A
 
 The moderators choose the Slack workspace and channel the alerts go to. They are responsible for who can read that channel and for how long Slack keeps its messages.
 
-Keep the webhook URL private: anyone who has it can post to the channel. Any moderator who can open the app's settings can read it. If it leaks, revoke it in Slack and enter a new one.
+The app posts through a Slack app that the developer installs in the workspace. It may only post, and only to the channels it has been added to. The developer keeps its token secret, and replaces it if it leaks.
 
-Alerts quote Reddit content and name redditors. The app cannot delete an alert once Slack has it, so content later deleted on Reddit stays in Slack until the moderators delete it there.
+Alerts quote Reddit content and name redditors. The app does not delete an alert once Slack has it, so content later deleted on Reddit stays in Slack until the moderators delete it there.
 
 ## 4. No guarantees
 

@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import type { Mock } from "vitest";
 import { NOW } from "./app.js";
-import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./fakeContext.js";
+import { BOT_TOKEN, createFakeContext, defaultSettings } from "./fakeContext.js";
 import type { FakeContext } from "./fakeContext.js";
 import type { ZMember } from "./fakeRedis.js";
 import type { ScheduledJob } from "./fakeScheduler.js";
@@ -18,7 +18,7 @@ export type FakeHealth = Readonly<{
 /** What the Slack outbox's unit tests build it from, and the fakes behind it. */
 export type OutboxFakes = Readonly<
     {
-        dependencies: Readonly<{ webhookUrl: string; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">>;
+        dependencies: Readonly<{ token: string; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">>;
         slack: FakeSlack;
         health: FakeHealth;
     } & Pick<FakeContext, "redis" | "scheduler">
@@ -42,7 +42,7 @@ export function outboxFakes(): OutboxFakes {
         }),
     };
     return {
-        dependencies: { webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler, health },
+        dependencies: { token: BOT_TOKEN, redis: context.redis, scheduler: context.scheduler, health },
         redis: context.redis,
         scheduler: context.scheduler,
         slack,

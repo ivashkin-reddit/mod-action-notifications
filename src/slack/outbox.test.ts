@@ -248,7 +248,7 @@ describe("an outbox whose drain died", (): void => {
     });
 });
 
-// Slack takes about one message a second from a webhook.
+// Slack takes about one message a second to a channel.
 describe("messages sent one after another", (): void => {
     it(
         "reach Slack 1.1 seconds apart, though each is delivered by its own drain",

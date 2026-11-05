@@ -35,7 +35,7 @@ import type { DeliveryHealth, SlackOutbox } from "./slack/delivery.js";
 /**
  * The composition root's wiring: for each trigger and scheduler job, read the settings and build the capability's
  * adapters from that handler's context. main.ts registers the handlers, and menuActions.ts does what menu items and
- * forms do. Without a webhook, alerts have nowhere to go: the handlers that send them do nothing.
+ * forms do. Without a bot token and a channel, alerts have nowhere to go: the handlers that send them do nothing.
  */
 
 /** The Devvit APIs the app calls. Trigger, scheduler, menu and form contexts all satisfy this. */
@@ -88,8 +88,18 @@ export async function configOf(context: AppContext): Promise<AppConfig> {
     return await loadConfig(context.settings, context.subredditId);
 }
 
+/** Whether Slack is set up: what is missing, if anything, for alerts to be sent. */
+export type SlackSetup = "set-up" | "token-missing" | "channel-missing";
+
+export function slackSetup(config: AppConfig): SlackSetup {
+    if (config.slackBotToken === "") {
+        return "token-missing";
+    }
+    return config.notificationChannel === "" ? "channel-missing" : "set-up";
+}
+
 export function alertsConfigured(config: AppConfig): boolean {
-    return config.slackWebhookUrl !== "";
+    return slackSetup(config) === "set-up";
 }
 
 /** Where the installation's health conditions are kept, and where moderators are told of them. */
@@ -100,15 +110,17 @@ function conditionPorts(context: AppContext): ConditionPorts {
     };
 }
 
-/** Whether alerts can be sent, noting for the health log whether the webhook URL is missing or not a Slack one. */
-async function webhookReady(context: AppContext, config: AppConfig): Promise<boolean> {
+/** Whether alerts can be sent, noting for the health log whether the bot token or the channel is missing. */
+async function slackReady(context: AppContext, config: AppConfig): Promise<boolean> {
     const conditions = conditionPorts(context);
-    const missing = !alertsConfigured(config) && !config.slackWebhookUrlInvalid;
-    await (missing ? raiseCondition(conditions, "webhook-missing", "") : clearCondition(conditions, "webhook-missing"));
-    await (config.slackWebhookUrlInvalid
-        ? raiseCondition(conditions, "webhook-invalid", "")
-        : clearCondition(conditions, "webhook-invalid"));
-    return alertsConfigured(config);
+    const setup = slackSetup(config);
+    await (setup === "token-missing"
+        ? raiseCondition(conditions, "token-missing", "")
+        : clearCondition(conditions, "token-missing"));
+    await (setup === "channel-missing"
+        ? raiseCondition(conditions, "channel-missing", "")
+        : clearCondition(conditions, "channel-missing"));
+    return setup === "set-up";
 }
 
 function moderationConfig(config: AppConfig): ModerationConfig {
@@ -151,7 +163,7 @@ export function healthReports(context: AppContext): DeliveryHealth & MonitorHeal
 /** The installation's Slack outbox, through which every alert goes. */
 export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
     return createSlackOutbox({
-        webhookUrl: config.slackWebhookUrl,
+        token: config.slackBotToken,
         redis: context.redis,
         scheduler: context.scheduler,
         health: healthReports(context),
@@ -187,7 +199,7 @@ export function monitorJobPorts(context: AppContext): MonitorJobPorts {
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
     const config = await configOf(context);
-    if (!(await webhookReady(context, config))) {
+    if (!(await slackReady(context, config))) {
         return;
     }
     await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));
@@ -198,7 +210,7 @@ export type CommentDeleteEvent = Readonly<{ commentId: string }>;
 
 /**
  * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, and stays out of any queued
- * later, whether or not a webhook is set. Logs rather than rejects, so a trigger goes on to its other work.
+ * later, whether or not Slack is set up. Logs rather than rejects, so a trigger goes on to its other work.
  */
 async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
     try {

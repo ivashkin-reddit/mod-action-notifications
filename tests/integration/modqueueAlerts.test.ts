@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
+import { CHANNEL } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastField, NOW_SECONDS } from "../fixtures/messages.js";
 import { freshQueue, queuedComment, queuedPost } from "../fixtures/queue.js";
@@ -15,10 +16,10 @@ const FAILURE_KEY = "scheduler_failure_count";
 const HOUR = 3_600_000;
 
 describe("the modqueue monitor", (): void => {
-    it("does nothing without a webhook", TEST_OPTIONS, async (): Promise<void> => {
+    it("does nothing without a bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { slackBotToken: undefined });
 
         await app.runJob("modqueueMonitor");
 
@@ -40,6 +41,7 @@ describe("the modqueue monitor", (): void => {
                 text: "⚠️ Modqueue Alert: 3 items pending",
                 username: "Mod Action Notifications",
                 icon_emoji: ":warning:",
+                channel: CHANNEL,
                 attachments: [
                     {
                         color: "#ff9900",
@@ -162,6 +164,7 @@ describe("the modqueue monitor", (): void => {
                 text: "⏰ Unmoderated Content Alert: 6 items over 24h old",
                 username: "Mod Action Notifications",
                 icon_emoji: ":alarm_clock:",
+                channel: CHANNEL,
                 attachments: [
                     {
                         color: "#ff6600",

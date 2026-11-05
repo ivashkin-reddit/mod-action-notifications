@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
+import { CHANNEL } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { NOW_SECONDS } from "../fixtures/messages.js";
 import { queuedComment, queuedPost } from "../fixtures/queue.js";
@@ -27,6 +28,7 @@ describe("the old reported content alert", (): void => {
                 text: "📣 Old Reported Content Alert: 2 reported items over 24h old",
                 username: "Mod Action Notifications",
                 icon_emoji: ":loudspeaker:",
+                channel: CHANNEL,
                 attachments: [
                     {
                         color: "#cc3300",

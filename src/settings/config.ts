@@ -4,25 +4,22 @@ import {
     DEFAULT_UNMODERATED_AGE_HOURS,
     DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
-    webhookUrlProblem,
 } from "./definitions.js";
 
 const DECIMAL = 10;
 
 /** The installation's settings, validated. */
 export interface AppConfig {
-    /** An https://hooks.slack.com/ URL, or '' when none is set or the one set is not one. */
-    readonly slackWebhookUrl: string;
-    /** True when the URL set is not an https://hooks.slack.com/ URL: one saved before the app checked on saving. */
-    readonly slackWebhookUrlInvalid: boolean;
+    /** The Slack app's bot token, trimmed, or '' when none is set. The developer sets it for every installation. */
+    readonly slackBotToken: string;
     readonly enabledActions: readonly string[];
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
     readonly flagUnknownModerators: boolean;
     readonly includeModNote: boolean;
-    /** A channel name without its leading #, or '' for the webhook's own channel. */
+    /** A channel ID, or a channel name without its leading #; '' when none is set, so no alerts can be sent. */
     readonly notificationChannel: string;
-    /** A channel name without its leading #: the alert channel, else the notification channel, else ''. */
+    /** A channel ID or name without its leading #: the alert channel, else the notification channel, else ''. */
     readonly alertChannel: string;
     /** 0 turns the queue-size alert off. */
     readonly modqueueThreshold: number;
@@ -44,8 +41,7 @@ type SettingValue = unknown;
 
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
-    slackWebhookUrl: "",
-    slackWebhookUrlInvalid: false,
+    slackBotToken: "",
     enabledActions: [],
     excludedModerators: [],
     flagUnknownModerators: true,
@@ -60,16 +56,13 @@ const DEFAULT_CONFIG: AppConfig = {
     dailySummary: false,
 };
 
-/** The webhook setting: an https Slack webhook URL, or '' and whether what was set is not one. */
-function webhookSetting(value: SettingValue): Pick<AppConfig, "slackWebhookUrl" | "slackWebhookUrlInvalid"> {
-    const url = typeof value === "string" ? value.trim() : "";
-    const invalid = webhookUrlProblem(url) !== undefined;
-    return { slackWebhookUrl: invalid ? "" : url, slackWebhookUrlInvalid: invalid };
+function trimmed(value: SettingValue): string {
+    return typeof value === "string" ? value.trim() : "";
 }
 
-/** A trimmed channel name without leading #s, or ''. */
+/** A trimmed channel ID, or channel name without leading #s, or ''. */
 function channelName(value: SettingValue): string {
-    return typeof value === "string" ? value.trim().replace(/^#+/u, "") : "";
+    return trimmed(value).replace(/^#+/u, "");
 }
 
 /** A whole number of at least 0, read from a number or numeric text; `fallback` for anything else. */
@@ -108,7 +101,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     const notificationChannel = channelName(await settings.get("notificationChannel"));
     const alertChannel = channelName(await settings.get("alertChannel"));
     return {
-        ...webhookSetting(await settings.get("slackWebhookUrl")),
+        slackBotToken: trimmed(await settings.get("slackBotToken")),
         enabledActions: selected(await settings.get("enabledActions")),
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
@@ -140,8 +133,8 @@ export type ConfigLoader = (settings: SettingsReader, installation: string) => P
 /**
  * Returns a loader that reads and validates the settings each time it is called. When they cannot be read, it
  * logs and returns the configuration it last read for that installation (the defaults, before the first successful
- * read). One app process can serve several installations, so one's settings, webhook URL included, must never
- * stand in for another's.
+ * read). One app process can serve several installations, so one's settings, channels included, must never stand
+ * in for another's.
  */
 export function createConfigLoader(): ConfigLoader {
     const lastRead = new Map<string, AppConfig>();
@@ -153,7 +146,7 @@ export function createConfigLoader(): ConfigLoader {
         } catch (error) {
             const last = lastRead.get(installation);
             if (last === undefined) {
-                // The defaults set no webhook: nothing is sent until the settings can be read.
+                // The defaults set no bot token: nothing is sent until the settings can be read.
                 console.error(
                     "[settings] Could not read the settings, so no alerts are sent until they can be:",
                     error,

@@ -42,7 +42,7 @@ describe("content deleted on Reddit", (): void => {
         expect(stored(redis)).not.toContain("said");
     });
 
-    it("leaves the queue with no webhook to send to", TEST_OPTIONS, async (): Promise<void> => {
+    it("leaves the queue with no bot token to send with", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const { dependencies, redis } = fakeOutbox();

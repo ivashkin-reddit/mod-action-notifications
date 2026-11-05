@@ -30,12 +30,12 @@ async function status(
 }
 
 describe("the Show Bot Status menu item", (): void => {
-    it("shows the app version, and that the webhook is set", TEST_OPTIONS, async (): Promise<void> => {
+    it("shows the app version, and that Slack is set up", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
-        await expect(status(app)).resolves.toMatchObject({ "App version": "1.2.3", "Slack webhook": "Set" });
+        await expect(status(app)).resolves.toMatchObject({ "App version": "1.2.3", "Slack app": "Set up" });
     });
 
     it("shows that the monitor is not scheduled yet", TEST_OPTIONS, async (): Promise<void> => {
@@ -103,29 +103,29 @@ describe("the Show Bot Status menu item", (): void => {
         await expect(status(app)).resolves.toMatchObject({ "Modqueue monitor": "On, scheduled (cron */15 * * * *)" });
     });
 
-    it("shows monitoring off and the webhook missing", TEST_OPTIONS, async (): Promise<void> => {
+    it("shows monitoring off and the bot token missing", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, {
-            slackWebhookUrl: "",
+            slackBotToken: "",
             modqueueThreshold: 0,
             unmoderagedAgeHours: 0,
             reportedContentAgeHours: 0,
         });
 
         await expect(status(app)).resolves.toMatchObject({
-            "Slack webhook": "Not set, so no alerts are sent",
+            "Slack app": "No bot token is set, so no alerts are sent. The app's developer sets it",
             "Modqueue monitor": "Off: all its thresholds are 0",
         });
     });
 
-    it("shows a webhook URL that is not a Slack one", TEST_OPTIONS, async (): Promise<void> => {
+    it("shows the notification channel missing", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackWebhookUrl: "https://example.com/hook" });
+        const app = await loadApp(devvit, { notificationChannel: "" });
 
         await expect(status(app)).resolves.toMatchObject({
-            "Slack webhook": "Not a Slack webhook URL, so no alerts are sent",
+            "Slack app": "No Notification Channel is set, so no alerts are sent",
         });
     });
 });
@@ -143,13 +143,13 @@ describe("the problems Show Bot Status shows", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.slack.respond(404);
+        app.slack.respond("not_in_channel");
         await app.fire("ModAction", removedPost());
         await app.advance(3 * HOUR);
 
         await expect(status(app)).resolves.toMatchObject({
             "Current problems":
-                "For 3 hours: Slack is refusing alerts (HTTP 404: error), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.",
+                "For 3 hours: Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
         });
     });
 

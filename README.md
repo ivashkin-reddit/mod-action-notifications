@@ -24,17 +24,17 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Daily summary.** Turn on the Daily Summary setting for a morning post of the day before's numbers, and any problems.
 
-**Problems in modmail.** If alerts stop reaching Slack (a revoked webhook, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
+**Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
-**Built for busy days.** Slack accepts about one message a second from a webhook. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
+**Built for busy days.** Slack accepts about one message a second to a channel. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
 
 ## Getting started
 
 You'll need moderator permissions on the subreddit and a Slack workspace where you can add an app.
 
-1. **Create a Slack incoming webhook.** Follow Slack's guide to [incoming webhooks](https://api.slack.com/messaging/webhooks) and copy the webhook URL. It starts with `https://hooks.slack.com/`.
-2. **Install the app** on your subreddit. This is a private moderation app, uploaded from this repository with the Devvit command-line tool. The [Operators Guide](./OPERATORS-GUIDE.md#deploying) walks through it.
-3. **Open the app's settings** for your subreddit and paste the webhook URL. Choose the mod actions you want alerts for; the defaults cover removals, spam and bans.
+1. **Install the app** on your subreddit. This is a private moderation app, uploaded from this repository with the Devvit command-line tool. The [Operators Guide](./OPERATORS-GUIDE.md#deploying) walks through it.
+2. **Set up the Slack app.** Alerts are posted by a Slack app in your workspace, made from the template in [slack-app/](./slack-app/README.md), which says how. Whoever deploys the app gives it the Slack app's token; moderators never see it. Add the Slack app to the channels alerts should go to.
+3. **Open the app's settings** for your subreddit and enter the channel's ID as the Notification Channel. Choose the mod actions you want alerts for; the defaults cover removals, spam and bans.
 4. **Send a test.** From the subreddit's mod tools menu, choose **Test Slack Connection**. A test message should arrive in Slack within seconds.
 5. **Turn on modqueue monitoring.** Set the thresholds you want, then choose **Setup Modqueue Monitoring**. Run it again whenever you turn monitoring on or off.
 
@@ -42,12 +42,11 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 
 | Setting                               | What it does                                                                                                                                                                                    | Default                         |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Slack Webhook URL                     | Where alerts are sent. Only a `https://hooks.slack.com/` address is accepted.                                                                                                                   | none                            |
 | Enabled Mod Actions                   | Which moderator actions send an alert.                                                                                                                                                          | removals, spam, bans and unbans |
 | Excluded Moderators                   | Moderators whose actions never send an alert, separated by commas (useful for bots).                                                                                                            | none                            |
 | Flag Unknown Moderators               | Send actions by accounts not on the mod list as security alerts.                                                                                                                                | on                              |
 | Include Mod Note                      | Show moderator notes in alerts. Reddit includes notes for bans only.                                                                                                                            | on                              |
-| Notification Channel                  | Slack channel for regular alerts.                                                                                                                                                               | the webhook's own channel       |
+| Notification Channel                  | The Slack channel for alerts and the daily summary: its channel ID, or a public channel's name. The Slack app must be in it. Alerts aren't sent until it's set.                                 | none                            |
 | Alert Channel                         | Slack channel for security, modqueue and deleted-post alerts.                                                                                                                                   | the notification channel        |
 | Modqueue Size Alert Threshold         | Alert when the modqueue holds at least this many items.                                                                                                                                         | 50                              |
 | Unmoderated Content Age Alert (Hours) | Alert when content has waited this long without a moderator reviewing it.                                                                                                                       | 24                              |
@@ -56,7 +55,7 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 | Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                              | 100                             |
 | Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working. | off                             |
 
-Setting a threshold to 0 turns that alert off. The channel settings only work with Slack's legacy incoming webhooks. A webhook created by a Slack app always posts to the channel chosen when it was created.
+Setting a threshold to 0 turns that alert off.
 
 ## Menu actions
 
@@ -88,7 +87,7 @@ The [Privacy Policy](./PRIVACY-POLICY.md) and [Terms & Conditions](./TERMS-AND-C
 
 The following domain is requested for this app:
 
-- `hooks.slack.com`: Slack incoming webhooks. The app posts moderation alerts to the webhook URL a subreddit's moderators enter in its settings, and the settings accept only a `https://hooks.slack.com/` URL. The app fetches no other domain.
+- `slack.com`: Slack's Web API. The app posts moderation alerts with `chat.postMessage`, as the subreddit's own Slack app, to the channels its moderators choose in its settings. The app fetches no other domain.
 
 ## Documentation
 

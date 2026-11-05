@@ -6,28 +6,14 @@ export const DEFAULT_MODQUEUE_THRESHOLD = 50;
 export const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
-/** The only host the app may fetch (devvit.json permissions.http.domains): a Slack incoming webhook's. */
-const SLACK_WEBHOOK_HOST = "hooks.slack.com";
-const WEBHOOK_URL_PROBLEM = "Enter a Slack incoming webhook URL, starting https://hooks.slack.com/";
+/** A Slack bot token starts so; a user token (xoxp-) would post as the person who made it. */
+const BOT_TOKEN_PREFIX = "xoxb-";
+const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 
-/** The text as a URL, or undefined when it is not one. */
-function urlOf(text: string): URL | undefined {
-    try {
-        return new URL(text);
-    } catch {
-        // Not a URL: what a moderator typed, which the caller reports.
-        return undefined;
-    }
-}
-
-/** Why the text cannot be the webhook URL, or undefined when it can: blank (no alerts) or an https Slack webhook. */
-export function webhookUrlProblem(text: string): string | undefined {
-    if (text === "") {
-        return undefined;
-    }
-    const url = urlOf(text);
-    return url?.protocol === "https:" && url.hostname === SLACK_WEBHOOK_HOST ? undefined : WEBHOOK_URL_PROBLEM;
+/** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
+function botTokenProblem(text: string): string | undefined {
+    return text === "" || text.startsWith(BOT_TOKEN_PREFIX) ? undefined : BOT_TOKEN_PROBLEM;
 }
 
 /** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
@@ -70,14 +56,15 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         type: "string",
         name: "notificationChannel",
         label: "Notification Channel",
-        helpText: "Slack channel name (optional, uses webhook default if empty)",
+        helpText:
+            "The Slack channel for alerts and the daily summary: its channel ID (in the channel's details, starting C), or a public channel's name. Add the Slack app to the channel. Required",
     },
     {
         type: "string",
         name: "alertChannel",
         label: "Alert Channel",
         helpText:
-            "Channel for security, modqueue and deleted-post alerts (optional; uses the notification channel if empty)",
+            "The Slack channel for security, modqueue and deleted-post alerts: its ID or name, as for the notification channel (optional; uses the notification channel if empty)",
     },
     {
         type: "number",
@@ -136,20 +123,26 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
 ];
 
 /**
- * Installation settings: the form moderators fill in, and the validated configuration read from it.
+ * The settings: the Slack app's bot token, which the developer sets for every installation, then the form moderators
+ * fill in, and the validated configuration read from it.
  *
- * Devvit stores each installation's values under these setting names, so renaming one loses what moderators
- * saved. The form lists the settings in this order.
+ * Devvit stores the values under these setting names, so renaming one loses what was saved. The form lists the
+ * settings in this order.
  */
 export function settingsDefinitions(modActions: ModActionChoices): SettingsFormField[] {
     return [
         {
             type: "string",
-            name: "slackWebhookUrl",
-            label: "Slack Webhook URL",
-            helpText: "The Slack incoming webhook URL to send notifications to (https://hooks.slack.com/...)",
+            name: "slackBotToken",
+            label: "Slack Bot Token",
+            helpText:
+                "The Slack app's Bot User OAuth Token (xoxb-...). The app's developer sets it with `devvit settings set slackBotToken`",
+            // An app-wide secret: Devvit encrypts it, and only the developer can set it, from the command line.
+            // Moderators never see it.
+            scope: "app",
+            isSecret: true,
             onValidate: ({ value }: Readonly<{ value?: string | undefined }>): string | undefined =>
-                webhookUrlProblem((value ?? "").trim()),
+                botTokenProblem((value ?? "").trim()),
         },
         {
             type: "select",

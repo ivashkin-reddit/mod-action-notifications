@@ -9,9 +9,9 @@ import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
 
 export interface ModActionPresentation {
     readonly includeModNote: boolean;
-    /** Channel name without #, or '' for the webhook's own channel. */
+    /** A channel ID, or a channel name without #. */
     readonly notificationChannel: string;
-    /** Channel name without # for security alerts, or '' for the webhook's own channel. */
+    /** A channel ID, or a channel name without #, for security alerts. */
     readonly alertChannel: string;
 }
 

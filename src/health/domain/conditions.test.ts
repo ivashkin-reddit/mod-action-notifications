@@ -7,8 +7,8 @@ const STARTED_AT = Date.UTC(2026, 10, 4, 12);
 
 // An error when alerts are lost or a feature has stopped; a warning when alerts wait, or none is set up to go.
 const LEVELS: readonly (readonly [Condition, LogLevel])[] = [
-    ["webhook-missing", "warn"],
-    ["webhook-invalid", "error"],
+    ["token-missing", "warn"],
+    ["channel-missing", "warn"],
     ["slack-refusing", "error"],
     ["slack-unreachable", "warn"],
     ["outbox-full", "error"],

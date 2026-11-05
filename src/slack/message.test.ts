@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { withoutTitle } from "./message.js";
+import { inChannel, withoutTitle } from "./message.js";
 
 const TEST_OPTIONS = { timeout: 1000 };
+
+describe("a message sent to a channel", (): void => {
+    it.each([
+        ["a channel ID as it is", "C0123ABCD", "C0123ABCD"],
+        ["an older private channel's ID as it is", "G0123ABCD", "G0123ABCD"],
+        ["a name with a #", "mod-log", "#mod-log"],
+        ["a name that has its # as it is", "#mod-log", "#mod-log"],
+        ["a lower-case name that starts like an ID with a #", "c0123abcd", "#c0123abcd"],
+    ])("names %s", TEST_OPTIONS, (_label: string, channel: string, expected: string): void => {
+        expect.hasAssertions();
+
+        expect(inChannel({ text: "hello" }, channel)).toStrictEqual({ text: "hello", channel: expected });
+    });
+
+    it("is left as it was for no channel", TEST_OPTIONS, (): void => {
+        expect.hasAssertions();
+
+        expect(inChannel({ text: "hello" }, "")).toStrictEqual({ text: "hello" });
+    });
+});
 
 describe("a permalink without its title", (): void => {
     it.each([

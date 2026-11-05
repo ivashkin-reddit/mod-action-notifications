@@ -1,0 +1,27 @@
+{
+  "_metadata": {
+    "major_version": 2,
+    "minor_version": 1
+  },
+  "display_information": {
+    "name": "Mod Action Notifications",
+    "description": "Tells a subreddit's mod team about moderation activity: mod actions, a backed-up modqueue, and more.",
+    "background_color": "#1f2933"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "mod-action-notifications",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["chat:write", "chat:write.customize"]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

@@ -1,5 +1,5 @@
-import { failureDetail } from "./webhook.js";
-import type { Delivery } from "./webhook.js";
+import { failureDetail } from "./webApi.js";
+import type { Delivery } from "./webApi.js";
 
 /** A lasting problem delivering alerts, which the outbox reports rather than logging each alert it affects. */
 export type DeliveryCondition = "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired";

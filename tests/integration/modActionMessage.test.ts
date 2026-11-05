@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import { modActionEvent, removedPost } from "../fixtures/events.js";
-import { WEBHOOK_URL } from "../fixtures/fakeContext.js";
+import { BOT_TOKEN, CHANNEL } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lines, NOW_SECONDS, onlyMessage, onlyRequest, WHEN_NOW } from "../fixtures/messages.js";
 
@@ -13,7 +13,7 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 
 describe("a mod action", (): void => {
-    it("is posted to the Slack webhook as a formatted message", TEST_OPTIONS, async (): Promise<void> => {
+    it("is posted to Slack with the bot token, as a formatted message", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -24,13 +24,17 @@ describe("a mod action", (): void => {
 
         const request = onlyRequest(app.slack.requests);
 
-        expect(request.url).toBe(WEBHOOK_URL);
+        expect(request.url).toBe("https://slack.com/api/chat.postMessage");
         expect(request.method).toBe("POST");
-        expect(request.headers).toStrictEqual({ "Content-Type": "application/json" });
+        expect(request.headers).toStrictEqual({
+            "content-type": "application/json; charset=utf-8",
+            "authorization": `Bearer ${BOT_TOKEN}`,
+        });
         expect(request.message).toStrictEqual({
             text: "🗑️ Post Removed",
             username: "Mod Action Notifications",
             icon_emoji: ":shield:",
+            channel: CHANNEL,
             attachments: [
                 {
                     color: "#ff4444",
@@ -194,8 +198,18 @@ describe("a mod action", (): void => {
         },
     );
 
+    it("goes to a channel named by its ID, as it is", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { notificationChannel: " C0456LOGS " });
+
+        await app.fire("ModAction", removedPost());
+
+        expect(onlyMessage(app.slack.messages).channel).toBe("C0456LOGS");
+    });
+
     it(
-        "goes to the webhook’s default channel when the channel setting is not text",
+        "is not sent when the channel setting is not text, as no channel is set",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -204,7 +218,7 @@ describe("a mod action", (): void => {
 
             await app.fire("ModAction", removedPost());
 
-            expect(onlyMessage(app.slack.messages)).not.toHaveProperty("channel");
+            expect(app.slack.requests).toStrictEqual([]);
         },
     );
 });

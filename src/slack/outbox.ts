@@ -16,8 +16,8 @@ import {
     scheduleRecovery,
     SEND_INTERVAL_MS,
 } from "./schedule.js";
-import { attemptDelivery, backoffMs, createWebhookSender, wait } from "./webhook.js";
-import type { Delivery } from "./webhook.js";
+import { backoffMs, createDirectSender, postMessage, wait } from "./webApi.js";
+import type { Delivery } from "./webApi.js";
 
 // The drain's bookkeeping, which expires.
 /**
@@ -36,13 +36,13 @@ const RETRY_LATER_MS = 30_000;
 type OutboxRedis = DeletionRedis & Readonly<Pick<TriggerContext["redis"], "get" | "set" | "del">>;
 type OutboxScheduler = Readonly<Pick<TriggerContext["scheduler"], "runJob">>;
 
-/** What the queue itself needs: enough to forget deleted content, which takes no webhook. */
+/** What the queue itself needs: enough to forget deleted content, which takes no bot token. */
 export type QueueDependencies = Readonly<{ redis: OutboxRedis; scheduler: OutboxScheduler }>;
 
 export type OutboxDependencies = QueueDependencies &
     Readonly<{
-        /** An https URL. */
-        webhookUrl: string;
+        /** The Slack app's bot token. */
+        token: string;
         /** Where lasting delivery problems are reported. */
         health: DeliveryHealth;
     }>;
@@ -76,7 +76,7 @@ async function noteSent({ redis }: OutboxDependencies): Promise<void> {
 
 /** One message's delivery within a drain: retried after rate limiting and failures, while the drain has time. */
 async function deliverWithRetries(drain: Drain, message: SlackMessage, retryCount: number): Promise<Delivery> {
-    const delivery = await attemptDelivery(drain.outbox.webhookUrl, message);
+    const delivery = await postMessage(drain.outbox.token, message);
     await noteSent(drain.outbox);
     if (
         delivery.outcome !== "retry" ||
@@ -231,7 +231,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself.
                 console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
-                await createWebhookSender(outbox.webhookUrl)(message);
+                await createDirectSender(outbox.token)(message);
                 return;
             }
             await deliverQueued(outbox).catch((error: unknown): void => {
@@ -249,7 +249,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
 /**
  * Notes that Reddit deleted this post or comment, by its ID: from now on, each message quoting it is sent and stored
  * without the quotes. Those queued lose them now, unless a drain holds the queue: it takes them out before it lets
- * go. Needs no webhook, as messages wait in the queue while none is set. Rejects when Redis fails.
+ * go. Needs no bot token, as messages wait in the queue while none is set. Rejects when Redis fails.
  */
 export async function forgetContent(queue: QueueDependencies, contentId: string): Promise<void> {
     await noteDeleted(queue.redis, contentId);

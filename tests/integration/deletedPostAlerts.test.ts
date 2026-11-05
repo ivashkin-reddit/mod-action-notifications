@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { bigPost, DeletionReason, DeletionSource, userDeletion } from "../fixtures/events.js";
+import { CHANNEL } from "../fixtures/fakeContext.js";
 import type { Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastField } from "../fixtures/messages.js";
@@ -28,6 +29,7 @@ describe("a user deleting their own post", (): void => {
                 text: "🗑️ User Deleted High-Score Post: 150 upvotes",
                 username: "Mod Action Notifications",
                 icon_emoji: ":wastebasket:",
+                channel: CHANNEL,
                 attachments: [
                     {
                         color: "#cc0000",
@@ -187,7 +189,8 @@ describe("a deletion that is not alerted", (): void => {
 
     it.each([
         ["deletion alerts are off", { postDeletionUpvoteThreshold: 0 }],
-        ["no webhook is set", { slackWebhookUrl: "" }],
+        ["no bot token is set", { slackBotToken: "" }],
+        ["no notification channel is set", { notificationChannel: "" }],
     ])("is one made while %s", TEST_OPTIONS, async (_label: string, settings: Readonly<Settings>): Promise<void> => {
         expect.hasAssertions();
 

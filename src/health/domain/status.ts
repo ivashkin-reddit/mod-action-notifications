@@ -20,7 +20,8 @@ export interface StatusInput {
     /** When the status is shown, in ms since the epoch. */
     readonly now: number;
     readonly version: string;
-    readonly webhook: "set" | "missing" | "invalid";
+    /** Whether Slack is set up: what is missing, if anything, for alerts to be sent. */
+    readonly slack: "set-up" | "token-missing" | "channel-missing";
     readonly monitor: MonitorState;
     readonly problems: readonly InForce[] | undefined;
     readonly queue: QueueState | undefined;
@@ -35,10 +36,10 @@ export interface StatusLine {
     readonly value: string;
 }
 
-const WEBHOOK_TEXT: Readonly<Record<StatusInput["webhook"], string>> = {
-    set: "Set",
-    missing: "Not set, so no alerts are sent",
-    invalid: "Not a Slack webhook URL, so no alerts are sent",
+const SLACK_TEXT: Readonly<Record<StatusInput["slack"], string>> = {
+    "set-up": "Set up",
+    "token-missing": "No bot token is set, so no alerts are sent. The app's developer sets it",
+    "channel-missing": "No Notification Channel is set, so no alerts are sent",
 };
 
 const SET_UP = "Use Setup Modqueue Monitoring.";
@@ -164,7 +165,7 @@ function monitorText(monitor: MonitorState): string {
 export function statusLines(input: StatusInput): readonly StatusLine[] {
     return [
         { label: "App version", value: input.version },
-        { label: "Slack webhook", value: WEBHOOK_TEXT[input.webhook] },
+        { label: "Slack app", value: SLACK_TEXT[input.slack] },
         { label: "Current problems", value: problemsText(input.problems, input.now) },
         { label: "Alerts waiting", value: waitingText(input.queue, input.now) },
         { label: "Last alert delivered", value: lastDeliveredText(input.lastSeen, input.now) },

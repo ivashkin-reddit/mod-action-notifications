@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFakeContext, defaultSettings, WEBHOOK_URL } from "../../tests/fixtures/fakeContext.js";
+import { BOT_TOKEN, createFakeContext, defaultSettings } from "../../tests/fixtures/fakeContext.js";
 import type { Settings } from "../../tests/fixtures/fakeContext.js";
 import { createConfigLoader } from "./config.js";
 import type { AppConfig } from "./config.js";
@@ -16,8 +16,7 @@ describe("reading the settings", (): void => {
         expect.hasAssertions();
 
         await expect(configFrom({})).resolves.toStrictEqual({
-            slackWebhookUrl: "",
-            slackWebhookUrlInvalid: false,
+            slackBotToken: "",
             enabledActions: [],
             excludedModerators: [],
             flagUnknownModerators: true,
@@ -56,6 +55,7 @@ describe("reading the settings", (): void => {
     );
 
     it.each([
+        ["an ID with spaces", " C0123MODS ", "C0123MODS"],
         ["a name with spaces and a #", " #mod-log ", "mod-log"],
         ["a name with several #s", "##mod-log", "mod-log"],
         ["a value of another type, as none", 5, ""],
@@ -120,13 +120,12 @@ describe("reading the settings", (): void => {
     });
 
     it.each([
-        ["a Slack webhook, trimmed", ` ${WEBHOOK_URL} `, WEBHOOK_URL],
-        ["one that is not https, as none", "http://hooks.slack.com/services/T000/B000/XXXX", ""],
-        ["one on another host, as none", "https://example.com/hook", ""],
-    ])("reads %s", TEST_OPTIONS, async (_label: string, value: string, url: string): Promise<void> => {
+        ["a bot token, trimmed", ` ${BOT_TOKEN} `, BOT_TOKEN],
+        ["a value of another type, as none", 5, ""],
+    ])("reads %s", TEST_OPTIONS, async (_label: string, value: unknown, token: string): Promise<void> => {
         expect.hasAssertions();
 
-        await expect(configFrom({ slackWebhookUrl: value })).resolves.toMatchObject({ slackWebhookUrl: url });
+        await expect(configFrom({ slackBotToken: value })).resolves.toMatchObject({ slackBotToken: token });
     });
 });
 
@@ -161,7 +160,7 @@ describe("settings that cannot be read", (): void => {
             const failure = new Error("settings unavailable");
             context.settings.get.mockRejectedValue(failure);
 
-            await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ slackWebhookUrl: "" });
+            await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ slackBotToken: "" });
             expect(console.error).toHaveBeenCalledExactlyOnceWith(
                 "[settings] Could not read the settings, so no alerts are sent until they can be:",
                 failure,

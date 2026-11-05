@@ -3,8 +3,8 @@
  * than each time it meets it, as Devvit keeps only 5,000 log entries.
  */
 export type Condition =
-    | "webhook-missing"
-    | "webhook-invalid"
+    | "token-missing"
+    | "channel-missing"
     | "slack-refusing"
     | "slack-unreachable"
     | "outbox-full"
@@ -12,8 +12,8 @@ export type Condition =
     | "monitor-failing";
 
 const CONDITION_NAMES: readonly string[] = [
-    "webhook-missing",
-    "webhook-invalid",
+    "token-missing",
+    "channel-missing",
     "slack-refusing",
     "slack-unreachable",
     "outbox-full",
@@ -52,24 +52,25 @@ interface ConditionText {
 }
 
 const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
-    "webhook-missing": {
-        title: "No Slack webhook URL is set",
+    "token-missing": {
+        title: "No Slack bot token is set",
         level: "warn",
-        started: (): string => "No Slack webhook URL is set, so no alerts are sent. Set one in the app's settings.",
-        resolved: "A Slack webhook URL is set: alerts are sent again.",
-    },
-    "webhook-invalid": {
-        title: "The Slack webhook URL is not a Slack one",
-        level: "error",
         started: (): string =>
-            "The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
-        resolved: "The Slack webhook URL is a Slack one: alerts are sent again.",
+            "No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.",
+        resolved: "A Slack bot token is set: alerts are sent again.",
+    },
+    "channel-missing": {
+        title: "No Slack channel is set",
+        level: "warn",
+        started: (): string =>
+            "No Notification Channel is set, so no alerts are sent. Set it in the app's settings to the Slack channel's ID.",
+        resolved: "A Notification Channel is set: alerts are sent again.",
     },
     "slack-refusing": {
         title: "Slack is refusing alerts",
         level: "error",
         started: (detail: string): string =>
-            `Slack is refusing alerts (${detail}), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.`,
+            `Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.`,
         resolved: "Slack is taking alerts again.",
     },
     "slack-unreachable": {

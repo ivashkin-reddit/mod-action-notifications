@@ -148,10 +148,10 @@ describe("the daily summary", (): void => {
         expect(app.context.redis.ttlSeconds("health:summary:2026-11-03")).toBe(2 * DAY_SECONDS);
     });
 
-    it("sends nothing while no webhook is set", TEST_OPTIONS, async (): Promise<void> => {
+    it("sends nothing while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { dailySummary: true, slackWebhookUrl: undefined });
+        const app = await loadApp(devvit, { dailySummary: true, slackBotToken: undefined });
 
         await app.runJob("dailySummary");
 

@@ -13,7 +13,7 @@ function input(fields: Readonly<Partial<StatusInput>> = {}): StatusInput {
     return {
         now: NOW,
         version: "1.2.3",
-        webhook: "set",
+        slack: "set-up",
         monitor: { enabled: true, job: "scheduled", cron: "*/15 * * * *" },
         problems: [],
         queue: { waiting: 0, oldestQueuedAt: undefined },

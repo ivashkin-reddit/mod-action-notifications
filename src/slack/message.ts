@@ -1,4 +1,4 @@
-/** A Slack incoming-webhook payload, as the app sends it. */
+/** A message as the app posts it with Slack's chat.postMessage: `channel` is a channel ID, or a #name. */
 export interface SlackMessage {
     readonly text: string;
     readonly username?: string;
@@ -54,15 +54,18 @@ export function quote(text: string): string {
         .join("\n");
 }
 
+/** A Slack channel ID: C for a channel, G for an older private one. Channel names are lower case. */
+const CHANNEL_ID = /^[CG][\dA-Z]+$/u;
+
 /**
- * The message, sent to the named channel: `name` with or without its leading #. For '' the message is unchanged,
- * so it goes to the webhook's own channel.
+ * The message, sent to the channel: a channel ID, or a name with or without its leading #. For '' the message is
+ * unchanged.
  */
-export function inChannel(message: SlackMessage, name: string): SlackMessage {
-    if (name === "") {
+export function inChannel(message: SlackMessage, channel: string): SlackMessage {
+    if (channel === "") {
         return message;
     }
-    return { ...message, channel: name.startsWith("#") ? name : `#${name}` };
+    return { ...message, channel: CHANNEL_ID.test(channel) || channel.startsWith("#") ? channel : `#${channel}` };
 }
 
 /**

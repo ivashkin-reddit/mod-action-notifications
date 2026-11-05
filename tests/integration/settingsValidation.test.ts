@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import type { App } from "../fixtures/app.js";
-import { removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -10,7 +9,7 @@ const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 
 const TEST_OPTIONS = { timeout: 5000 };
-const WEBHOOK_PROBLEM = "Enter a Slack incoming webhook URL, starting https://hooks.slack.com/";
+const TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 const THRESHOLDS = [
     ["modqueueThreshold"],
@@ -28,46 +27,31 @@ function validation(app: Readonly<Pick<App, "registrations">>, name: string, val
     return validate({ value, isEditing: true }, {});
 }
 
-// Devvit lets the app fetch only hooks.slack.com, and moderators cannot see the app's logs: a webhook URL that cannot
-// work is refused as it is saved rather than silently turning alerts off.
-describe("saving the Slack webhook URL", (): void => {
+// A user token (xoxp-) would post as the person who made it, and other Slack secrets cannot post at all: only the
+// Slack app's bot token is taken.
+describe("setting the Slack bot token", (): void => {
     it.each([
         ["blank, which turns alerts off", ""],
-        ["a Slack incoming webhook", "https://hooks.slack.com/services/T000/B000/XXXX"],
-        ["one with spaces around it", "  https://hooks.slack.com/services/T000/B000/XXXX  "],
+        ["a bot token", "xoxb-1234-5678-abcd"],
+        ["one with spaces around it", "  xoxb-1234-5678-abcd  "],
     ])("accepts %s", TEST_OPTIONS, async (_label: string, value: string): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
-        expect(validation(app, "slackWebhookUrl", value)).toBeUndefined();
+        expect(validation(app, "slackBotToken", value)).toBeUndefined();
     });
 
     it.each([
-        ["one that is not https", "http://hooks.slack.com/services/T000/B000/XXXX"],
-        ["another host", "https://example.com/hooks/slack"],
-        ["a host that only starts like Slack's", "https://hooks.slack.com.example.com/services/X"],
-        ["text that is not a URL", "hooks.slack.com/services/T000"],
+        ["a user token", "xoxp-1234-5678-abcd"],
+        ["an incoming webhook URL", "https://hooks.slack.com/services/T000/B000/XXXX"],
+        ["the app's signing secret", "8f742231b10e8888abcd99yyyzzz85a5"],
     ])("refuses %s", TEST_OPTIONS, async (_label: string, value: string): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
-        expect(validation(app, "slackWebhookUrl", value)).toBe(WEBHOOK_PROBLEM);
-    });
-
-    // A URL saved before saving checked it is still read as no webhook, so alerts go nowhere they cannot reach.
-    it("treats a webhook URL on another host, saved earlier, as none", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { slackWebhookUrl: "https://example.com/hooks/slack" });
-
-        await app.fire("ModAction", removedPost());
-
-        expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith(
-            "[health] The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
-        );
+        expect(validation(app, "slackBotToken", value)).toBe(TOKEN_PROBLEM);
     });
 });
 

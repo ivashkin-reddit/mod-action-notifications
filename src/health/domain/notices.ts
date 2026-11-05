@@ -15,11 +15,12 @@ const LASTING_MS = 1_800_000;
 
 /**
  * How long each condition lasts before moderators are told: at once when alerts are lost or not sent, after 30
- * minutes for a problem that often passes by itself, and never for a missing webhook, which moderators choose.
+ * minutes for a problem that often passes by itself, and never for a missing bot token or channel, which are set up
+ * with the app.
  */
 const NOTICE_AFTER_MS: Readonly<Record<Condition, number | undefined>> = {
-    "webhook-missing": undefined,
-    "webhook-invalid": 0,
+    "token-missing": undefined,
+    "channel-missing": undefined,
     "slack-refusing": 0,
     "slack-unreachable": LASTING_MS,
     "outbox-full": 0,

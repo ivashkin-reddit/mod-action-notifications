@@ -112,7 +112,7 @@ function actions(registrations: Registrations, context: unknown, shownForms: rea
 
 /**
  * Loads src/main.ts afresh, so each test gets a new bot with no cached settings or moderator list, and wires it to
- * fake Devvit services, a fake Slack webhook and a clock frozen at NOW.
+ * fake Devvit services, a fake Slack Web API and a clock frozen at NOW.
  */
 export async function loadApp(devvit: FakeDevvit, settingsOverrides: Readonly<Settings> = {}): Promise<App> {
     vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });

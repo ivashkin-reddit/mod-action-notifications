@@ -20,7 +20,7 @@ const DRAIN_SCHEDULED_KEY = "slack_outbox_drain_scheduled";
 const RECOVERY_SCHEDULED_KEY = "slack_outbox_recovery_scheduled";
 
 const MS_PER_SECOND = 1000;
-/** Slack takes about one message a second from a webhook. */
+/** Slack takes about one message a second to a channel (docs.slack.dev, chat.postMessage, "Rate limiting"). */
 export const SEND_INTERVAL_MS = 1100;
 /** One drain starts delivering for at most this long, so the trigger or job running it finishes well within its time. */
 export const DRAIN_BUDGET_MS = 10_000;

@@ -33,7 +33,7 @@ describe("what the app registers with Devvit", (): void => {
                     }),
                 ),
             ).toStrictEqual([
-                { name: "slackWebhookUrl", type: "string", defaultValue: undefined },
+                { name: "slackBotToken", type: "string", defaultValue: undefined },
                 {
                     name: "enabledActions",
                     type: "select",
@@ -51,6 +51,23 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
             ]);
+        },
+    );
+
+    // Devvit encrypts a secret, and only the developer can set it, from the command line: moderators never see it.
+    it(
+        "registers the Slack bot token as a secret the developer sets for the whole app",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+
+            expect(
+                app.registrations.settings
+                    .filter(({ isSecret }): boolean => isSecret === true)
+                    .map(({ name, scope }): { name: string; scope: string | undefined } => ({ name, scope })),
+            ).toStrictEqual([{ name: "slackBotToken", scope: "app" }]);
         },
     );
 
@@ -124,10 +141,10 @@ describe("what the app registers with Devvit", (): void => {
         const { permissions, blocks } = devvitJson;
 
         expect(app.registrations.configure).toStrictEqual([
-            { redditAPI: true, http: { domains: ["hooks.slack.com"] }, redis: true },
+            { redditAPI: true, http: { domains: ["slack.com"] }, redis: true },
         ]);
         expect(permissions).toStrictEqual({
-            http: { enable: true, domains: ["hooks.slack.com"] },
+            http: { enable: true, domains: ["slack.com"] },
             redis: true,
             reddit: true,
         });
