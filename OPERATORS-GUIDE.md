@@ -202,21 +202,23 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 
 **Redis.** All of this is per installation. Every key expires, or is cleared once it's used.
 
-| Key                                                               | Holds                                                                              | Kept for                          | Limit            |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------- | ---------------- |
-| `mod_actions:moderator_actions:{subreddit}:{moderator}`           | the moderator's recent action IDs, by time                                         | 1 hour                            | 100 actions      |
-| `mod_actions:discipline_events:{ban\|mute}:{subreddit}:{user}`    | the user's bans or mutes and their lifting: time, moderator, note, details         | 90 days                           | 20 events        |
-| `mod_actions:reported:{actionId}`                                 | that an action was alerted                                                         | 1 day                             | one per alert    |
-| `post_deletion:alerted:{postId}`                                  | that a deletion was alerted                                                        | 1 day                             | one per alert    |
-| `mod_actions:throttle:modqueue_{size\|unmoderated\|reported}`     | that an alert of that kind was sent                                                | 1 hour                            | 3 keys           |
-| `scheduler_failure_count`                                         | the monitor's failures in a row                                                    | 1 hour                            | 1 key            |
-| `slack_outbox`                                                    | queued alerts, each with the IDs of the content it quotes and a version without it | 1 day                             | 500 alerts       |
-| `health:conditions`                                               | the health conditions in force, each with when it started                          | 7 days from when one was last met | 7 conditions     |
-| `health:reminder:{condition}`                                     | that a condition was logged within the day                                         | 1 day                             | 1 per condition  |
-| `slack_outbox_deleted`                                            | the IDs of posts and comments deleted on Reddit, by time                           | 1 day and 1 second                | one per deletion |
-| `slack_outbox_lease`                                              | which run is delivering                                                            | 46.1 seconds                      | 1 key            |
-| `slack_outbox_last_sent`                                          | when Slack was last sent a message                                                 | 1 minute                          | 1 key            |
-| `slack_outbox_drain_scheduled`, `slack_outbox_recovery_scheduled` | that a follow-up or recovery run is scheduled                                      | until it runs                     | 1 key each       |
+| Key                                                               | Holds                                                                                   | Kept for                          | Limit            |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------- | ---------------- |
+| `mod_actions:moderator_actions:{subreddit}:{moderator}`           | the moderator's recent action IDs, by time                                              | 1 hour                            | 100 actions      |
+| `mod_actions:discipline_events:{ban\|mute}:{subreddit}:{user}`    | the user's bans or mutes and their lifting: time, moderator, note, details              | 90 days                           | 20 events        |
+| `mod_actions:reported:{actionId}`                                 | that an action was alerted                                                              | 1 day                             | one per alert    |
+| `post_deletion:alerted:{postId}`                                  | that a deletion was alerted                                                             | 1 day                             | one per alert    |
+| `mod_actions:throttle:modqueue_{size\|unmoderated\|reported}`     | that an alert of that kind was sent                                                     | 1 hour                            | 3 keys           |
+| `scheduler_failure_count`                                         | the monitor's failures in a row                                                         | 1 hour                            | 1 key            |
+| `slack_outbox`                                                    | queued alerts, each with the IDs of the content it quotes and a version without it      | 1 day                             | 500 alerts       |
+| `health:conditions`                                               | the health conditions in force, each with when it started                               | 7 days from when one was last met | 7 conditions     |
+| `health:last`                                                     | when each event (a trigger, an alert delivered or dropped, a monitor run) last happened | 7 days from the last              | 7 events         |
+| `health:count:{day}`                                              | how many of each event a UTC day saw                                                    | 8 days                            | 7 counts a day   |
+| `health:reminder:{condition}`                                     | that a condition was logged within the day                                              | 1 day                             | 1 per condition  |
+| `slack_outbox_deleted`                                            | the IDs of posts and comments deleted on Reddit, by time                                | 1 day and 1 second                | one per deletion |
+| `slack_outbox_lease`                                              | which run is delivering                                                                 | 46.1 seconds                      | 1 key            |
+| `slack_outbox_last_sent`                                          | when Slack was last sent a message                                                      | 1 minute                          | 1 key            |
+| `slack_outbox_drain_scheduled`, `slack_outbox_recovery_scheduled` | that a follow-up or recovery run is scheduled                                           | until it runs                     | 1 key each       |
 
 **Settings** are stored by Devvit for each installation. The webhook URL is an ordinary setting, because Devvit allows only app-wide secrets, so any moderator who can open the app's settings can read it.
 
@@ -232,15 +234,21 @@ Reddit shows the four menu actions only to moderators, but Devvit runs a menu ac
 
 ### Show Bot Status
 
-The status reads like `Modqueue Monitoring: ON • Slack Webhook: Configured • Modqueue Monitor: Active (cron */15 * * * *)`.
+Moderators can't read the app's logs, so this is where they see how it's doing. It shows a form of read-only lines:
 
-| Part                                    | Meaning                                                                       |
-| --------------------------------------- | ----------------------------------------------------------------------------- |
-| `Modqueue Monitoring: ON` / `OFF`       | Whether any modqueue threshold is above 0.                                    |
-| `Slack Webhook: Configured` / `Missing` | Whether a usable webhook URL is set.                                          |
-| `Modqueue Monitor: Active (cron …)`     | The monitor job is scheduled.                                                 |
-| `Modqueue Monitor: Not scheduled`       | No monitor job. Run **Setup Modqueue Monitoring** if monitoring should be on. |
-| `Modqueue Monitor: Unknown`             | The scheduler couldn't be asked. Try again shortly.                           |
+| Line                 | Says                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| App version          | The version installed.                                                                                                                         |
+| Current problems     | Each health condition in force (see [Reading the logs](#reading-the-logs)), with what the app saw and for how long, and what to do; or `None`. |
+| Alerts waiting       | How many alerts wait for Slack, and how long the oldest has waited.                                                                            |
+| Last alert delivered | When Slack last took an alert, or `None in the last week`.                                                                                     |
+| Slack webhook        | `Set`, `Not set`, or `Not a Slack webhook URL`: without a usable one, no alerts are sent.                                                      |
+| Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds are 0; or `Unknown`.     |
+| Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                           |
+| Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.       |
+| Today (UTC)          | Mod actions heard of, alerts delivered and dropped, and monitor runs and failures, since midnight UTC.                                         |
+
+A line reads `Unknown: Redis could not be read` when Redis fails; the rest still show.
 
 ### Test Slack Connection
 
@@ -260,7 +268,7 @@ The status reads like `Modqueue Monitoring: ON • Slack Webhook: Configured •
 - **Alerts arriving slowly during busy periods.** That's the 1.1-second pacing at work. A burst of 60 actions takes about a minute to deliver.
 - **An alert sent twice.** This is rare: Slack accepted it but its answer was lost, so it was resent.
 - **No modqueue alerts.**
-    - Show Bot Status should say the monitor is active.
+    - Show Bot Status should say the monitor is on and scheduled.
     - The listing must reach the threshold.
     - Each kind of alert is held back for an hour after it's sent.
 - **A deleted-post alert that never came.** Only deletions by the post's author count, and the score is the one Reddit reports at the moment of deletion.

@@ -116,6 +116,7 @@ All data is stored temporarily in Reddit's Redis infrastructure with automatic e
 | Alerts already sent (mod action and post IDs) | 1 day            | Avoid sending an alert twice when Reddit delivers an event again |
 | Scheduler failures                            | 1 hour           | Track monitoring issues                                          |
 | Problems the bot is having (no user data)     | Up to 7 days     | Log each problem once, rather than on every event                |
+| When the bot last acted, and daily counts     | Up to 8 days     | Show moderators the bot is at work (counts and times only)       |
 
 **Important:** Data is automatically deleted after these periods. We do not maintain long-term archives.
 

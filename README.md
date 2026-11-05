@@ -57,12 +57,12 @@ Setting a threshold to 0 turns that alert off. The channel settings only work wi
 
 These appear in the subreddit's mod tools menu, and only moderators of the subreddit can use them.
 
-| Action                    | What it does                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------------------------- |
-| Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                   |
-| Show Bot Status           | Shows whether monitoring is on, whether a webhook is set, and whether the monitor is scheduled. |
-| Simulate Mod Action       | Sends a sample alert so you can see how alerts look, without touching any real data.            |
-| Setup Modqueue Monitoring | Schedules or cancels the modqueue monitor to match your settings.                               |
+| Action                    | What it does                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                                                                         |
+| Show Bot Status           | Shows how the app is doing: any problems, alerts waiting for Slack, when it last delivered an alert and ran the modqueue monitor, and today's counts. |
+| Simulate Mod Action       | Sends a sample alert so you can see how alerts look, without touching any real data.                                                                  |
+| Setup Modqueue Monitoring | Schedules or cancels the modqueue monitor to match your settings.                                                                                     |
 
 ## Your data
 
