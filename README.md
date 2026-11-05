@@ -71,7 +71,7 @@ The app reads only what it needs to write an alert, and keeps very little:
 - **Ban and mute history**, to explain unbans: 90 days.
 - **Queued alerts**, for up to a day.
 - **IDs of deleted posts and comments**, so alerts still waiting to be sent leave their text out: a day.
-- **Short-lived records** that pace alerts and prevent duplicates: a minute to a day.
+- **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.
 
