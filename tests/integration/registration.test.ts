@@ -49,6 +49,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
+                { name: "dailySummary", type: "boolean", defaultValue: false },
             ]);
         },
     );
@@ -135,14 +136,18 @@ describe("what the app registers with Devvit", (): void => {
 
     // Scheduler job names are stored with every scheduled job: renaming one orphans the jobs already scheduled.
     it(
-        "registers the modqueue monitor and the Slack outbox as its scheduler jobs",
+        "registers the modqueue monitor, the Slack outbox and the daily summary as its scheduler jobs",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
 
-            expect(Object.keys(app.registrations.schedulerJobs)).toStrictEqual(["modqueueMonitor", "slackOutbox"]);
+            expect(Object.keys(app.registrations.schedulerJobs)).toStrictEqual([
+                "modqueueMonitor",
+                "slackOutbox",
+                "dailySummary",
+            ]);
         },
     );
 

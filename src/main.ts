@@ -4,21 +4,16 @@
  * what each menu item and form does, and the capability modules do the work.
  */
 import { Devvit } from "@devvit/public-api";
-import {
-    alertOnModAction,
-    deliverQueuedAlerts,
-    onCommentDelete,
-    onPostDelete,
-    runModqueueMonitor,
-    setUpModqueueMonitor,
-} from "./composition.js";
+import { alertOnModAction, onCommentDelete, onPostDelete } from "./composition.js";
 import type { AppContext, CommentDeleteEvent } from "./composition.js";
+import { SUMMARY_JOB_NAME } from "./health/index.js";
 import { botStatus, forModerators, sendSimulation, sendTestAlert, setUpFromMenu, statusForm } from "./menuActions.js";
 import type { MenuContext } from "./menuActions.js";
 import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import type { PostDeleteEvent } from "./postDeletion/index.js";
+import { deliverQueuedAlerts, runModqueueMonitor, sendSummary, setUpScheduledJobs } from "./scheduledJobs.js";
 import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
 
@@ -40,7 +35,7 @@ Devvit.addTrigger({
     onEvent: async (_event: unknown, context: AppContext): Promise<void> => {
         console.info(`[setup] Installed version ${context.appVersion}`);
         try {
-            await setUpModqueueMonitor(context);
+            await setUpScheduledJobs(context);
         } catch (error) {
             console.error("[setup] Could not set up the modqueue monitor on install:", error);
         }
@@ -52,7 +47,7 @@ Devvit.addTrigger({
     onEvent: async (_event: unknown, context: AppContext): Promise<void> => {
         console.info(`[setup] Upgraded to version ${context.appVersion}`);
         try {
-            await setUpModqueueMonitor(context);
+            await setUpScheduledJobs(context);
         } catch (error) {
             console.error("[setup] Could not set up the modqueue monitor on upgrade:", error);
         }
@@ -94,6 +89,14 @@ Devvit.addSchedulerJob({
     name: OUTBOX_JOB_NAME,
     onRun: async (_event: unknown, context: AppContext): Promise<void> => {
         await deliverQueuedAlerts(context);
+    },
+});
+
+// Sends the summary of the day before at 08:00 UTC, when the setting is on.
+Devvit.addSchedulerJob({
+    name: SUMMARY_JOB_NAME,
+    onRun: async (_event: unknown, context: AppContext): Promise<void> => {
+        await sendSummary(context);
     },
 });
 

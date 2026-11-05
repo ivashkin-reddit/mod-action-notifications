@@ -1,11 +1,5 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import {
-    alertsConfigured,
-    configOf,
-    modActionPresentation,
-    monitorThresholds,
-    setUpModqueueMonitor,
-} from "./composition.js";
+import { alertsConfigured, configOf, modActionPresentation, monitorThresholds } from "./composition.js";
 import type { AppContext } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
 import type { MonitorState, StatusInput, StatusLine } from "./health/index.js";
@@ -18,6 +12,7 @@ import {
 import type { SimulateFormValues } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
+import { setUpScheduledJobs } from "./scheduledJobs.js";
 import type { AppConfig } from "./settings/index.js";
 import { createWebhookSender, queueState, sendTestMessage } from "./slack/delivery.js";
 
@@ -215,7 +210,7 @@ export async function sendSimulation(values: SimulateFormValues, context: MenuCo
 /** Sets up the monitor from the menu, and says how it went. */
 export async function setUpFromMenu(context: MenuContext): Promise<void> {
     try {
-        const result = await setUpModqueueMonitor(context);
+        const result = await setUpScheduledJobs(context);
         context.ui.showToast(
             result.enabled
                 ? {

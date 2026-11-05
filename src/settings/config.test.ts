@@ -29,6 +29,7 @@ describe("reading the settings", (): void => {
             reportedContentAgeHours: 24,
             enableAutoModAlerts: false,
             postDeletionUpvoteThreshold: 100,
+            dailySummary: false,
         });
     });
 

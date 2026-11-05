@@ -33,6 +33,8 @@ export interface AppConfig {
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
+    /** Whether a summary of the day before goes to Slack each morning. */
+    readonly dailySummary: boolean;
 }
 
 // Devvit's client lets a caller name the type a setting comes back as, but checks nothing: a saved value can be
@@ -55,6 +57,7 @@ const DEFAULT_CONFIG: AppConfig = {
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
+    dailySummary: false,
 };
 
 /** The webhook setting: an https Slack webhook URL, or '' and whether what was set is not one. */
@@ -123,6 +126,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
             DEFAULT_REPORTED_CONTENT_AGE_HOURS,
         ),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
+        dailySummary: booleanOr(await settings.get("dailySummary"), false),
         postDeletionUpvoteThreshold: nonNegativeInteger(
             await settings.get("postDeletionUpvoteThreshold"),
             DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,

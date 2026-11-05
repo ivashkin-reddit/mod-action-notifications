@@ -33,6 +33,7 @@ export interface Settings {
     reportedContentAgeHours?: unknown;
     enableAutoModAlerts?: unknown;
     postDeletionUpvoteThreshold?: unknown;
+    dailySummary?: unknown;
 }
 
 /** The app's own setting defaults, with a webhook configured. */

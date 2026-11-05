@@ -16,6 +16,22 @@ export interface EventStore {
     readonly lastSeen: () => Promise<LastSeen>;
     /** The counts of a UTC day such as 2026-11-04. Rejects when Redis cannot be read. */
     readonly counts: (day: string) => Promise<Counts>;
+    /** Claims the summary of a UTC day for `seconds`: false when it was claimed within them. */
+    readonly claimSummary: (day: string, seconds: number) => Promise<boolean>;
+}
+
+/** A daily summary job on the scheduler. */
+export interface ScheduledSummaryJob {
+    readonly id: string;
+    /** Absent for a one-off job. */
+    readonly cron: string | undefined;
+}
+
+export interface SummaryScheduler {
+    readonly schedule: (cron: string) => Promise<string>;
+    readonly cancel: (jobId: string) => Promise<void>;
+    /** The summary jobs scheduled for this installation. */
+    readonly jobs: () => Promise<readonly ScheduledSummaryJob[]>;
 }
 
 /** Where the conditions in force are kept. */

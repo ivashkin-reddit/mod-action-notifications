@@ -17,21 +17,8 @@ import {
     notifyModAction,
 } from "./moderation/index.js";
 import type { ModActionEvent, ModActionPresentation, ModerationConfig, ModerationPorts } from "./moderation/index.js";
-import {
-    checkModqueue,
-    createDevvitMonitorScheduler,
-    createRedisMonitorStore,
-    createSlackModqueueAlerts,
-    openRedditQueues,
-    setupMonitoring,
-} from "./modqueue/index.js";
-import type {
-    ModerationQueues,
-    MonitorHealth,
-    MonitorJobPorts,
-    MonitoringSetup,
-    MonitorThresholds,
-} from "./modqueue/index.js";
+import { createDevvitMonitorScheduler, createRedisMonitorStore } from "./modqueue/index.js";
+import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
 import {
     alertOnUserDeletion,
     createRedditPostLookup,
@@ -146,7 +133,7 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
 }
 
 /** The installation's health log, where the outbox and the monitor report lasting problems. */
-function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
+export function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
     const conditions = conditionPorts(context);
     return {
         raise: async (condition: Condition, detail: string): Promise<void> => {
@@ -162,7 +149,7 @@ function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
 }
 
 /** The installation's Slack outbox, through which every alert goes. */
-function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
+export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
     return createSlackOutbox({
         webhookUrl: config.slackWebhookUrl,
         redis: context.redis,
@@ -190,7 +177,7 @@ function moderationPorts(context: AppContext, config: AppConfig): ModerationPort
     };
 }
 
-function monitorJobPorts(context: AppContext): MonitorJobPorts {
+export function monitorJobPorts(context: AppContext): MonitorJobPorts {
     return {
         store: createRedisMonitorStore(context.redis),
         scheduler: createDevvitMonitorScheduler(context.scheduler),
@@ -204,43 +191,6 @@ export async function alertOnModAction(event: ModActionEvent, context: AppContex
         return;
     }
     await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));
-}
-
-/** Schedules the monitor while any of its thresholds is above 0, and cancels it otherwise, logging which. */
-export async function setUpModqueueMonitor(context: AppContext): Promise<MonitoringSetup> {
-    const config = await configOf(context);
-    const setup = await setupMonitoring(monitorThresholds(config), monitorJobPorts(context));
-    console.info(
-        setup.enabled
-            ? "[setup] The modqueue monitor is on"
-            : "[setup] The modqueue monitor is off: all its thresholds are 0",
-    );
-    return setup;
-}
-
-export async function runModqueueMonitor(context: AppContext): Promise<void> {
-    const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        return;
-    }
-    await checkModqueue(monitorThresholds(config), {
-        openQueues: async (): Promise<ModerationQueues> => await openRedditQueues(context.reddit),
-        store: createRedisMonitorStore(context.redis),
-        alerts: createSlackModqueueAlerts(outboxOf(context, config).send, config.alertChannel),
-        health: healthReports(context),
-    });
-}
-
-async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext): Promise<void> {
-    const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        return;
-    }
-    await alertOnUserDeletion(postDeletionConfig(config), postDeletionFromTriggerEvent(event), {
-        posts: createRedditPostLookup(context.reddit),
-        claims: createRedisDeletionClaims(context.redis),
-        alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
-    });
 }
 
 /** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */
@@ -258,6 +208,18 @@ async function forgetDeletedContent(contentId: string, context: AppContext): Pro
     }
 }
 
+async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext): Promise<void> {
+    const config = await configOf(context);
+    if (!alertsConfigured(config)) {
+        return;
+    }
+    await alertOnUserDeletion(postDeletionConfig(config), postDeletionFromTriggerEvent(event), {
+        posts: createRedditPostLookup(context.reddit),
+        claims: createRedisDeletionClaims(context.redis),
+        alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
+    });
+}
+
 /**
  * A post was deleted: its text leaves queued alerts, then a user's own deletion of a high-score post is alerted.
  * The alert about a deleted post names the post, by the owner's decision (AGENTS.md).
@@ -272,12 +234,4 @@ export async function onPostDelete(event: PostDeleteEvent, context: AppContext):
 export async function onCommentDelete(event: CommentDeleteEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "comment-delete", 1);
     await forgetDeletedContent(event.commentId, context);
-}
-
-/** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while no webhook is set. */
-export async function deliverQueuedAlerts(context: AppContext): Promise<void> {
-    const config = await configOf(context);
-    if (alertsConfigured(config)) {
-        await outboxOf(context, config).deliverQueued();
-    }
 }

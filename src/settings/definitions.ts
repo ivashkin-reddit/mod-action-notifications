@@ -125,6 +125,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
             wholeNumberProblem(value),
     },
+    {
+        type: "boolean",
+        name: "dailySummary",
+        label: "Daily Summary",
+        helpText:
+            "Post a summary of the day before to Slack each morning at 08:00 UTC: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working (off by default)",
+        defaultValue: false,
+    },
 ];
 
 /**

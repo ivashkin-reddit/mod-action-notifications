@@ -15,7 +15,14 @@ function countKey(day: string): string {
     return `health:count:${day}`;
 }
 
-type EventRedis = Readonly<Pick<TriggerContext["redis"], "hSet" | "hIncrBy" | "hGetAll" | "expire">>;
+type EventRedis = Readonly<Pick<TriggerContext["redis"], "hSet" | "hIncrBy" | "hGetAll" | "expire" | "set">>;
+
+const MS_PER_SECOND = 1000;
+
+/** Present once a UTC day's summary has been sent. */
+function summaryKey(day: string): string {
+    return `health:summary:${day}`;
+}
 
 /** The hash's numbers by event. A field this version does not know is never read. */
 function byEvent(fields: Readonly<Record<string, string>>): Partial<Record<HealthEvent, number>> {
@@ -37,5 +44,10 @@ export function createRedisEventStore(redis: EventRedis): EventStore {
         },
         lastSeen: async (): Promise<LastSeen> => byEvent(await redis.hGetAll(LAST_KEY)),
         counts: async (day: string): Promise<Counts> => byEvent(await redis.hGetAll(countKey(day))),
+        claimSummary: async (day: string, seconds: number): Promise<boolean> =>
+            (await redis.set(summaryKey(day), "1", {
+                nx: true,
+                expiration: new Date(Date.now() + seconds * MS_PER_SECOND),
+            })) !== "",
     };
 }
