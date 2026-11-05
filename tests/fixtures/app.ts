@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import { createFakeContext, defaultSettings } from "./fakeContext.js";
-import type { FakeContext, Settings, Toast } from "./fakeContext.js";
+import type { FakeContext, Settings, ShownForm, Toast } from "./fakeContext.js";
 import type { FakeDevvit, FormDefinition, Handler, Registrations } from "./fakeDevvit.js";
 import { createFakeSlack } from "./fakeSlack.js";
 import type { FakeSlack } from "./fakeSlack.js";
@@ -63,20 +63,22 @@ async function invoke(handler: Handler, event: unknown, context: unknown): Promi
     await drive(Promise.resolve(handler(event, context)));
 }
 
-function shownFormIn(registrations: Registrations, shownForms: readonly string[]): App["shownForm"] {
+/** The form the app most recently showed, built from the data it showed it with when the app gave a function. */
+function shownFormIn(registrations: Registrations, shownForms: readonly ShownForm[]): App["shownForm"] {
     return (): Readonly<{ key: string; definition: FormDefinition }> => {
-        const key = shownForms[shownForms.length - 1];
-        if (key === undefined) {
+        const shown = shownForms[shownForms.length - 1];
+        if (shown === undefined) {
             throw new Error("no form has been shown");
         }
-        return { key, definition: named(registrations.forms, "form", key).definition };
+        const source = named(registrations.forms, "form", shown.key).definition;
+        return { key: shown.key, definition: typeof source === "function" ? source(shown.data) : source };
     };
 }
 
 type Actions = Pick<App, "fire" | "runJob" | "pressMenuItem" | "shownForm" | "submitForm" | "fillForm" | "advance">;
 
 /** What a test can do to the app: deliver what Devvit would, and move the clock. */
-function actions(registrations: Registrations, context: unknown, shownForms: readonly string[]): Actions {
+function actions(registrations: Registrations, context: unknown, shownForms: readonly ShownForm[]): Actions {
     const shownForm = shownFormIn(registrations, shownForms);
     const pressMenuItem = async (label: string): Promise<void> => {
         const item = registrations.menuItems.find((menuItem): boolean => menuItem.label === label);

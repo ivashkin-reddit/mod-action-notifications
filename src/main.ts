@@ -13,7 +13,7 @@ import {
     setUpModqueueMonitor,
 } from "./composition.js";
 import type { AppContext, CommentDeleteEvent } from "./composition.js";
-import { forModerators, sendSimulation, sendTestAlert, setUpFromMenu, showBotStatus } from "./menuActions.js";
+import { botStatus, forModerators, sendSimulation, sendTestAlert, setUpFromMenu, statusForm } from "./menuActions.js";
 import type { MenuContext } from "./menuActions.js";
 import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
@@ -125,6 +125,9 @@ const testForm = Devvit.createForm(
     },
 );
 
+// What Show Bot Status shows: read-only lines, closed with its one button.
+const botStatusForm = Devvit.createForm(statusForm, (): void => undefined);
+
 const simulateActionForm = Devvit.createForm(
     simulateForm,
     async ({ values }: Readonly<{ values: SimulateFormValues }>, context: MenuContext): Promise<void> => {
@@ -151,7 +154,7 @@ Devvit.addMenuItem({
     forUserType: "moderator",
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
         await forModerators(context, async (): Promise<void> => {
-            await showBotStatus(context);
+            context.ui.showForm(botStatusForm, await botStatus(context));
         });
     },
 });

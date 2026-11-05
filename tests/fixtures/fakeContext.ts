@@ -243,14 +243,17 @@ export interface FakeContext {
     readonly scheduler: FakeScheduler;
     readonly ui: Readonly<{
         showToast: Mock<(toast: Toast) => void>;
-        showForm: Mock<(formKey: string) => void>;
+        showForm: Mock<(formKey: string, data?: Readonly<Record<string, unknown>>) => void>;
     }>;
 }
+
+/** A form the app showed, and the data it showed it with. */
+export type ShownForm = Readonly<{ key: string; data: Readonly<Record<string, unknown>> }>;
 
 export interface CreatedContext {
     readonly context: FakeContext;
     readonly toasts: readonly Toast[];
-    readonly shownForms: readonly string[];
+    readonly shownForms: readonly ShownForm[];
 }
 
 /**
@@ -259,7 +262,7 @@ export interface CreatedContext {
  */
 export function createFakeContext(settings: Readonly<Settings>, subredditId = "t5_testsub"): CreatedContext {
     const toasts: Toast[] = [];
-    const shownForms: string[] = [];
+    const shownForms: ShownForm[] = [];
     const settingValues: Readonly<Record<string, unknown>> = settings;
     return {
         context: {
@@ -276,8 +279,8 @@ export function createFakeContext(settings: Readonly<Settings>, subredditId = "t
                 showToast: vi.fn((toast: Toast): void => {
                     toasts.push(toast);
                 }),
-                showForm: vi.fn((formKey: string): void => {
-                    shownForms.push(formKey);
+                showForm: vi.fn((formKey: string, data: Readonly<Record<string, unknown>> = {}): void => {
+                    shownForms.push({ key: formKey, data });
                 }),
             },
         },

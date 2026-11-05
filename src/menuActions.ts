@@ -1,4 +1,4 @@
-import type { Context, User } from "@devvit/public-api";
+import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
 import {
     alertsConfigured,
     configOf,
@@ -7,6 +7,8 @@ import {
     setUpModqueueMonitor,
 } from "./composition.js";
 import type { AppContext } from "./composition.js";
+import { statusLines } from "./health/index.js";
+import type { MonitorState, StatusInput, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
     simulateModAction,
@@ -16,6 +18,7 @@ import {
 import type { SimulateFormValues } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
+import type { AppConfig } from "./settings/index.js";
 import { createWebhookSender, sendTestMessage } from "./slack/delivery.js";
 
 /**
@@ -76,32 +79,67 @@ export async function forModerators(context: MenuContext, action: () => Promise<
     await action();
 }
 
-function describeMonitorJob(status: MonitorJobStatus): string {
-    switch (status.state) {
+function monitorState(enabled: boolean, job: MonitorJobStatus): MonitorState {
+    switch (job.state) {
         case "not-scheduled": {
-            return "Modqueue Monitor: Not scheduled";
+            return { enabled, job: "none" };
         }
         case "active": {
-            return status.cron === undefined
-                ? "Modqueue Monitor: Active"
-                : `Modqueue Monitor: Active (cron ${status.cron})`;
+            return job.cron === undefined ? { enabled, job: "one-off" } : { enabled, job: "scheduled", cron: job.cron };
         }
         case "unknown": {
-            return "Modqueue Monitor: Unknown";
+            return { enabled, job: "unknown" };
         }
     }
 }
 
-/** Shows the bot's status as a toast. */
-export async function showBotStatus(context: MenuContext): Promise<void> {
+function webhookState(config: AppConfig): StatusInput["webhook"] {
+    if (config.slackWebhookUrlInvalid) {
+        return "invalid";
+    }
+    return alertsConfigured(config) ? "set" : "missing";
+}
+
+/**
+ * What the bot's status form says, from the settings, the scheduler and Redis: the data ui.showForm passes to
+ * statusForm, which Devvit requires to be plain JSON.
+ */
+export async function botStatus(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
     const config = await configOf(context);
-    const monitorJob = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
-    const text = [
-        `Modqueue Monitoring: ${isMonitoringEnabled(monitorThresholds(config)) ? "ON" : "OFF"}`,
-        `Slack Webhook: ${alertsConfigured(config) ? "Configured" : "Missing"}`,
-        describeMonitorJob(monitorJob),
-    ].join(" • ");
-    context.ui.showToast({ text, appearance: "neutral" });
+    const job = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
+    const lines = statusLines({
+        version: context.appVersion,
+        webhook: webhookState(config),
+        monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
+    });
+    return { lines: lines.map(({ label, value }: StatusLine): { label: string; value: string } => ({ label, value })) };
+}
+
+function isStatusLine(value: unknown): value is StatusLine {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "label" in value &&
+        typeof value.label === "string" &&
+        "value" in value &&
+        typeof value.value === "string"
+    );
+}
+
+/** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
+export function statusForm(data: Readonly<Record<string, unknown>>): Form {
+    const lines = Array.isArray(data["lines"]) ? data["lines"].filter(isStatusLine) : [];
+    return {
+        title: "Bot Status",
+        fields: lines.map(({ label, value }: StatusLine, index: number): ParagraphField => ({
+            name: `status${String(index)}`,
+            label,
+            type: "paragraph",
+            defaultValue: value,
+            disabled: true,
+        })),
+        acceptLabel: "Close",
+    };
 }
 
 /** How sending a test message went. */

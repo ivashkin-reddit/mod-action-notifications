@@ -40,12 +40,16 @@ export type FormDefinition = Readonly<{
         type: string;
         defaultValue?: unknown;
         options?: readonly Option[];
+        disabled?: boolean;
     }>[];
     acceptLabel?: string;
     cancelLabel?: string;
 }>;
 
-export type FormRegistration = Readonly<{ definition: FormDefinition; onSubmit: Handler }>;
+/** What Devvit.createForm takes: a form, or a function that builds one from the data ui.showForm passes. */
+export type FormSource = FormDefinition | ((data: Readonly<Record<string, unknown>>) => FormDefinition);
+
+export type FormRegistration = Readonly<{ definition: FormSource; onSubmit: Handler }>;
 
 /** What the app registered, by name: one handler per trigger event, scheduler job and form. */
 export type Registrations = Readonly<{
@@ -66,7 +70,7 @@ export type FakeDevvit = Readonly<{
         addSettings: (settings: readonly SettingDefinition[]) => void;
         addTrigger: (definition: TriggerDefinition) => void;
         addSchedulerJob: (job: Readonly<{ name: string; onRun: Handler }>) => void;
-        createForm: (definition: FormDefinition, onSubmit: Handler) => string;
+        createForm: (definition: FormSource, onSubmit: Handler) => string;
         addMenuItem: (item: MenuItemDefinition) => void;
     }>;
     /** Everything registered since the last `reset()`. */
@@ -114,7 +118,7 @@ export function createFakeDevvit(): FakeDevvit {
                 const schedulerJobs = withHandler(recorded.schedulerJobs, "scheduler job", { name, handler: onRun });
                 recorded = { ...recorded, schedulerJobs };
             },
-            createForm: (definition: FormDefinition, onSubmit: Handler): string => {
+            createForm: (definition: FormSource, onSubmit: Handler): string => {
                 const key = `form.${String(Object.keys(recorded.forms).length)}`;
                 recorded = { ...recorded, forms: { ...recorded.forms, [key]: { definition, onSubmit } } };
                 return key;

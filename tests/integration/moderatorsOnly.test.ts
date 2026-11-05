@@ -94,7 +94,7 @@ describe("a menu item", (): void => {
         await app.pressMenuItem("Show Bot Status");
 
         expect(moderator.getModPermissionsForSubreddit).toHaveBeenCalledExactlyOnceWith("testsub");
-        expect(app.toasts[0]?.text).toMatch(/^Modqueue Monitoring: /u);
+        expect(app.shownForm().definition.title).toBe("Bot Status");
     });
 });
 

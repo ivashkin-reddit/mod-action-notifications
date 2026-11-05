@@ -5,4 +5,5 @@
 export { clearCondition, raiseCondition } from "./application/conditions.js";
 export type { ConditionStore } from "./application/ports.js";
 export type { Condition } from "./domain/conditions.js";
+export { statusLines, type MonitorState, type StatusInput, type StatusLine } from "./domain/status.js";
 export { createRedisConditionStore } from "./infrastructure/redisConditionStore.js";
