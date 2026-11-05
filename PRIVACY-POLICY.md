@@ -1,246 +1,114 @@
 # Privacy Policy
 
-**Effective Date:** October 30, 2025  
-**App Name:** Reddit Mod Action Slack Bot  
+**App:** Reddit Mod Action Slack Bot (Devvit app `ukpolitics-man`)  
 **Developer:** u/ivashkin  
-**Intended Use:** Internal moderation tool for subreddit moderation teams
+**Effective:** 5 November 2026
 
----
+## In short
 
-## 1. Overview
+This app is a moderation tool. A subreddit's moderators install it so that their mod team sees moderation activity in their own Slack workspace. It reads moderation activity in that subreddit, sends alerts about it to the moderators' Slack, and keeps a few records, most of them for a day or less. It runs entirely on Reddit's Developer Platform, and sends nothing anywhere except that Slack workspace and the subreddit's own modmail. It sells nothing, shows no ads, and builds no profiles of anyone.
 
-This Privacy Policy describes how the Reddit Mod Action Slack Bot ("the Bot") collects, uses, and shares data when installed and used by subreddit moderators.
+## Whom this policy is about
 
-**Important:** This bot is designed for internal use by subreddit moderation teams to improve moderation workflow and team coordination.
+- **The subreddit's moderators**, who install the app, configure it and read its alerts. Their usernames appear in alerts about the actions they take.
+- **Redditors whose posts, comments or accounts a moderator acts on**, and redditors who delete a post that scored highly. They never use the app and cannot see it, but their usernames and content pass through it.
 
----
+The developer, u/ivashkin, is responsible for the app and for this policy. The subreddit's moderators are responsible for their Slack workspace, and for what they do with the alerts in it.
 
-## 2. What Data We Collect
+## Where it runs
 
-The Bot only collects data necessary to send moderation action notifications to your configured Slack workspace:
+- **Reddit's Developer Platform (Devvit).** The app's code runs on Reddit's servers. Its records are kept in Devvit's storage for the subreddit's installation, which no other installation can read, and Devvit stores its settings. The developer runs no servers or databases of their own.
+- **The moderators' Slack workspace.** The moderators create a Slack incoming webhook and enter it in the app's settings. Alerts go there, and nowhere else outside Reddit.
+- **The subreddit's modmail.** Notices about problems with the app itself go there.
 
-### 2.1 Moderation Action Data
+## What it reads from Reddit, and why
 
-- **Moderator username** (who performed the action)
-- **Action type** (e.g., removed post, banned user, approved comment)
-- **Target user** (if applicable - username only, no personal information)
-- **Content metadata** (post/comment titles, permalinks)
-- **Timestamps** (when actions occurred)
-- **Mod notes** (if included by moderators)
+| Feature                    | What it reads                                                                                                                                                                                                    | Why                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Mod action alerts          | Each mod action in the subreddit: its type and time, the moderator, the user acted on, and the post or comment (title, link, and up to 200 characters of its text). For a ban, its length, details and mod note. | To tell the mod team about the action.                   |
+| Ban lengths                | The subreddit's 10 most recent bans in the mod log, when a ban doesn't say how long it lasts.                                                                                                                    | To show how long the ban lasts.                          |
+| Unknown moderators         | The subreddit's mod list, at most once every five minutes.                                                                                                                                                       | To flag an action by an account that isn't a moderator.  |
+| Deleted posts              | A post deleted by its own author: its title, author, score, Reddit's deletion reason, and link.                                                                                                                  | To flag a popular post deleted by its author.            |
+| Deleted posts and comments | The ID of each post or comment deleted in the subreddit.                                                                                                                                                         | To take deleted content out of alerts not yet sent.      |
+| Modqueue monitor           | The modqueue, unmoderated and reports listings: how many items wait, for how long, and links to the oldest.                                                                                                      | To warn the mod team when content waits too long.        |
+| Menu actions               | The permissions of the person who opens one.                                                                                                                                                                     | To refuse anyone who isn't a moderator of the subreddit. |
 
-### 2.2 Post Deletion Monitoring Data
+It reads nothing else: no modmail, private messages or chats, no user profiles or post histories, and nothing from other subreddits.
 
-When a user deletes their own post, the Bot reads from Reddit at that moment, and includes in its notification:
+## What it sends, and to whom
 
-- **Post scores** (upvote counts)
-- **Post titles**
-- **Post authors** (usernames only)
-- **Post permalinks**
+### The moderators' Slack workspace
 
-None of this is stored. Only the post's ID is kept, for a day, so that an alert is not sent twice.
+Alerts can contain:
 
-### 2.3 Configuration Data
+- usernames: of the moderator who acted, of the user acted on, and of the author of a deleted post;
+- post titles, links, and up to 200 characters of a removed post's or comment's text;
+- for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for an unban or unmute, the ban or mute it lifts;
+- for modqueue alerts, counts, and links to the oldest items waiting;
+- a deleted post's score.
 
-- **Slack webhook URL** (stored securely in Reddit's Devvit platform)
-- **Bot settings** (enabled actions, excluded moderators, notification preferences)
+The daily summary, which is off unless the moderators turn it on, holds only counts.
 
----
+Alerts travel over HTTPS. Text from Reddit is escaped, so it cannot notify a whole Slack channel.
 
-## 3. What Data We Do NOT Collect
+Once an alert reaches Slack, it is kept under the workspace's message retention settings and Slack's privacy policy, and the moderators control it. **The app cannot change or delete an alert once it is in Slack**, as an incoming webhook can only post. An alert stays in Slack even if the content it quotes is later deleted on Reddit. The moderators can delete it in Slack.
 
-- ❌ User IP addresses
-- ❌ Email addresses
-- ❌ Real names or personal identifiable information (PII)
-- ❌ Private messages or modmail content
-- ❌ User passwords or credentials
-- ❌ Location data
-- ❌ Device information
-- ❌ Browsing history
+### The subreddit's modmail
 
----
+When alerts cannot reach Slack, or the modqueue monitor keeps failing, the app sends the subreddit's modmail a notice from the app's account: what is wrong, what the app saw, and what to do. Notices contain no Reddit content or user data. Each problem is sent at most once a day, and once more when it ends.
 
-## 4. How We Use Data
+### Nobody else
 
-### 4.1 Primary Purpose
+The app sends nothing to any other service. It does not sell, license or share data, show advertising, use analytics, train AI models, or profile or track redditors.
 
-All data is used **solely** to send real-time notifications to your subreddit's moderation team via Slack when moderation actions occur.
+## What it keeps, and for how long
 
-### 4.2 Specific Uses
+Everything the app keeps expires by itself.
 
-- Send Slack alerts when moderators perform actions
-- Pair ban/unban events to show context
-- Detect rapid-fire moderation activity
-- Alert on high modqueue volume
-- Notify when high-scoring posts are deleted
-- Optionally, post a daily summary of the Bot's own activity (counts only) to Slack
+| What                                                                    | Personal data in it                                                                                         | Kept for                                               |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Ban and mute history                                                    | Usernames of the user and the moderator, times, ban details and mod notes. The latest 20 per user.          | Until 90 days after the user's most recent ban or mute |
+| Alerts waiting for Slack                                                | What each alert will say                                                                                    | Until delivered, at most a day                         |
+| Moderator activity                                                      | Each moderator's username, with the IDs of their recent actions                                             | 1 hour                                                 |
+| Alerts already sent                                                     | The IDs of the mod actions and posts alerted                                                                | 1 day                                                  |
+| Posts and comments deleted on Reddit                                    | Their IDs                                                                                                   | 1 day                                                  |
+| The app's own workings: alert pacing, its problems, counts and times    | None                                                                                                        | Up to 8 days                                           |
+| Settings: the webhook URL, channels, alert choices, excluded moderators | Usernames of excluded moderators                                                                            | Until changed, or the app is uninstalled               |
+| The app's logs, kept by Reddit                                          | The username of an account not on the mod list, when one takes an action. No lines quote posts or comments. | 7 days, up to 5,000 lines                              |
 
-### 4.3 No Secondary Uses
+The ban and mute history is kept for longer than the 30 days Reddit recommends for user data, so that an unban months after a long ban still says which ban it lifts.
 
-We **do not**:
+Uninstalling the app removes its records and settings. Alerts already in Slack and notices already in modmail stay.
 
-- Sell or share data with third parties
-- Use data for advertising or marketing
-- Train AI/ML models
-- Profile or track users
-- Analyze user behavior for any purpose beyond notifications
+## Who can see what
 
----
+- **The subreddit's moderators** can see the app's settings, its modmail notices, and **Show Bot Status**, which shows counts and times but no user data. The webhook URL is an ordinary setting, as Devvit offers secrets only for app-wide settings that the developer sets: any moderator who can open the app's settings can read it.
+- **Members of the Slack channel** can read the alerts. The moderators decide who they are.
+- **The developer** can read the app's logs.
+- **Reddit** runs the platform the app runs on, and **Slack** holds the alerts for the workspace, each under its own privacy policy.
 
-## 5. Where Data Is Sent
+## Deletions
 
-### 5.1 Slack Integration
+- **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. It does not remove content from alerts already in Slack. The alert about a deleted post names the post, as reporting that deletion is its purpose.
+- **A deleted Reddit account.** Reddit does not tell apps when an account is deleted. A deleted account's username stays in the ban and mute history until that expires, and in alerts already in Slack.
 
-- Moderation notifications are sent to your configured Slack webhook URL
-- Data is transmitted over HTTPS (encrypted in transit)
-- Only the Slack workspace you configure receives notifications
-- Slack's data handling is governed by [Slack's Privacy Policy](https://slack.com/trust/privacy/privacy-policy)
+## Choices
 
-### 5.2 Your Subreddit's Modmail
+- **Moderators** choose which actions send alerts, can leave mod notes out of alerts, can turn any modqueue alert off by setting its threshold to 0, and can uninstall the app at any time. Excluding a moderator stops alerts about their actions; their actions still count toward activity spikes, and bans and mutes they issue are still recorded, so that unbans keep their context.
+- **Redditors** cannot opt out of a subreddit's moderation tools. To ask what the app holds about you, or to ask for it to be removed, message u/ivashkin on Reddit. Alerts already in a subreddit's Slack are for that subreddit's moderators to delete: ask them.
 
-- When the Bot cannot deliver notifications to Slack, or its modqueue monitoring keeps failing, it sends a notification about its own problem to your subreddit's modmail, from the app's account
-- These notifications describe the Bot's problem and what to do; they contain no Reddit content or user data
-- At most one is sent per problem per day, and one when the problem is over
+## Children
 
-### 5.3 Reddit's Devvit Platform
+Reddit is for people aged 13 and over. The app is a tool for moderators, and is not directed at children.
 
-- Configuration settings are stored in Reddit's secure Devvit infrastructure
-- We do not operate any external servers or databases
-- All processing occurs within Reddit's controlled environment
+## Copies run by others
 
----
+The app's code is open source. Anyone who deploys their own copy of it is that copy's developer, and this policy does not cover it.
 
-## 6. How Long We Store Data
+## Changes
 
-All data is stored temporarily in Reddit's Redis infrastructure with automatic expiration:
+This policy is kept in the app's [GitHub repository](https://github.com/ivashkin-reddit/mod-action-notifications), whose history records every change to it. The date at the top says when it last changed.
 
-| Data Type                                     | Retention Period | Purpose                                                          |
-| --------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
-| Ban/mute history                              | 90 days          | Pair unbans/unmutes with the bans/mutes they lift                |
-| Queued Slack notifications                    | Up to 1 day      | Deliver notifications at the rate Slack accepts                  |
-| IDs of posts and comments deleted on Reddit   | 1 day            | Leave deleted content out of notifications not yet sent          |
-| Moderator activity                            | 1 hour           | Detect rapid-fire actions                                        |
-| Alert throttling                              | 1 hour           | Prevent notification spam                                        |
-| Alerts already sent (mod action and post IDs) | 1 day            | Avoid sending an alert twice when Reddit delivers an event again |
-| Scheduler failures                            | 1 hour           | Track monitoring issues                                          |
-| Problems the bot is having (no user data)     | Up to 7 days     | Log each problem once, rather than on every event                |
-| When the bot last acted, and daily counts     | Up to 8 days     | Show moderators the bot is at work (counts and times only)       |
+## Contact
 
-**Important:** Data is automatically deleted after these periods. We do not maintain long-term archives.
-
----
-
-## 7. Data Security
-
-### 7.1 Security Measures
-
-- All data stored in Reddit's secure infrastructure
-- Webhook URLs encrypted at rest
-- HTTPS-only communication with Slack
-- No plaintext credentials in code
-- Input sanitization to prevent injection attacks
-
-### 7.2 Access Control
-
-- Only subreddit moderators with bot configuration access can view settings
-- Webhook URL is stored securely and not exposed in logs
-- Reddit controls all infrastructure security
-
----
-
-## 8. User Rights & Deletions
-
-### 8.1 Respecting Reddit Deletions
-
-When users delete their posts, comments, or accounts on Reddit:
-
-- Post/comment content is removed from our cache within 7-90 days (automatic TTL expiration)
-- Account deletions: User IDs are removed from all stored data
-- The bot listens for Reddit's PostDelete and CommentDelete events: a deleted post's or comment's text and title are taken out of notifications not yet sent to Slack, and left out of any sent afterwards, apart from the notification that reports a deleted post (section 2.2). Only the content's ID is kept, for a day.
-
-### 8.2 Opting Out
-
-- Subreddit moderators can disable or uninstall the bot at any time via Reddit's app settings
-- Specific moderators can be excluded from notifications via bot settings
-- Uninstalling the bot immediately stops all data collection
-
----
-
-## 9. Third-Party Services
-
-### 9.1 Slack
-
-- We send notifications to Slack via webhooks
-- Slack's data handling is governed by their own privacy policy
-- We recommend reviewing [Slack's Privacy Policy](https://slack.com/trust/privacy/privacy-policy)
-- You control who has access to your Slack workspace
-
-### 9.2 No Other Third Parties
-
-We do not integrate with any services other than Slack and Reddit's Devvit platform.
-
----
-
-## 10. Children's Privacy
-
-This bot is designed for use by subreddit moderators (Reddit requires users to be 13+). We do not knowingly collect data from anyone under 13, and Reddit's terms prohibit users under 13 from using the platform.
-
----
-
-## 11. International Users
-
-- Data is processed on Reddit's infrastructure (location subject to Reddit's data policies)
-- Slack webhook delivery follows Slack's infrastructure routing
-- This bot complies with GDPR and other international data protection regulations
-
----
-
-## 12. Changes to This Policy
-
-We may update this Privacy Policy to reflect changes in:
-
-- Bot functionality
-- Data practices
-- Legal requirements
-- Reddit/Devvit platform updates
-
-**Notification:** Material changes will be announced via the bot's GitHub repository.
-
----
-
-## 13. Data Controller
-
-**Developer:** u/ivashkin  
-**Platform:** Reddit Devvit  
-**Contact:** Via GitHub issues at the repository
-
----
-
-## 14. Legal Compliance
-
-This bot complies with:
-
-- ✅ Reddit's [Developer Terms](https://www.redditinc.com/policies/developer-terms)
-- ✅ Reddit's [Developer Data Protection Addendum](https://www.redditinc.com/policies/developer-dpa)
-- ✅ Reddit's [Privacy Policy](https://www.reddit.com/policies/privacy-policy)
-- ✅ GDPR (General Data Protection Regulation)
-- ✅ UK Data Protection Act 2018
-- ✅ Devvit Rules and Guidelines
-
----
-
-## 15. Your Consent
-
-By installing and using this bot, your subreddit's moderation team consents to the data practices described in this policy.
-
----
-
-## 16. Contact & Questions
-
-For questions about this Privacy Policy or the bot's data practices:
-
-- **GitHub:** [Open an issue](https://github.com/ivashkin-reddit/mod-action-notifications/issues)
-- **Developer:** u/ivashkin
-
----
-
-**Last Updated:** November 5, 2026
+Message u/ivashkin on Reddit about anything in this policy. For questions that involve no personal data, you can also [open an issue on GitHub](https://github.com/ivashkin-reddit/mod-action-notifications/issues); issues are public.

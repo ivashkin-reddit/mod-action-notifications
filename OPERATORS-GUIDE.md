@@ -62,10 +62,10 @@ After installing, follow the [README's Getting started](./README.md#getting-star
 
 [devvit.json](./devvit.json) requests:
 
-- **Reddit API:** reads only. The mod list, the mod log's bans, posts, the modqueue, unmoderated and reports listings, and the permissions of the user who opens a menu action. The app never posts, removes, bans or messages.
+- **Reddit API:** reads the mod list, the mod log's bans, posts, the modqueue, unmoderated and reports listings, and the permissions of the user who opens a menu action. Its only write is a notice to the subreddit's modmail about a problem with the app (see [Reading the logs](#reading-the-logs)). The app never posts, removes or bans.
 - **Redis:** the stores listed under [Data stored](#data-stored).
 - **HTTP:** `hooks.slack.com` only.
-- **Triggers:** `onAppInstall`, `onAppUpgrade`, `onModAction`, `onPostDelete`.
+- **Triggers:** `onAppInstall`, `onAppUpgrade`, `onModAction`, `onPostDelete`, `onCommentDelete`.
 
 ### Upgrading
 
@@ -242,7 +242,7 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 
 **Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Once an alert reaches Slack, it stays there under your workspace's message retention. An incoming webhook can't edit or delete what it posted, so content deleted on Reddit after its alert was sent isn't removed from Slack. Content deleted before then leaves the alert, apart from the deleted-post alert's title.
 
-**Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They name moderators and record errors. The app doesn't log the webhook URL itself, though an error from Devvit's HTTP client could include it.
+**Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They record errors and never quote Reddit content; the one line that names an account is the one reporting an account not on the mod list. An error from a Slack request names the webhook without its secret path.
 
 ## Access control
 
