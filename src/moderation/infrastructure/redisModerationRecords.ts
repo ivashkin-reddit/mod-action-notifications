@@ -1,5 +1,6 @@
 import type { TriggerContext } from "@devvit/public-api";
-import type { ModerationRecords, ModeratorRef } from "../application/ports.js";
+import type { ModerationRecords } from "../application/ports.js";
+import type { ModeratorRef } from "../domain/activity.js";
 import type { DisciplineEvent, DisciplineSubject } from "../domain/discipline.js";
 
 const MS_PER_SECOND = 1000;
@@ -138,7 +139,12 @@ function disciplineRecords(redis: ModerationRedis): DisciplineRecords {
         await redis.zRemRangeByRank(key, 0, -(MAX_DISCIPLINE_EVENTS + 1));
         await redis.expire(key, DISCIPLINE_RETENTION_SECONDS);
     };
-    /** Carries over the ban or mute an earlier version stored for the subject, if any, and returns it. */
+    /**
+     * Carries over the ban or mute an earlier version stored for the subject, if any, and returns it. A read, then
+     * writes, against the rule of single atomic commands, and still safe: nothing writes the old key any more, so
+     * handlers carrying it over at once read the same value, add the same member (one ZADD keeps it once) and
+     * delete the same key.
+     */
     const legacyDiscipline = async (subject: DisciplineSubject): Promise<readonly DisciplineEvent[]> => {
         const raw = await redis.get(legacyDisciplineKey(subject));
         if (raw === undefined) {

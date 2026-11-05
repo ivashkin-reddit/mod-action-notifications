@@ -1,8 +1,8 @@
 import { escapeText, inChannel, quote } from "../../slack/index.js";
-import type { SlackMessage, SlackSender } from "../../slack/index.js";
-import type { ModActionAlerts, ReportOptions } from "../application/ports.js";
-import { ACTIVITY_SPIKE_ACTIONS } from "../domain/activity.js";
+import type { DirectSlackSender, SlackMessage, SlackSender } from "../../slack/index.js";
+import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
 import { banDurationText } from "../domain/banDuration.js";
+import { disciplineStep } from "../domain/discipline.js";
 import { isBlank } from "../domain/modAction.js";
 import type { Actor, ModAction, ModActionTarget } from "../domain/modAction.js";
 import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
@@ -11,7 +11,7 @@ export interface ModActionPresentation {
     readonly includeModNote: boolean;
     /** Channel name without #, or '' for the webhook's own channel. */
     readonly notificationChannel: string;
-    /** Channel name without # for security alerts, or '' to use the notification channel. */
+    /** Channel name without # for security alerts, or '' for the webhook's own channel. */
     readonly alertChannel: string;
 }
 
@@ -81,7 +81,7 @@ function detailLines(modAction: ModAction, includeModNote: boolean): readonly st
 /** For an unban or unmute: the ban or mute it lifts. */
 function relatedLines(modAction: ModAction): readonly string[] {
     const related = modAction.relatedAction;
-    if (related === undefined || (modAction.type !== "unbanuser" && modAction.type !== "unmuteuser")) {
+    if (related === undefined) {
         return [];
     }
     const detail = isBlank(related.details) ? related.description : related.details;
@@ -90,7 +90,7 @@ function relatedLines(modAction: ModAction): readonly string[] {
         ...(related.occurredAt === undefined ? [] : [`on ${related.occurredAt.toISOString()}`]),
         ...(isBlank(detail) ? [] : [`Details ${escapeText(detail)}`]),
     ];
-    const title = modAction.type === "unmuteuser" ? "Related Mute" : "Related Ban";
+    const title = disciplineStep(modAction.type)?.kind === "mute" ? "Related Mute" : "Related Ban";
     return pieces.length === 0 ? [] : [`• *${title}:* ${pieces.join(" • ")}`];
 }
 
@@ -131,11 +131,11 @@ function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
     const status = [
         ...(actorStatus === "" ? [] : [actorStatus]),
         ...(modAction.isAutoModerator ? ["Origin AutoModerator"] : []),
-        ...(spike !== undefined && spike.count >= ACTIVITY_SPIKE_ACTIONS
-            ? [
+        ...(spike === undefined
+            ? []
+            : [
                   `Activity spike ${String(spike.count)} actions / ${String(Math.round(spike.windowSeconds / SECONDS_PER_MINUTE))} min`,
-              ]
-            : []),
+              ]),
     ];
     return status.length === 0 ? [] : [`• *Status:* ${status.join(" | ")}`];
 }
@@ -171,17 +171,25 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
             },
         ],
     };
-    const channel =
-        unknownModerator && presentation.alertChannel !== ""
-            ? presentation.alertChannel
-            : presentation.notificationChannel;
-    return inChannel(message, channel);
+    return inChannel(message, unknownModerator ? presentation.alertChannel : presentation.notificationChannel);
 }
 
-/** Mod-action alerts as Slack messages. */
+/** Mod-action alerts as Slack messages, handed to `send`, which queues them. */
 export function createSlackModActionAlerts(send: SlackSender, presentation: ModActionPresentation): ModActionAlerts {
     return {
-        report: async (modAction: ModAction, { actor, channel }: ReportOptions): Promise<boolean> =>
-            await send(inChannel(modActionMessage(modAction, presentation, actor), channel)),
+        report: async (modAction: ModAction, actor: Actor): Promise<void> => {
+            await send(modActionMessage(modAction, presentation, actor));
+        },
+    };
+}
+
+/** A simulated action's alert as a moderator's Slack message, sent straight to Slack. */
+export function createSlackSimulationAlerts(
+    send: DirectSlackSender,
+    presentation: ModActionPresentation,
+): SimulationAlerts {
+    return {
+        deliver: async (modAction: ModAction): Promise<boolean> =>
+            await send(modActionMessage(modAction, presentation, "moderator")),
     };
 }

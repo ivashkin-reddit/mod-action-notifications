@@ -66,19 +66,7 @@ export function actionTypeOf(modAction: ModAction): string {
     return modAction.type === "" ? "unknown" : modAction.type;
 }
 
-/** The acting moderator's name, or "Unknown" for an event that names none. */
-export function moderatorOf(modAction: ModAction): string {
-    return isBlank(modAction.moderatorName) ? "Unknown" : modAction.moderatorName;
-}
-
-/** Whether the moderator is in the comma-separated exclusion list, ignoring case and spaces. */
-export function isExcludedModerator(moderatorName: string, excludedModerators: string): boolean {
-    if (excludedModerators === "") {
-        return false;
-    }
-    return excludedModerators
-        .split(",")
-        .map((name: string): string => name.trim().toLowerCase())
-        .filter((name: string): boolean => name.length > 0)
-        .includes(moderatorName.toLowerCase());
+/** Whether the name is AutoModerator's, ignoring case. */
+export function isAutoModeratorName(name: string | undefined): boolean {
+    return name?.toLowerCase() === "automoderator";
 }

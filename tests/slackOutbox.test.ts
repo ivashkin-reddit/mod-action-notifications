@@ -254,13 +254,21 @@ describe("the Slack outbox", (): void => {
     );
 
     // The drain looked, found nothing, and let go of the lease just as another handler queued a message and found
-    // the lease held: the drain looks once more after letting go.
-    it("delivers a message queued as a drain finished", TEST_OPTIONS, async (): Promise<void> => {
+    // the lease held: the drain looks once more after letting go, and leaves what it finds to a later drain, so that
+    // one trigger's delivering is bounded however fast messages arrive.
+    it("hands a message queued as a drain finished to a later drain", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
         await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "late"));
         app.context.redis.zRange.mockResolvedValueOnce([]);
+
+        await app.runJob("slackOutbox");
+
+        expect(app.slack.messages).toStrictEqual([]);
+        expect(
+            outboxJobs(app.context.scheduler.jobs).map((job: ScheduledJob): Date | undefined => job.runAt),
+        ).toStrictEqual([new Date(NOW.getTime() + 1000)]);
 
         await app.runJob("slackOutbox");
 

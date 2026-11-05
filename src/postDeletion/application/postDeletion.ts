@@ -1,10 +1,8 @@
-import { deservesAlert } from "../domain/posts.js";
+import { deletionAlertsOn, deservesAlert } from "../domain/posts.js";
 import type { PostDeletion } from "../domain/posts.js";
 import type { PostDeletionAlerts, PostLookup } from "./ports.js";
 
 export interface PostDeletionConfig {
-    /** Whether alerts have somewhere to go. */
-    readonly alertsConfigured: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly upvoteThreshold: number;
 }
@@ -39,7 +37,8 @@ export async function alertOnUserDeletion(
     deletion: PostDeletion,
     ports: PostDeletionPorts,
 ): Promise<void> {
-    if (config.upvoteThreshold <= 0 || !config.alertsConfigured || !deletion.deletedByUser) {
+    // Checked before the post is looked up on Reddit.
+    if (!deletionAlertsOn(config.upvoteThreshold) || !deletion.deletedByUser) {
         return;
     }
     if (deletion.postId === "") {

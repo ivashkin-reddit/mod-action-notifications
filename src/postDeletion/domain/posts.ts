@@ -20,7 +20,12 @@ export interface PostDeletion {
     readonly subredditName: string | undefined;
 }
 
-/** A user deleting a post alerts moderators when the post had at least the threshold score; 0 turns alerts off. */
+/** Whether deleted-post alerts are on: a threshold of 0 turns them off. */
+export function deletionAlertsOn(upvoteThreshold: number): boolean {
+    return upvoteThreshold > 0;
+}
+
+/** A user deleting a post alerts moderators when the post had at least the threshold score, while alerts are on. */
 export function deservesAlert(score: number, upvoteThreshold: number): boolean {
-    return upvoteThreshold > 0 && score >= upvoteThreshold;
+    return deletionAlertsOn(upvoteThreshold) && score >= upvoteThreshold;
 }

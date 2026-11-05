@@ -16,13 +16,13 @@ import {
     testSlackConnection,
 } from "./composition.js";
 import type { AppContext, BotStatus, ConnectionTest } from "./composition.js";
-import { simulateForm } from "./moderation/index.js";
+import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import type { PostDeleteEvent } from "./postDeletion/index.js";
 import { settingsDefinitions } from "./settings/index.js";
-import { OUTBOX_JOB_NAME } from "./slack/index.js";
+import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
 
 /** The Devvit APIs a menu item or form handler calls. */
 type MenuContext = AppContext & Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
@@ -37,14 +37,8 @@ function describeMonitorJob(status: MonitorJobStatus): string {
                 ? "Modqueue Monitor: Active"
                 : `Modqueue Monitor: Active (cron ${status.cron})`;
         }
-        case "stale": {
-            return "Modqueue Monitor: Stale reference";
-        }
         case "unknown": {
             return "Modqueue Monitor: Unknown";
-        }
-        case "unavailable": {
-            return "Job Status: Unavailable";
         }
     }
 }
@@ -77,7 +71,7 @@ Devvit.configure({
     redis: true,
 });
 
-Devvit.addSettings(settingsDefinitions);
+Devvit.addSettings(settingsDefinitions(ENABLED_ACTIONS_CHOICES));
 
 // Triggers. devvit.json must list every trigger registered here.
 

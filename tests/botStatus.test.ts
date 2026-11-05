@@ -45,7 +45,6 @@ describe("the Show Bot Status menu item", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.redis.seed(JOB_ID_KEY, "job-7");
         app.context.scheduler.jobs = [{ id: "job-7", name: "modqueueMonitor" }];
 
         await expect(statusToast(app)).resolves.toBe(
@@ -53,22 +52,26 @@ describe("the Show Bot Status menu item", (): void => {
         );
     });
 
-    it("flags a stored job the scheduler no longer has", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+    // Versions before this remembered the job's ID in Redis, which could outlive the job, or be missing while one ran.
+    it(
+        "takes the monitor's state from the scheduler, not a job ID an earlier version kept",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const app = await loadApp(devvit);
-        app.context.redis.seed(JOB_ID_KEY, "job-gone");
+            const app = await loadApp(devvit);
+            app.context.redis.seed(JOB_ID_KEY, "job-gone");
 
-        await expect(statusToast(app)).resolves.toBe(
-            "Modqueue Monitoring: ON • Slack Webhook: Configured • Modqueue Monitor: Stale reference",
-        );
-    });
+            await expect(statusToast(app)).resolves.toBe(
+                "Modqueue Monitoring: ON • Slack Webhook: Configured • Modqueue Monitor: Not scheduled",
+            );
+        },
+    );
 
     it("shows the monitor as unknown when the scheduler cannot list jobs", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.redis.seed(JOB_ID_KEY, "job-1");
         app.context.scheduler.listJobs.mockRejectedValue(new Error("scheduler down"));
 
         await expect(statusToast(app)).resolves.toBe(
@@ -76,14 +79,15 @@ describe("the Show Bot Status menu item", (): void => {
         );
     });
 
-    it("shows the job status as unavailable when Redis fails", TEST_OPTIONS, async (): Promise<void> => {
+    it("shows the monitor's schedule while Redis is down", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
+        await app.pressMenuItem("Setup Modqueue Monitoring");
         app.context.redis.get.mockRejectedValue(new Error("redis down"));
 
         await expect(statusToast(app)).resolves.toBe(
-            "Modqueue Monitoring: ON • Slack Webhook: Configured • Job Status: Unavailable",
+            "Modqueue Monitoring: ON • Slack Webhook: Configured • Modqueue Monitor: Active (cron */15 * * * *)",
         );
     });
 

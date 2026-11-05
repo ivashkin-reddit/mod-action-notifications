@@ -4,7 +4,12 @@ import type { MonitorStore, QueueAlert } from "../application/ports.js";
 const MS_PER_SECOND = 1000;
 
 // Installations already hold values under these keys.
-const MONITOR_JOB_ID_KEY = "modqueue_monitor_job_id";
+/**
+ * Where versions before this kept the monitor job's ID, without a TTL. Nothing reads or writes it now; setup deletes
+ * it, and installations run setup on upgrade, so this key and the deleting of it can go once every installation has
+ * upgraded past this version.
+ */
+const LEGACY_MONITOR_JOB_ID_KEY = "modqueue_monitor_job_id";
 const FAILURE_COUNT_KEY = "scheduler_failure_count";
 const THROTTLE_KEYS: Readonly<Record<QueueAlert, string>> = {
     "queue-size": "mod_actions:throttle:modqueue_size",
@@ -12,7 +17,7 @@ const THROTTLE_KEYS: Readonly<Record<QueueAlert, string>> = {
     "reported": "mod_actions:throttle:modqueue_reported",
 };
 
-type MonitorRedis = Readonly<Pick<TriggerContext["redis"], "get" | "set" | "del" | "incrBy" | "expire">>;
+type MonitorRedis = Readonly<Pick<TriggerContext["redis"], "set" | "del" | "incrBy" | "expire">>;
 
 export function createRedisMonitorStore(redis: MonitorRedis): MonitorStore {
     return {
@@ -30,12 +35,8 @@ export function createRedisMonitorStore(redis: MonitorRedis): MonitorStore {
         clearFailures: async (): Promise<void> => {
             await redis.del(FAILURE_COUNT_KEY);
         },
-        monitorJobId: async (): Promise<string | undefined> => await redis.get(MONITOR_JOB_ID_KEY),
-        rememberMonitorJob: async (jobId: string): Promise<void> => {
-            await redis.set(MONITOR_JOB_ID_KEY, jobId);
-        },
-        forgetMonitorJob: async (): Promise<void> => {
-            await redis.del(MONITOR_JOB_ID_KEY);
+        forgetLegacyJobId: async (): Promise<void> => {
+            await redis.del(LEGACY_MONITOR_JOB_ID_KEY);
         },
     };
 }

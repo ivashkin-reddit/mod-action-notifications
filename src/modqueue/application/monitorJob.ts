@@ -32,10 +32,9 @@ async function scheduleMonitor(scheduler: MonitorScheduler): Promise<string> {
 }
 
 /**
- * Leaves the scheduler running exactly what the thresholds call for: one monitor job on MONITOR_CRON while either
- * alert is on, none while both are off. It reads the scheduler rather than the remembered job ID, so it also
- * replaces a job that no longer exists, and cancels jobs left by an interrupted or overlapping setup or scheduled
- * on an older cron. Rejects, after logging, when scheduling fails.
+ * Leaves the scheduler running exactly what the thresholds call for: one monitor job on MONITOR_CRON while any of
+ * its alerts is on, none while all are off. It reads the scheduler, so it also cancels jobs left by an interrupted
+ * or overlapping setup or scheduled on an older cron. Rejects, after logging, when scheduling fails.
  */
 export async function setupMonitoring(thresholds: MonitorThresholds, ports: MonitorJobPorts): Promise<MonitoringSetup> {
     const enabled = isMonitoringEnabled(thresholds);
@@ -45,46 +44,30 @@ export async function setupMonitoring(thresholds: MonitorThresholds, ports: Moni
         jobs.filter((job: ScheduledMonitorJob): boolean => job !== kept),
         ports.scheduler,
     );
+    // Cleanup only: a job ID left behind is never read.
+    await ports.store.forgetLegacyJobId().catch((): undefined => undefined);
 
     if (!enabled) {
-        await ports.store.forgetMonitorJob();
         return { enabled: false };
     }
-    const jobId = kept?.id ?? (await scheduleMonitor(ports.scheduler));
-    await ports.store.rememberMonitorJob(jobId);
-    return { enabled: true, jobId };
+    return { enabled: true, jobId: kept?.id ?? (await scheduleMonitor(ports.scheduler)) };
 }
 
 export type MonitorJobStatus =
     | { readonly state: "not-scheduled" }
     | { readonly state: "active"; readonly cron?: string }
-    /** The remembered job is no longer scheduled. */
-    | { readonly state: "stale" }
     /** The scheduler could not say. */
-    | { readonly state: "unknown" }
-    /** The remembered job could not be read. */
-    | { readonly state: "unavailable" };
+    | { readonly state: "unknown" };
 
-async function scheduledStatus(jobId: string, scheduler: MonitorScheduler): Promise<MonitorJobStatus> {
+/** The monitor job the scheduler has, as Show Bot Status names it. */
+export async function monitorJobStatus(scheduler: MonitorScheduler): Promise<MonitorJobStatus> {
     try {
-        const job = (await scheduler.jobs()).find((entry): boolean => entry.id === jobId);
+        const [job] = await scheduler.jobs();
         if (job === undefined) {
-            return { state: "stale" };
+            return { state: "not-scheduled" };
         }
         return job.cron === undefined ? { state: "active" } : { state: "active", cron: job.cron };
     } catch {
         return { state: "unknown" };
     }
-}
-
-export async function monitorJobStatus(ports: MonitorJobPorts): Promise<MonitorJobStatus> {
-    // null: the remembered job could not be read; undefined: no job is remembered.
-    const jobId = await ports.store.monitorJobId().catch((): null => null);
-    if (jobId === null) {
-        return { state: "unavailable" };
-    }
-    if (jobId === undefined || jobId === "") {
-        return { state: "not-scheduled" };
-    }
-    return await scheduledStatus(jobId, ports.scheduler);
 }

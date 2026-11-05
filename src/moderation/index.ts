@@ -3,13 +3,25 @@
  * not on the mod list, bursts of activity by one moderator, and the ban or mute an unban or unmute lifts; and lets
  * moderators send a simulated action.
  *
- * Owns the Redis keys `mod_actions:moderator_activity:{subreddit}:{moderator}` (1-hour TTL) and
- * `mod_actions:discipline:{ban|mute}:{subreddit}:{username}` (90-day TTL).
+ * Owns the Redis keys `mod_actions:moderator_actions:{subreddit}:{moderator}` (1-hour TTL) and
+ * `mod_actions:discipline_events:{ban|mute}:{subreddit}:{username}` (90-day TTL), and reads, then deletes, the
+ * earlier `mod_actions:discipline:{ban|mute}:{subreddit}:{username}`.
  */
-export { notifyModAction, type ModerationConfig } from "./application/notifyModAction.js";
+export { ENABLED_ACTIONS_CHOICES } from "./infrastructure/actionCatalog.js";
+export { notifyModAction, type ModerationConfig, type ModerationPorts } from "./application/notifyModAction.js";
+export type { ModActionAlerts, SimulationAlerts } from "./application/ports.js";
 export { simulateModAction } from "./application/simulateModAction.js";
 export { modActionFromTriggerEvent, type ModActionEvent } from "./infrastructure/modActionEvent.js";
 export { createModListCache, createRedditModerationLookups } from "./infrastructure/redditModeration.js";
 export { createRedisModerationRecords } from "./infrastructure/redisModerationRecords.js";
-export { simulateForm, simulationRequestFromForm, type SimulateFormValues } from "./infrastructure/simulateForm.js";
-export { createSlackModActionAlerts } from "./infrastructure/slackModActionAlerts.js";
+export {
+    simulateForm,
+    simulationRequestFromForm,
+    slackChannelFromForm,
+    type SimulateFormValues,
+} from "./infrastructure/simulateForm.js";
+export {
+    createSlackModActionAlerts,
+    createSlackSimulationAlerts,
+    type ModActionPresentation,
+} from "./infrastructure/slackModActionAlerts.js";

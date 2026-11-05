@@ -13,7 +13,7 @@ const MONITOR_JOB = { id: "job-1", name: "modqueueMonitor", cron: "*/15 * * * *"
 
 describe("installing or upgrading the app", (): void => {
     it.each([["AppInstall"], ["AppUpgrade"]])(
-        "%s schedules the modqueue monitor every 15 minutes",
+        "%s schedules the modqueue monitor every 15 minutes, keeping nothing in Redis",
         TEST_OPTIONS,
         async (trigger): Promise<void> => {
             expect.hasAssertions();
@@ -23,8 +23,7 @@ describe("installing or upgrading the app", (): void => {
             await app.fire(trigger, { type: trigger });
 
             expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
-            await expect(app.context.redis.get(JOB_ID_KEY)).resolves.toBe("job-1");
-            expect(app.context.redis.ttlSeconds(JOB_ID_KEY)).toBeUndefined();
+            expect(app.context.redis.keys()).toStrictEqual([]);
         },
     );
 
@@ -83,18 +82,33 @@ describe("installing or upgrading the app", (): void => {
         expect(app.context.redis.keys()).toStrictEqual([]);
     });
 
-    // The scheduler, not the remembered ID, says what runs: the remembered job may have been cancelled, or a setup
-    // interrupted between scheduling a job and remembering it.
-    it("replaces a remembered job that is no longer scheduled", TEST_OPTIONS, async (): Promise<void> => {
+    // Versions before this remembered the job's ID in Redis, which could name a job since cancelled. The scheduler
+    // says what runs; setup deletes the old ID.
+    it(
+        "schedules the monitor whatever job ID an earlier version kept, and deletes it",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.context.redis.seed(JOB_ID_KEY, "job-gone");
+
+            await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+            expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
+            expect(app.context.redis.keys()).toStrictEqual([]);
+        },
+    );
+
+    it("still schedules the monitor when the old job ID cannot be deleted", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.redis.seed(JOB_ID_KEY, "job-gone");
+        app.context.redis.del.mockRejectedValue(new Error("redis down"));
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
         expect(app.context.scheduler.jobs).toStrictEqual([MONITOR_JOB]);
-        await expect(app.context.redis.get(JOB_ID_KEY)).resolves.toBe("job-1");
     });
 
     it("keeps one monitor job, cancelling extras left by overlapping setups", TEST_OPTIONS, async (): Promise<void> => {
@@ -110,7 +124,6 @@ describe("installing or upgrading the app", (): void => {
 
         expect(app.context.scheduler.jobs).toStrictEqual([{ ...MONITOR_JOB, id: "job-a" }]);
         expect(app.context.scheduler.runJob).not.toHaveBeenCalled();
-        await expect(app.context.redis.get(JOB_ID_KEY)).resolves.toBe("job-a");
     });
 
     it("replaces a monitor job scheduled on another cron", TEST_OPTIONS, async (): Promise<void> => {

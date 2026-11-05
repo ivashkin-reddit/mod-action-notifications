@@ -44,8 +44,8 @@ export type OutboxDependencies = Readonly<{
 
 export interface SlackOutbox {
     /**
-     * Queues the message, then delivers the queue, oldest first, at Slack's pace: true once queued, or once sent
-     * directly when the queue cannot be written. Never rejects.
+     * Queues the message, then delivers the queue, oldest first, at Slack's pace; sends it directly when the queue
+     * cannot be written. Never rejects.
      */
     readonly send: SlackSender;
     /** Delivers what is queued, as the scheduled job. Rejects when the queue cannot be read. */
@@ -204,9 +204,11 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
         await scheduleDrain(outbox, end.afterMs);
         return;
     }
-    // A message queued after the drain last looked, but before it let go of the lease, found the lease held.
+    // A message queued after the drain last looked, but before it let go of the lease, found the lease held, so its
+    // sender left it to this drain. A later drain delivers it: one trigger delivers for at most one drain's time,
+    // however fast messages arrive.
     if ((await oldest(outbox)) !== undefined) {
-        await deliverQueued(outbox);
+        await scheduleDrain(outbox, CONTINUE_SOON_MS);
     }
 }
 
@@ -218,19 +220,20 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
  */
 export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
-        send: async (message: SlackMessage): Promise<boolean> => {
+        send: async (message: SlackMessage): Promise<void> => {
             try {
                 await enqueue(outbox, message);
             } catch (error) {
-                // The queue only paces delivery: without it, the alert still goes, straight to Slack.
+                // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
+                // failure itself.
                 console.error("Failed to queue a Slack message; sending it directly:", error);
-                return await createWebhookSender(outbox.webhookUrl)(message);
+                await createWebhookSender(outbox.webhookUrl)(message);
+                return;
             }
             await deliverQueued(outbox).catch((error: unknown): void => {
                 // The message stays queued for the next drain.
                 console.error("Failed to deliver queued Slack messages:", error);
             });
-            return true;
         },
         deliverQueued: async (): Promise<void> => {
             await outbox.redis.del(DRAIN_SCHEDULED_KEY);

@@ -7,59 +7,16 @@ const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 const DECIMAL = 10;
 
 /**
- * Installation settings: the form moderators fill in, and the validated configuration read from it.
- *
- * Devvit stores each installation's values under these setting names, so renaming one loses what moderators
- * saved. The form lists the settings in this order.
+ * What the Enabled Mod Actions setting offers, and those it starts with. The moderation module knows the mod
+ * actions; the composition root passes them in.
  */
-export const settingsDefinitions: SettingsFormField[] = [
-    {
-        type: "string",
-        name: "slackWebhookUrl",
-        label: "Slack Webhook URL",
-        helpText: "The Slack webhook URL to send mod action notifications to",
-    },
-    {
-        type: "select",
-        name: "enabledActions",
-        label: "Enabled Mod Actions",
-        helpText: "Select which mod actions to monitor",
-        options: [
-            { label: "Remove Post", value: "removelink" },
-            { label: "Remove Comment", value: "removecomment" },
-            { label: "Spam Post", value: "spamlink" },
-            { label: "Spam Comment", value: "spamcomment" },
-            { label: "Approve Post", value: "approvelink" },
-            { label: "Approve Comment", value: "approvecomment" },
-            { label: "Ban User", value: "banuser" },
-            { label: "Unban User", value: "unbanuser" },
-            { label: "Lock Post", value: "lock" },
-            { label: "Unlock Post", value: "unlock" },
-            { label: "Sticky Post", value: "sticky" },
-            { label: "Unsticky Post", value: "unsticky" },
-            { label: "Edit Flair", value: "editflair" },
-            { label: "Mute User", value: "muteuser" },
-            { label: "Unmute User", value: "unmuteuser" },
-            { label: "Distinguish Post/Comment", value: "distinguish" },
-            { label: "Ignore Reports", value: "ignorereports" },
-            { label: "Unignore Reports", value: "unignorereports" },
-            { label: "Snooze Reports", value: "snoozereports" },
-            { label: "Unsnooze Reports", value: "unsnoozereports" },
-            { label: "Add Approved User", value: "addcontributor" },
-            { label: "Remove Approved User", value: "removecontributor" },
-            { label: "Invite Moderator", value: "invitemoderator" },
-            { label: "Uninvite Moderator", value: "uninvitemoderator" },
-            { label: "Accept Moderator Invite", value: "acceptmoderatorinvite" },
-            { label: "Add Moderator", value: "addmoderator" },
-            { label: "Remove Moderator", value: "removemoderator" },
-            { label: "Edit Settings", value: "editsettings" },
-            { label: "Adjust Crowd Control Level", value: "adjust_post_crowd_control_level" },
-            { label: "Enable Crowd Control Filter", value: "enable_post_crowd_control_filter" },
-            { label: "Disable Crowd Control Filter", value: "disable_post_crowd_control_filter" },
-        ],
-        multiSelect: true,
-        defaultValue: ["removelink", "removecomment", "spamlink", "spamcomment", "banuser", "unbanuser"],
-    },
+export type ModActionChoices = Readonly<{
+    options: readonly Readonly<{ label: string; value: string }>[];
+    defaults: readonly string[];
+}>;
+
+/** The settings after Enabled Mod Actions, in form order. */
+const OTHER_SETTINGS: readonly SettingsFormField[] = [
     {
         type: "string",
         name: "excludedModerators",
@@ -132,18 +89,45 @@ export const settingsDefinitions: SettingsFormField[] = [
     },
 ];
 
+/**
+ * Installation settings: the form moderators fill in, and the validated configuration read from it.
+ *
+ * Devvit stores each installation's values under these setting names, so renaming one loses what moderators
+ * saved. The form lists the settings in this order.
+ */
+export function settingsDefinitions(modActions: ModActionChoices): SettingsFormField[] {
+    return [
+        {
+            type: "string",
+            name: "slackWebhookUrl",
+            label: "Slack Webhook URL",
+            helpText: "The Slack webhook URL to send mod action notifications to",
+        },
+        {
+            type: "select",
+            name: "enabledActions",
+            label: "Enabled Mod Actions",
+            helpText: "Select which mod actions to monitor",
+            options: modActions.options.map(({ label, value }): { label: string; value: string } => ({ label, value })),
+            multiSelect: true,
+            defaultValue: [...modActions.defaults],
+        },
+        ...OTHER_SETTINGS,
+    ];
+}
+
 /** The installation's settings, validated. */
 export interface AppConfig {
     /** An https URL, or '' when none is set or the one set is not https. */
     readonly slackWebhookUrl: string;
     readonly enabledActions: readonly string[];
-    /** Comma-separated usernames. */
-    readonly excludedModerators: string;
+    /** Lower-cased usernames, from the comma-separated setting. */
+    readonly excludedModerators: readonly string[];
     readonly flagUnknownModerators: boolean;
     readonly includeModNote: boolean;
     /** A channel name without its leading #, or '' for the webhook's own channel. */
     readonly notificationChannel: string;
-    /** A channel name without its leading #, or ''. */
+    /** A channel name without its leading #: the alert channel, else the notification channel, else ''. */
     readonly alertChannel: string;
     /** 0 turns the queue-size alert off. */
     readonly modqueueThreshold: number;
@@ -163,7 +147,7 @@ type SettingValue = Awaited<ReturnType<SettingsReader["get"]>>;
 const DEFAULT_CONFIG: AppConfig = {
     slackWebhookUrl: "",
     enabledActions: [],
-    excludedModerators: "",
+    excludedModerators: [],
     flagUnknownModerators: true,
     includeModNote: true,
     notificationChannel: "",
@@ -211,20 +195,29 @@ function selected(value: SettingValue): readonly string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function text(value: SettingValue): string {
-    return typeof value === "string" ? value : "";
+/** The names in comma-separated text, trimmed and lower-cased, leaving out blanks. */
+function usernames(value: SettingValue): readonly string[] {
+    return typeof value === "string"
+        ? value
+              .split(",")
+              .map((name: string): string => name.trim().toLowerCase())
+              .filter((name: string): boolean => name !== "")
+        : [];
 }
 
 async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     // Read one after another: a setting that cannot be read stops the rest.
+    const notificationChannel = channelName(await settings.get("notificationChannel"));
+    const alertChannel = channelName(await settings.get("alertChannel"));
     return {
         slackWebhookUrl: webhookUrl(await settings.get("slackWebhookUrl")),
         enabledActions: selected(await settings.get("enabledActions")),
-        excludedModerators: text(await settings.get("excludedModerators")),
+        excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
         includeModNote: booleanOr(await settings.get("includeModNote"), true),
-        notificationChannel: channelName(await settings.get("notificationChannel")),
-        alertChannel: channelName(await settings.get("alertChannel")),
+        notificationChannel,
+        // The setting's help text: "uses main channel if empty".
+        alertChannel: alertChannel === "" ? notificationChannel : alertChannel,
         modqueueThreshold: nonNegativeInteger(await settings.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
         unmoderatedAgeHours: nonNegativeInteger(
             await settings.get("unmoderagedAgeHours"),

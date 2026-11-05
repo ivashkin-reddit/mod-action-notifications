@@ -32,13 +32,22 @@ export const FAILURES_BEFORE_ALERT = 3;
 /** A run of failures is forgotten an hour after the last one. */
 export const FAILURE_MEMORY_SECONDS = SECONDS_PER_HOUR;
 
+/** Whether the alert a threshold sets is on: 0 turns it off. */
+export function isAlertOn(threshold: number): boolean {
+    return threshold > 0;
+}
+
 /** The monitor is scheduled only while at least one of its alerts is on. */
 export function isMonitoringEnabled(thresholds: MonitorThresholds): boolean {
-    return thresholds.queueSizeThreshold > 0 || thresholds.unmoderatedAgeHours > 0 || thresholds.reportedAgeHours > 0;
+    return (
+        isAlertOn(thresholds.queueSizeThreshold) ||
+        isAlertOn(thresholds.unmoderatedAgeHours) ||
+        isAlertOn(thresholds.reportedAgeHours)
+    );
 }
 
 export function isQueueTooLong(size: number, queueSizeThreshold: number): boolean {
-    return queueSizeThreshold > 0 && size >= queueSizeThreshold;
+    return isAlertOn(queueSizeThreshold) && size >= queueSizeThreshold;
 }
 
 export function countByKind(items: readonly QueueItem[]): { readonly posts: number; readonly comments: number } {

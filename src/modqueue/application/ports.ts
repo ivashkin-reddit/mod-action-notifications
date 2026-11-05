@@ -22,10 +22,8 @@ export interface MonitorStore {
     /** Forgets the failure count `seconds` from now, unless it changes first. */
     readonly expireFailuresAfter: (seconds: number) => Promise<void>;
     readonly clearFailures: () => Promise<void>;
-    /** The monitor job setup last kept or scheduled, for Show Bot Status to name. */
-    readonly monitorJobId: () => Promise<string | undefined>;
-    readonly rememberMonitorJob: (jobId: string) => Promise<void>;
-    readonly forgetMonitorJob: () => Promise<void>;
+    /** Deletes the monitor job ID that versions before this kept; the scheduler says which jobs exist. */
+    readonly forgetLegacyJobId: () => Promise<void>;
 }
 
 export interface ScheduledMonitorJob {

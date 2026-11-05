@@ -1,12 +1,7 @@
+import type { ModeratorRef } from "../domain/activity.js";
 import type { BanLogEntry } from "../domain/banDuration.js";
 import type { DisciplineEvent, DisciplineSubject } from "../domain/discipline.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
-
-/** A moderator of a subreddit. */
-export interface ModeratorRef {
-    readonly subredditName: string;
-    readonly moderatorName: string;
-}
 
 /** What mod-action alerts keep between actions. Each method rejects when storage fails. */
 export interface ModerationRecords {
@@ -37,14 +32,16 @@ export interface ModerationLookups {
     readonly recentBans: (subredditName: string | undefined) => Promise<readonly BanLogEntry[]>;
 }
 
-export interface ReportOptions {
-    /** Who took the action; an unknown moderator's action is sent as a security alert. */
-    readonly actor: Actor;
-    /** A channel to send to instead of the configured one; '' for none. */
-    readonly channel: string;
+export interface ModActionAlerts {
+    /**
+     * Tells moderators about the action, taken by `actor`: an unknown moderator's goes out as a security alert.
+     * Delivery may come later. Never rejects.
+     */
+    readonly report: (modAction: ModAction, actor: Actor) => Promise<void>;
 }
 
-export interface ModActionAlerts {
-    /** Tells moderators about the action: true when Slack accepted the alert. Never rejects. */
-    readonly report: (modAction: ModAction, options: ReportOptions) => Promise<boolean>;
+/** Where a simulated action's alert goes: straight to moderators, who wait on the result. */
+export interface SimulationAlerts {
+    /** Sends the alert the action would produce, as a moderator's: true when it was delivered. Never rejects. */
+    readonly deliver: (modAction: ModAction) => Promise<boolean>;
 }

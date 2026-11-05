@@ -21,29 +21,31 @@ type LoggedBan = Readonly<{
     target?: Readonly<{ author?: string | undefined }> | undefined;
 }>;
 
-/** The subreddit's mod list as last fetched. Create one per app process, so lookups share it. */
+/**
+ * Each installation's mod list as last fetched, keyed by installation (its subreddit ID): one app process can serve
+ * several. Create one per app process, so lookups share it.
+ */
 export interface ModListCache {
-    /** The cached list, when it was fetched for this subreddit less than five minutes before `now`. */
-    readonly fresh: (subredditName: string, now: number) => readonly string[] | undefined;
-    readonly store: (subredditName: string, fetchedAt: number, moderators: readonly string[]) => void;
+    /** The installation's cached list, lower-cased, when it was fetched less than five minutes before `now`. */
+    readonly fresh: (installation: string, now: number) => readonly string[] | undefined;
+    readonly store: (installation: string, fetchedAt: number, moderators: readonly string[]) => void;
 }
 
 export function createModListCache(): ModListCache {
-    const state: {
-        cached: { subredditName: string; fetchedAt: number; moderators: readonly string[] } | undefined;
-    } = { cached: undefined };
+    const lists = new Map<string, Readonly<{ fetchedAt: number; moderators: readonly string[] }>>();
     return {
-        fresh: (subredditName: string, now: number): readonly string[] | undefined => {
-            const { cached } = state;
-            return cached?.subredditName === subredditName && now - cached.fetchedAt < MOD_LIST_REUSE_MS
-                ? cached.moderators
-                : undefined;
+        fresh: (installation: string, now: number): readonly string[] | undefined => {
+            const cached = lists.get(installation);
+            return cached !== undefined && now - cached.fetchedAt < MOD_LIST_REUSE_MS ? cached.moderators : undefined;
         },
-        store: (subredditName: string, fetchedAt: number, moderators: readonly string[]): void => {
-            state.cached = { subredditName, fetchedAt, moderators };
+        store: (installation: string, fetchedAt: number, moderators: readonly string[]): void => {
+            lists.set(installation, { fetchedAt, moderators });
         },
     };
 }
+
+/** The process's mod-list cache and the installation a lookup is for. */
+export type ModList = Readonly<{ cache: ModListCache; installation: string }>;
 
 function banLogEntryOf(entry: LoggedBan): BanLogEntry {
     return {
@@ -56,20 +58,19 @@ function banLogEntryOf(entry: LoggedBan): BanLogEntry {
     };
 }
 
-export function createRedditModerationLookups(reddit: ModerationReddit, modListCache: ModListCache): ModerationLookups {
+export function createRedditModerationLookups(reddit: ModerationReddit, modList: ModList): ModerationLookups {
     return {
         isModerator: async (username: string): Promise<boolean> => {
-            const subreddit = await reddit.getCurrentSubreddit();
             const now = Date.now();
-            const cached = modListCache.fresh(subreddit.name, now);
+            const cached = modList.cache.fresh(modList.installation, now);
             if (cached !== undefined) {
                 return cached.includes(username.toLowerCase());
             }
-            const moderators = await subreddit.getModerators().all();
+            const moderators = await (await reddit.getCurrentSubreddit()).getModerators().all();
             const usernames = moderators.map((moderator: Readonly<Pick<User, "username">>): string =>
                 moderator.username.toLowerCase(),
             );
-            modListCache.store(subreddit.name, now, usernames);
+            modList.cache.store(modList.installation, now, usernames);
             return usernames.includes(username.toLowerCase());
         },
         recentBans: async (subredditName: string | undefined): Promise<readonly BanLogEntry[]> => {

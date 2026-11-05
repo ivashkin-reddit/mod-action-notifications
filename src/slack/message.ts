@@ -23,10 +23,13 @@ export interface SlackField {
 }
 
 /**
- * Delivers a message to Slack: true when Slack accepted it. Never rejects: delivery failures are retried, then
- * logged.
+ * Hands a message over for delivery to Slack, which may come later: alerts are queued and delivered at Slack's
+ * pace. Never rejects: what cannot be delivered is retried, then logged.
  */
-export type SlackSender = (message: SlackMessage) => Promise<boolean>;
+export type SlackSender = (message: SlackMessage) => Promise<void>;
+
+/** Sends a message to Slack now, for a moderator waiting on the result: true when Slack accepted it. Never rejects. */
+export type DirectSlackSender = (message: SlackMessage) => Promise<boolean>;
 
 /**
  * `text` as Slack shows it literally. Slack reads `&`, `<` and `>` as markup (`<!channel>` notifies everyone in the

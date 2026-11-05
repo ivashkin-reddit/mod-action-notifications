@@ -1,20 +1,16 @@
-import { ACTIVITY_WINDOW_MS, activitySpike } from "../domain/activity.js";
+import { ACTIVITY_WINDOW_MS, activityOf, activitySpike } from "../domain/activity.js";
+import { isReported } from "../domain/alerting.js";
+import type { AlertRules } from "../domain/alerting.js";
 import { hasBanDurationMetadata, matchBanLogEntry, withBanLogEntry } from "../domain/banDuration.js";
 import { disciplineEventOf, disciplineStep, disciplineSubject, liftedBy } from "../domain/discipline.js";
 import type { DisciplineEvent } from "../domain/discipline.js";
-import { actionTypeOf, isBlank, isExcludedModerator, isRedditAccount, moderatorOf } from "../domain/modAction.js";
+import { actionTypeOf, isBlank, isRedditAccount } from "../domain/modAction.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
-import type { ModActionAlerts, ModerationLookups, ModerationRecords, ReportOptions } from "./ports.js";
+import type { ModActionAlerts, ModerationLookups, ModerationRecords } from "./ports.js";
 
-export interface ModerationConfig {
-    /** Whether alerts have somewhere to go; without, mod actions are ignored entirely. */
-    readonly alertsConfigured: boolean;
-    readonly enabledActions: readonly string[];
-    /** Comma-separated usernames whose actions are not sent. */
-    readonly excludedModerators: string;
+export interface ModerationConfig extends AlertRules {
     /** Send actions by users not on the mod list as security alerts. */
     readonly flagUnknownModerators: boolean;
-    readonly enableAutoModAlerts: boolean;
 }
 
 export interface ModerationPorts {
@@ -58,20 +54,14 @@ async function withDiscipline(modAction: ModAction, records: ModerationRecords):
 }
 
 /**
- * Counts the action, at the time it was taken, toward its moderator's activity (except AutoModerator's and
- * Reddit's, whose bursts are automated), noting the spike it completes, if any. Activity tracking is best effort:
- * when storage fails, no spike is noted.
+ * Counts the action, at the time it was taken, toward its moderator's activity, noting the spike it completes, if
+ * any. Activity tracking is best effort: when storage fails, no spike is noted.
  */
 async function withActivity(modAction: ModAction, records: ModerationRecords): Promise<ModAction> {
-    if (
-        modAction.isAutoModerator ||
-        isRedditAccount(modAction.moderatorName) ||
-        isBlank(modAction.moderatorName) ||
-        isBlank(modAction.subredditName)
-    ) {
+    const moderator = activityOf(modAction);
+    if (moderator === undefined) {
         return modAction;
     }
-    const moderator = { subredditName: modAction.subredditName, moderatorName: modAction.moderatorName };
     const actionCount = await records
         .countAction(moderator, { id: modAction.id, at: modAction.occurredAt.getTime() }, ACTIVITY_WINDOW_MS)
         .catch((): undefined => undefined);
@@ -101,58 +91,33 @@ async function isUnknownModerator(
  * flagged, someone not on the mod list; else a moderator.
  */
 async function actorOf(modAction: ModAction, config: ModerationConfig, lookups: ModerationLookups): Promise<Actor> {
-    const moderatorName = moderatorOf(modAction);
+    const { moderatorName } = modAction;
     if (isRedditAccount(moderatorName)) {
         return "reddit";
     }
     return config.flagUnknownModerators &&
-        moderatorName !== "Unknown" &&
+        !isBlank(moderatorName) &&
         (await isUnknownModerator(moderatorName, actionTypeOf(modAction), lookups))
         ? "unknown-moderator"
         : "moderator";
 }
 
 /**
- * How to report the action, or undefined when it is not sent: its type is not enabled, its moderator is excluded,
- * or it is AutoModerator's while AutoModerator alerts are off. Users not on the mod list are checked first.
- */
-async function reportOptions(
-    modAction: ModAction,
-    config: ModerationConfig,
-    lookups: ModerationLookups,
-): Promise<ReportOptions | undefined> {
-    const actionType = actionTypeOf(modAction);
-    const moderatorName = moderatorOf(modAction);
-    if (!config.enabledActions.includes(actionType) || isExcludedModerator(moderatorName, config.excludedModerators)) {
-        return undefined;
-    }
-    const actor = await actorOf(modAction, config, lookups);
-    if (!config.enableAutoModAlerts && modAction.isAutoModerator) {
-        return undefined;
-    }
-    return { actor, channel: "" };
-}
-
-/**
  * Tells moderators about a mod action. Every action, sent or not, is first completed from the mod log (a ban
  * without a length), remembered or matched against what it lifts (bans and mutes), and counted toward its
- * moderator's activity (except AutoModerator's).
+ * moderator's activity (except AutoModerator's and Reddit's). Only an action that is reported has its moderator
+ * checked against the mod list.
  */
 export async function notifyModAction(
     action: ModAction,
     config: ModerationConfig,
     ports: ModerationPorts,
 ): Promise<void> {
-    if (!config.alertsConfigured) {
-        console.error("Slack webhook URL not configured - skipping notification");
-        return;
-    }
     const modAction = await withActivity(
         await withDiscipline(await withBanFromModLog(action, ports.lookups), ports.records),
         ports.records,
     );
-    const options = await reportOptions(modAction, config, ports.lookups);
-    if (options !== undefined) {
-        await ports.alerts.report(modAction, options);
+    if (isReported(modAction, config)) {
+        await ports.alerts.report(modAction, await actorOf(modAction, config, ports.lookups));
     }
 }

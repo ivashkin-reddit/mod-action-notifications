@@ -1,4 +1,4 @@
-import type { SlackMessage, SlackSender } from "./message.js";
+import type { DirectSlackSender, SlackMessage } from "./message.js";
 
 const MS_PER_SECOND = 1000;
 /** A direct send retries this many times. */
@@ -136,7 +136,7 @@ async function postToSlack(webhookUrl: string, message: SlackMessage, retryCount
  * A sender that posts straight to the webhook, an https URL, retrying as postToSlack does: for a moderator waiting
  * on the result. Alerts go through the outbox instead.
  */
-export function createWebhookSender(webhookUrl: string): SlackSender {
+export function createWebhookSender(webhookUrl: string): DirectSlackSender {
     return async (message: SlackMessage): Promise<boolean> => await postToSlack(webhookUrl, message, 0);
 }
 

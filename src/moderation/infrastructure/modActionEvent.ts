@@ -1,4 +1,4 @@
-import { isBlank } from "../domain/modAction.js";
+import { isAutoModeratorName, isBlank } from "../domain/modAction.js";
 import type { ModAction, ModActionTarget } from "../domain/modAction.js";
 
 /** What the app reads from a ModAction trigger event; Devvit's event type satisfies it. */
@@ -67,7 +67,7 @@ export function modActionFromTriggerEvent(event: ModActionEvent): ModAction {
         description: "",
         details: undefined,
         occurredAt: actionTime(event.actionedAt),
-        isAutoModerator: (moderatorName ?? "").toLowerCase() === "automoderator",
+        isAutoModerator: isAutoModeratorName(moderatorName),
         banDuration: undefined,
         banDurationLabel: undefined,
         relatedAction: undefined,

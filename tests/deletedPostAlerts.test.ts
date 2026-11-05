@@ -135,6 +135,22 @@ describe("a user deleting their own post", (): void => {
         expect(app.slack.messages[0]?.channel).toBe("#alerts");
     });
 
+    // The Alert Channel setting's help text: "uses main channel if empty".
+    it(
+        "sends the alert to the notification channel when no alert channel is set",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { notificationChannel: "mod-log" });
+            app.context.reddit.posts = [bigPost(150)];
+
+            await app.fire("PostDelete", userDeletion());
+
+            expect(app.slack.messages[0]?.channel).toBe("#mod-log");
+        },
+    );
+
     it("gives the current time as the deletion time when the event has none", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

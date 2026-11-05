@@ -1,5 +1,7 @@
 import type { Form } from "@devvit/public-api";
 import type { SimulationRequest } from "../application/simulateModAction.js";
+import { actionChoices } from "./actionCatalog.js";
+import type { ActionChoice } from "./actionCatalog.js";
 
 /** The Simulate Mod Action form; simulationRequestFromForm reads what it submits. */
 export const simulateForm: Form = {
@@ -10,14 +12,14 @@ export const simulateForm: Form = {
             name: "actionType",
             label: "Action Type",
             type: "select",
-            options: [
-                { label: "Remove Post", value: "removelink" },
-                { label: "Remove Comment", value: "removecomment" },
-                { label: "Ban User", value: "banuser" },
-                { label: "Unban User", value: "unbanuser" },
-                { label: "Mute User", value: "muteuser" },
-                { label: "Unmute User", value: "unmuteuser" },
-            ],
+            options: actionChoices([
+                "removelink",
+                "removecomment",
+                "banuser",
+                "unbanuser",
+                "muteuser",
+                "unmuteuser",
+            ]).map((choice: ActionChoice): { label: string; value: string } => ({ ...choice })),
             defaultValue: ["removelink"],
         },
         {
@@ -95,6 +97,10 @@ export function simulationRequestFromForm(values: SimulateFormValues): Simulatio
         modNote: values.modNote,
         banDuration: values.banDuration,
         customDetails: filled(values.customDetails),
-        slackChannel: filled(values.slackChannel) ?? "",
     };
+}
+
+/** The channel the simulate form asks the alert to go to, or '' for the configured one. */
+export function slackChannelFromForm(values: SimulateFormValues): string {
+    return filled(values.slackChannel) ?? "";
 }

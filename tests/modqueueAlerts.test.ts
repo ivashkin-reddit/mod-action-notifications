@@ -248,6 +248,24 @@ describe("the modqueue monitor", (): void => {
         ]);
     });
 
+    // The Alert Channel setting's help text: "uses main channel if empty".
+    it(
+        "sends its alerts to the notification channel when no alert channel is set",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { modqueueThreshold: 1, notificationChannel: "mod-log" });
+            app.context.reddit.modQueue = [queuedPost("a", 5)];
+
+            await app.runJob("modqueueMonitor");
+
+            expect(app.slack.messages.map((message): string | undefined => message.channel)).toStrictEqual([
+                "#mod-log",
+            ]);
+        },
+    );
+
     it("clears the failure count after a successful run", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

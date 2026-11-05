@@ -3,7 +3,7 @@ import { loadApp } from "./support/app.js";
 import { removedPost } from "./support/events.js";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./support/fakeContext.js";
 import type { FakeDevvit } from "./support/fakeDevvit.js";
-import { lastLine, lines, MINUTE, onlyMessage } from "./support/messages.js";
+import { lastLine, lines, onlyMessage } from "./support/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("./support/fakeDevvit.js")).createFakeDevvit(),
@@ -132,6 +132,17 @@ describe("which mod actions are sent", (): void => {
 });
 
 describe("an action by someone not on the mod list", (): void => {
+    // "Unknown" is how alerts name a moderator the event leaves out, and also a username anyone could register.
+    it("is a security alert from an account named Unknown", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await app.fire("ModAction", removedPost({ moderator: { name: "Unknown" } }));
+
+        expect(onlyMessage(app.slack.messages).text).toBe("🚨 SECURITY ALERT: 🗑️ Post Removed by unknown moderator");
+    });
+
     it("is sent as a security alert to the alert channel", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
@@ -201,25 +212,6 @@ describe("an action by someone not on the mod list", (): void => {
     });
 });
 
-describe("the mod list", (): void => {
-    it("is fetched once and reused for five minutes", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        await app.fire("ModAction", removedPost());
-        await app.advance(5 * MINUTE - 1);
-        await app.fire("ModAction", removedPost());
-
-        expect(app.context.reddit.getModerators).toHaveBeenCalledExactlyOnceWith();
-
-        await app.advance(1);
-        await app.fire("ModAction", removedPost());
-
-        expect(app.context.reddit.getModerators).toHaveBeenCalledTimes(2);
-    });
-});
-
 describe("autoModerator actions", (): void => {
     it("are not sent by default", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
@@ -230,6 +222,16 @@ describe("autoModerator actions", (): void => {
         await app.fire("ModAction", removedPost({ moderator: { name: "AutoModerator" } }));
 
         expect(app.slack.requests).toStrictEqual([]);
+    });
+
+    it("are not checked against the mod list while their alerts are off", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await app.fire("ModAction", removedPost({ moderator: { name: "AutoModerator" } }));
+
+        expect(app.context.reddit.getModerators).not.toHaveBeenCalled();
     });
 
     it(

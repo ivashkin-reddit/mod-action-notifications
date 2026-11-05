@@ -1,7 +1,7 @@
 import { banLengthLabel, daysLabel } from "../domain/banDuration.js";
-import { isBlank } from "../domain/modAction.js";
+import { isAutoModeratorName, isBlank } from "../domain/modAction.js";
 import type { ModAction } from "../domain/modAction.js";
-import type { ModActionAlerts } from "./ports.js";
+import type { SimulationAlerts } from "./ports.js";
 
 /** A moderator's request to see how an action would be reported. */
 export interface SimulationRequest {
@@ -13,14 +13,6 @@ export interface SimulationRequest {
     /** For a ban: days, 0 for permanent. */
     readonly banDuration: number | undefined;
     readonly customDetails: string | undefined;
-    /** '' for the configured channel. */
-    readonly slackChannel: string;
-}
-
-export interface SimulationContext {
-    /** Whether alerts have somewhere to go. */
-    readonly alertsConfigured: boolean;
-    readonly subredditName: string | undefined;
 }
 
 type BanFields = Pick<ModAction, "banDuration" | "banDurationLabel" | "details">;
@@ -60,7 +52,7 @@ function simulatedModAction(request: SimulationRequest, subredditName: string | 
                 : { author: request.targetUser, permalink: undefined, body: undefined, isComment: false },
         description: request.includeModNote ? (request.modNote ?? "Simulation note") : undefined,
         occurredAt: new Date(),
-        isAutoModerator: moderatorName.toLowerCase() === "automoderator",
+        isAutoModerator: isAutoModeratorName(moderatorName),
         relatedAction: undefined,
         activitySpike: undefined,
         ...banFields,
@@ -68,22 +60,15 @@ function simulatedModAction(request: SimulationRequest, subredditName: string | 
 }
 
 /**
- * Sends the alert a mod action like the one requested would produce, without touching stored data or checking the
- * mod list. Rejects when alerts have nowhere to go or the alert was not delivered.
+ * Sends the alert a mod action like the one requested would produce, in `subredditName`, without touching stored
+ * data or checking the mod list. Rejects when the alert was not delivered.
  */
 export async function simulateModAction(
     request: SimulationRequest,
-    context: SimulationContext,
-    alerts: ModActionAlerts,
+    subredditName: string | undefined,
+    alerts: SimulationAlerts,
 ): Promise<void> {
-    if (!context.alertsConfigured) {
-        throw new Error("Slack webhook URL is not configured");
-    }
-    const delivered = await alerts.report(simulatedModAction(request, context.subredditName), {
-        actor: "moderator",
-        channel: request.slackChannel,
-    });
-    if (!delivered) {
+    if (!(await alerts.deliver(simulatedModAction(request, subredditName)))) {
         throw new Error("Slack did not accept the simulated alert");
     }
 }

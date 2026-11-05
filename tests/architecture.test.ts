@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+import { ALLOWED_IMPORTS, FORBIDDEN_IMPORTS } from "./support/architectureCases.js";
+import type { ImportCase } from "./support/architectureCases.js";
 
 // Lints imports that break the architecture, and imports it must keep allowing, through the project's own ESLint
 // config. A dependency upgrade or config change that stops a boundary rule from firing fails here rather than
@@ -17,18 +19,15 @@ const ARCHITECTURE_RULES = new Set([
     "boundaries/no-unknown-dependencies",
     "boundaries/no-unknown-files",
     "import-x/no-cycle",
+    "no-restricted-globals",
+    "no-restricted-properties",
+    "no-restricted-syntax",
 ]);
 
 const eslint = new ESLint({
     overrideConfig: { languageOptions: { parserOptions: { projectService: false } } },
     ruleFilter: ({ ruleId }: Readonly<{ ruleId: string }>): boolean => ARCHITECTURE_RULES.has(ruleId),
 });
-
-interface ImportCase {
-    readonly rule: string;
-    readonly file: string;
-    readonly source: string;
-}
 
 /** The architecture rules that report `source`, linted as if it were the content of `file`. */
 async function architectureFindings(importCase: ImportCase): Promise<string[]> {
@@ -45,172 +44,13 @@ async function architectureFindings(importCase: ImportCase): Promise<string[]> {
     return ruleIds;
 }
 
-const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
-    {
-        rule: "domain code does not import Devvit, even its types",
-        file: "src/moderation/domain/modAction.ts",
-        source: 'export type { TriggerContext } from "@devvit/public-api";',
-    },
-    {
-        rule: "application code does not import Devvit, even its types",
-        file: "src/moderation/application/notifyModAction.ts",
-        source: 'export type { TriggerContext } from "@devvit/public-api";',
-    },
-    {
-        rule: "an adapter imports only Devvit's types",
-        file: "src/moderation/infrastructure/redisModerationRecords.ts",
-        source: 'export { Devvit } from "@devvit/public-api";',
-    },
-    {
-        rule: "composition.ts imports only Devvit's types",
-        file: "src/composition.ts",
-        source: 'export { Devvit } from "@devvit/public-api";',
-    },
-    {
-        rule: "a shared module imports only Devvit's types",
-        file: "src/settings/index.ts",
-        source: 'export { Devvit } from "@devvit/public-api";',
-    },
-    {
-        rule: "domain code does not import its module's application code",
-        file: "src/moderation/domain/modAction.ts",
-        source: 'export type * from "../application/ports.js";',
-    },
-    {
-        rule: "domain code does not import its module's adapters",
-        file: "src/moderation/domain/modAction.ts",
-        source: 'export * from "../infrastructure/redisModerationRecords.js";',
-    },
-    {
-        rule: "domain code does not import another module's domain",
-        file: "src/moderation/domain/modAction.ts",
-        source: 'export * from "../../modqueue/domain/monitoring.js";',
-    },
-    {
-        rule: "application code does not import its module's adapters",
-        file: "src/moderation/application/notifyModAction.ts",
-        source: 'export * from "../infrastructure/redisModerationRecords.js";',
-    },
-    {
-        rule: "application code reaches Slack only through its ports",
-        file: "src/moderation/application/notifyModAction.ts",
-        source: 'export * from "../../slack/index.js";',
-    },
-    {
-        rule: "an adapter imports Slack only through its interface",
-        file: "src/moderation/infrastructure/slackModActionAlerts.ts",
-        source: 'export * from "../../slack/webhook.js";',
-    },
-    {
-        rule: "an adapter does not import another capability",
-        file: "src/moderation/infrastructure/redditModeration.ts",
-        source: 'export * from "../../modqueue/index.js";',
-    },
-    {
-        rule: "a capability does not import settings",
-        file: "src/modqueue/infrastructure/redisMonitorStore.ts",
-        source: 'export * from "../../settings/index.js";',
-    },
-    {
-        rule: "a capability's interface does not import another capability",
-        file: "src/moderation/index.ts",
-        source: 'export * from "../postDeletion/index.js";',
-    },
-    {
-        rule: "settings imports no other module",
-        file: "src/settings/index.ts",
-        source: 'export * from "../slack/index.js";',
-    },
-    {
-        rule: "slack imports no other module",
-        file: "src/slack/message.ts",
-        source: 'export * from "../settings/index.js";',
-    },
-    {
-        rule: "the composition root imports a module only through its index.ts",
-        file: "src/composition.ts",
-        source: 'export * from "./moderation/infrastructure/redisModerationRecords.js";',
-    },
-    {
-        rule: "modules do not import the composition root",
-        file: "src/moderation/application/notifyModAction.ts",
-        source: 'export * from "../../composition.js";',
-    },
-    {
-        rule: "production code does not import test support",
-        file: "src/slack/webhook.ts",
-        source: 'export * from "../../tests/support/fakeSlack.js";',
-    },
-    {
-        rule: "tests reach the app only through main.ts",
-        file: "tests/support/app.ts",
-        source: 'export * from "../../src/composition.js";',
-    },
-    {
-        rule: "tests do not import a module directly",
-        file: "tests/modActionMessage.test.ts",
-        source: 'export * from "../src/moderation/index.js";',
-    },
-];
-
-const ALLOWED_IMPORTS: readonly ImportCase[] = [
-    {
-        rule: "domain code imports its module's domain",
-        file: "src/moderation/domain/discipline.ts",
-        source: 'export * from "./modAction.js";',
-    },
-    {
-        rule: "application code imports its module's domain and ports",
-        file: "src/moderation/application/notifyModAction.ts",
-        source: 'export * from "../domain/modAction.js";\nexport type * from "./ports.js";',
-    },
-    {
-        rule: "an adapter imports Devvit's types and its module's ports",
-        file: "src/moderation/infrastructure/redisModerationRecords.ts",
-        source: 'export type { TriggerContext } from "@devvit/public-api";\nexport type * from "../application/ports.js";',
-    },
-    {
-        rule: "an adapter imports Slack's interface",
-        file: "src/moderation/infrastructure/slackModActionAlerts.ts",
-        source: 'export * from "../../slack/index.js";',
-    },
-    {
-        rule: "a capability's interface re-exports its layers",
-        file: "src/moderation/index.ts",
-        source: 'export * from "./infrastructure/redisModerationRecords.js";',
-    },
-    {
-        rule: "a shared module's files import each other",
-        file: "src/slack/webhook.ts",
-        source: 'export type * from "./message.js";',
-    },
-    {
-        rule: "the composition root imports a module's interface",
-        file: "src/composition.ts",
-        source: 'export * from "./moderation/index.js";',
-    },
-    {
-        rule: "main.ts registers with Devvit and imports the composition root",
-        file: "src/main.ts",
-        source: 'export { Devvit } from "@devvit/public-api";\nexport * from "./composition.js";',
-    },
-    {
-        rule: "a test imports main.ts, test support and devvit.json",
-        file: "tests/registration.test.ts",
-        source: [
-            'import devvitJson from "../devvit.json" with { type: "json" };',
-            'export * from "../src/main.js";',
-            'export * from "./support/app.js";',
-            "export { devvitJson };",
-        ].join("\n"),
-    },
-];
-
 describe("architecture rules", (): void => {
     it.for(FORBIDDEN_IMPORTS)("report that $rule", TEST_OPTIONS, async (importCase: ImportCase): Promise<void> => {
         expect.assertions(1);
 
-        await expect(architectureFindings(importCase)).resolves.toContain("boundaries/dependencies");
+        await expect(architectureFindings(importCase)).resolves.toContain(
+            importCase.reportedBy ?? "boundaries/dependencies",
+        );
     });
 
     it.for(ALLOWED_IMPORTS)("allow that $rule", TEST_OPTIONS, async (importCase: ImportCase): Promise<void> => {

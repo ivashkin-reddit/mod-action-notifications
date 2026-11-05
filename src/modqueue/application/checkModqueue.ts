@@ -4,16 +4,12 @@ import {
     countByKind,
     FAILURE_MEMORY_SECONDS,
     FAILURES_BEFORE_ALERT,
+    isAlertOn,
     isQueueTooLong,
     OLDEST_ITEMS_LISTED,
 } from "../domain/monitoring.js";
 import type { MonitorThresholds, QueueItem } from "../domain/monitoring.js";
 import type { ModerationQueues, ModqueueAlerts, MonitorStore } from "./ports.js";
-
-export interface ModqueueConfig extends MonitorThresholds {
-    /** Whether alerts have somewhere to go; the monitor does nothing without. */
-    readonly alertsConfigured: boolean;
-}
 
 export interface CheckModqueuePorts {
     readonly openQueues: () => Promise<ModerationQueues>;
@@ -23,17 +19,17 @@ export interface CheckModqueuePorts {
 
 async function alertIfQueueTooLong(
     items: readonly QueueItem[],
-    config: ModqueueConfig,
+    thresholds: MonitorThresholds,
     ports: CheckModqueuePorts,
 ): Promise<void> {
     if (
-        isQueueTooLong(items.length, config.queueSizeThreshold) &&
+        isQueueTooLong(items.length, thresholds.queueSizeThreshold) &&
         (await ports.store.claimAlert("queue-size", ALERT_PERIOD_SECONDS))
     ) {
         await ports.alerts.queueTooLong({
             size: items.length,
             ...countByKind(items),
-            threshold: config.queueSizeThreshold,
+            threshold: thresholds.queueSizeThreshold,
         });
     }
 }
@@ -51,16 +47,14 @@ async function alertIfOld({ alert, items, ageHours }: AgeCheck, ports: CheckModq
     await (alert === "unmoderated" ? ports.alerts.waitingTooLong(content) : ports.alerts.reportedContentOld(content));
 }
 
-async function countFailure(config: ModqueueConfig, ports: CheckModqueuePorts, error: Readonly<Error>): Promise<void> {
+async function countFailure(ports: CheckModqueuePorts, error: Readonly<Error>): Promise<void> {
     try {
         const failures = await ports.store.countFailure();
         if (failures < FAILURES_BEFORE_ALERT) {
             await ports.store.expireFailuresAfter(FAILURE_MEMORY_SECONDS);
             return;
         }
-        if (config.alertsConfigured) {
-            await ports.alerts.monitorFailing({ failures, error: error.message });
-        }
+        await ports.alerts.monitorFailing({ failures, error: error.message });
         await ports.store.clearFailures();
     } catch {
         // Failure tracking must not break the scheduler.
@@ -72,17 +66,21 @@ async function countFailure(config: ModqueueConfig, ports: CheckModqueuePorts, e
  * Reads the listings whose alerts are on and sends the alerts they call for; a successful run clears the failure
  * count.
  */
-async function checkQueues(queues: ModerationQueues, config: ModqueueConfig, ports: CheckModqueuePorts): Promise<void> {
-    if (config.queueSizeThreshold > 0) {
-        await alertIfQueueTooLong(await queues.modqueue(), config, ports);
+async function checkQueues(
+    queues: ModerationQueues,
+    thresholds: MonitorThresholds,
+    ports: CheckModqueuePorts,
+): Promise<void> {
+    if (isAlertOn(thresholds.queueSizeThreshold)) {
+        await alertIfQueueTooLong(await queues.modqueue(), thresholds, ports);
     }
-    if (config.unmoderatedAgeHours > 0) {
+    if (isAlertOn(thresholds.unmoderatedAgeHours)) {
         const items = await queues.unmoderated();
-        await alertIfOld({ alert: "unmoderated", items, ageHours: config.unmoderatedAgeHours }, ports);
+        await alertIfOld({ alert: "unmoderated", items, ageHours: thresholds.unmoderatedAgeHours }, ports);
     }
-    if (config.reportedAgeHours > 0) {
+    if (isAlertOn(thresholds.reportedAgeHours)) {
         const items = await queues.reported();
-        await alertIfOld({ alert: "reported", items, ageHours: config.reportedAgeHours }, ports);
+        await alertIfOld({ alert: "reported", items, ageHours: thresholds.reportedAgeHours }, ports);
     }
     try {
         await ports.store.clearFailures();
@@ -97,19 +95,15 @@ async function checkQueues(queues: ModerationQueues, config: ModqueueConfig, por
  * counted, and the third failure in a row alerts moderators; the run then rejects so the scheduler records the
  * failure. Failing to open the subreddit at all rejects without being counted.
  */
-export async function checkModqueue(config: ModqueueConfig, ports: CheckModqueuePorts): Promise<void> {
-    if (!config.alertsConfigured) {
-        return;
-    }
-
+export async function checkModqueue(thresholds: MonitorThresholds, ports: CheckModqueuePorts): Promise<void> {
     const queues = await ports.openQueues();
 
     try {
-        await checkQueues(queues, config, ports);
+        await checkQueues(queues, thresholds, ports);
     } catch (error) {
         console.error("Failed to check modqueue:", error);
         if (error instanceof Error) {
-            await countFailure(config, ports, error);
+            await countFailure(ports, error);
         }
         throw error;
     }

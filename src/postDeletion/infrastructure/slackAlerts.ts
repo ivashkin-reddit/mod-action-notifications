@@ -32,7 +32,7 @@ function deletedPostMessage({ post, authorName, subredditName, deletedAt, reason
     };
 }
 
-/** Deleted-post alerts as Slack messages, sent to the alert channel when one is set. */
+/** Deleted-post alerts as Slack messages, sent to the alert channel ('' for the webhook's own). */
 export function createSlackPostDeletionAlerts(send: SlackSender, alertChannel: string): PostDeletionAlerts {
     return {
         highScorePostDeleted: async (alert: DeletedPostAlert): Promise<void> => {
