@@ -80,6 +80,14 @@ export async function attemptDelivery(webhookUrl: string, message: SlackMessage)
     }
 }
 
+/** A Slack webhook URL's secret: its path, with which anyone can post to the channel. */
+const WEBHOOK_SECRET = /(?<=hooks\.slack\.com\/services\/)[^\s"'<>]+/giu;
+
+/** `text` with the secret path of any Slack webhook URL in it left out, so an error that names the URL can be logged. */
+function withoutWebhookSecret(text: string): string {
+    return text.replace(WEBHOOK_SECRET, "…");
+}
+
 /** At most this much of Slack's answer goes into a log line. */
 const RESPONSE_TEXT_LOGGED = 100;
 
@@ -88,7 +96,7 @@ export function failureDetail(failure: Failure): string {
     if (failure.kind === "response") {
         return `HTTP ${String(failure.status)}: ${failure.responseText.slice(0, RESPONSE_TEXT_LOGGED)}`;
     }
-    return failure.error instanceof Error ? failure.error.message : String(failure.error);
+    return withoutWebhookSecret(failure.error instanceof Error ? failure.error.message : String(failure.error));
 }
 
 /** Logs why the message did not reach Slack, with what to check. */
@@ -102,7 +110,7 @@ export function logFailure(failure: Failure, message: SlackMessage): void {
         });
         return;
     }
-    const errorMessage = failure.error instanceof Error ? failure.error.message : String(failure.error);
+    const errorMessage = failureDetail(failure);
     if (failure.ranOutOfTime || errorMessage.includes("timeout")) {
         console.error(
             "Slack webhook request timed out - Slack may be experiencing delays or webhook URL may be incorrect",
@@ -114,7 +122,7 @@ export function logFailure(failure: Failure, message: SlackMessage): void {
         );
         return;
     }
-    console.error("Error sending Slack message - check webhook URL and network connectivity:", failure.error);
+    console.error("Error sending Slack message - check webhook URL and network connectivity:", errorMessage);
 }
 
 /** Whether a direct send retries after this attempt: Slack may take it later, and the request did not time out. */

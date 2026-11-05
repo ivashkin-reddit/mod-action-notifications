@@ -138,6 +138,44 @@ describe("a failing modqueue monitor", (): void => {
     });
 });
 
+/** Everything the app logged as a warning or an error, as text. */
+function warningsAndErrors(): string {
+    return JSON.stringify([vi.mocked(console.warn).mock.calls, vi.mocked(console.error).mock.calls]);
+}
+
+// A webhook URL's path is its secret: anyone who has it can post to the channel.
+describe("an error that names the webhook URL", (): void => {
+    it("is logged without the URL's secret path, when delivering an alert", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        const error = new Error(`request to ${WEBHOOK_URL} failed: ECONNREFUSED`);
+        app.slack.respond(error, error, error, error);
+
+        await app.fire("ModAction", removedPost());
+
+        expect(warningsAndErrors()).toContain("request to https://hooks.slack.com/services/… failed: ECONNREFUSED");
+        expect(warningsAndErrors()).not.toContain("T000/B000/XXXX");
+    });
+
+    it(
+        "is logged without the URL's secret path, when sending a test message",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            const error = new Error(`request to ${WEBHOOK_URL} failed: ECONNREFUSED`);
+            app.slack.respond(error, error, error, error);
+
+            await app.fillForm("Test Slack Connection", {});
+
+            expect(warningsAndErrors()).toContain("request to https://hooks.slack.com/services/… failed: ECONNREFUSED");
+            expect(warningsAndErrors()).not.toContain("T000/B000/XXXX");
+        },
+    );
+});
+
 describe("recording a condition", (): void => {
     it("never stops an alert, and says so when Redis fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
