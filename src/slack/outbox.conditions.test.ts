@@ -29,6 +29,18 @@ describe("the conditions a drain reports", (): void => {
         expect(conditions.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404: error"]]);
     });
 
+    // An answer from something between the app and Slack, such as an HTML error page, must not fill the log.
+    it("give at most 100 characters of Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { conditions, outbox, slack } = fakeOutbox();
+        slack.respond({ status: 404, body: `${"x".repeat(100)}and more` });
+
+        await drive(outbox.send({ text: "hello" }));
+
+        expect(conditions.raise.mock.calls).toStrictEqual([["slack-refusing", `HTTP 404: ${"x".repeat(100)}`]]);
+    });
+
     it.each([
         ["a server error", [503, 503, 503, 503], "HTTP 503: error"],
         ["a network error", [new Error("ECONNRESET")], "ECONNRESET"],
