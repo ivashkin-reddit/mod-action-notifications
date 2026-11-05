@@ -6,5 +6,6 @@
  * Owns the Redis keys that start `slack_outbox`, and the scheduler job OUTBOX_JOB_NAME.
  */
 export type { DeliveryCondition, DeliveryConditions } from "./conditions.js";
-export { createSlackOutbox, forgetContent, OUTBOX_JOB_NAME, type SlackOutbox } from "./outbox.js";
+export { createSlackOutbox, forgetContent, type SlackOutbox } from "./outbox.js";
+export { OUTBOX_JOB_NAME } from "./schedule.js";
 export { createWebhookSender, sendTestMessage } from "./webhook.js";

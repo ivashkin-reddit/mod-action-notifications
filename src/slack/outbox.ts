@@ -6,18 +6,20 @@ import type { DeletionRedis } from "./deletions.js";
 import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
+import {
+    continuationStarted,
+    CONTINUE_SOON_MS,
+    DRAIN_BUDGET_MS,
+    lease,
+    releaseLease,
+    scheduleDrain,
+    scheduleRecovery,
+    SEND_INTERVAL_MS,
+} from "./schedule.js";
 import { attemptDelivery, backoffMs, createWebhookSender, wait } from "./webhook.js";
 import type { Delivery } from "./webhook.js";
 
-/** The scheduler job that delivers what an earlier drain left queued; the composition root registers it. */
-export const OUTBOX_JOB_NAME = "slackOutbox";
-
-// The queue's bookkeeping, each key of which expires.
-const LEASE_KEY = "slack_outbox_lease";
-/** Present while a drain is scheduled to continue where one left off. */
-const DRAIN_SCHEDULED_KEY = "slack_outbox_drain_scheduled";
-/** Present while a drain is scheduled to follow one that may die before it finishes. */
-const RECOVERY_SCHEDULED_KEY = "slack_outbox_recovery_scheduled";
+// The drain's bookkeeping, which expires.
 /**
  * When a drain last sent Slack a message, in ms since the epoch: the next drain keeps the pace from it, as each
  * alert that arrives after a drain has finished starts a drain of its own.
@@ -27,27 +29,10 @@ const LAST_SENT_KEY = "slack_outbox_last_sent";
 const LAST_SENT_MEMORY_MS = 60_000;
 
 const MS_PER_SECOND = 1000;
-/** Slack takes about one message a second from a webhook. */
-const SEND_INTERVAL_MS = 1100;
-/** One drain starts delivering for at most this long, so the trigger or job running it finishes well within its time. */
-const DRAIN_BUDGET_MS = 10_000;
-/** Devvit ends an HTTP request after this long (developers.reddit.com/docs, 0.15, HTTP Fetch: "HTTP timeout limit"). */
-const FETCH_TIMEOUT_MS = 30_000;
-/** The Redis commands a drain makes after its last request. */
-const LEASE_MARGIN_MS = 5000;
-/**
- * Longer than any drain can hold it: its budget, then a pause before the next message, then a request that runs
- * to the fetch timeout. So a drain never outlives its lease, and letting go of the lease never frees another's; a
- * drain that dies holds the queue for at most this long.
- */
-const LEASE_MS = DRAIN_BUDGET_MS + SEND_INTERVAL_MS + FETCH_TIMEOUT_MS + LEASE_MARGIN_MS;
 /** Within one drain, a message is retried this many times before the queue waits for a later drain. */
 const MAX_RETRIES_PER_DRAIN = 3;
 /** A later drain runs this long after Slack failed to take a message, unless Slack said when to retry. */
 const RETRY_LATER_MS = 30_000;
-/** A later drain runs this soon after one that used up its time with messages left. */
-const CONTINUE_SOON_MS = 1000;
-
 type OutboxRedis = DeletionRedis & Readonly<Pick<TriggerContext["redis"], "get" | "set" | "del">>;
 type OutboxScheduler = Readonly<Pick<TriggerContext["scheduler"], "runJob">>;
 
@@ -76,16 +61,6 @@ export interface SlackOutbox {
 type DrainEnd = Readonly<{ until: "empty" }> | Readonly<{ until: "later"; afterMs: number }>;
 
 type Drain = Readonly<{ outbox: OutboxDependencies; deadline: number }>;
-
-/** Takes the lease that lets one drain, or one rewrite of the queue, work on it at a time; false when it is held. */
-async function lease({ redis }: QueueDependencies): Promise<boolean> {
-    return (
-        (await redis.set(LEASE_KEY, String(Date.now()), {
-            nx: true,
-            expiration: new Date(Date.now() + LEASE_MS),
-        })) !== ""
-    );
-}
 
 /** When a drain last sent Slack a message; 0 when none has lately. */
 async function whenLastSent({ redis }: OutboxDependencies): Promise<number> {
@@ -172,34 +147,6 @@ async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
     return (await deliverNext(drain, queued)) ?? (await drainQueue(drain, Date.now()));
 }
 
-/** Schedules one drain to continue later; a continuation already scheduled covers this one. */
-async function scheduleDrain({ redis, scheduler }: QueueDependencies, afterMs: number): Promise<void> {
-    const runAt = new Date(Date.now() + afterMs);
-    const claimed =
-        (await redis.set(DRAIN_SCHEDULED_KEY, runAt.toISOString(), {
-            nx: true,
-            expiration: new Date(runAt.getTime() + LEASE_MS),
-        })) !== "";
-    if (claimed) {
-        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
-    }
-}
-
-/**
- * Schedules a drain for after the current lease has expired, for when the drain holding it dies first: Devvit ends
- * a handler that runs too long, and a Slack request can take up to the fetch timeout. Without it, what that drain
- * left queued would wait for the next alert. A recovery already scheduled covers this one; it expires as its drain
- * runs, so a drain that finds the lease held can schedule the next.
- */
-async function scheduleRecovery({ redis, scheduler }: OutboxDependencies): Promise<void> {
-    const runAt = new Date(Date.now() + LEASE_MS + MS_PER_SECOND);
-    const claimed =
-        (await redis.set(RECOVERY_SCHEDULED_KEY, runAt.toISOString(), { nx: true, expiration: runAt })) !== "";
-    if (claimed) {
-        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
-    }
-}
-
 /**
  * Drains the queue while holding the lease; undefined when another drain holds it, and will deliver the queue. Before
  * it lets go, it takes deleted content's quotes out of what is left: only the lease holder does, so none is taken
@@ -217,7 +164,7 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
         await removeDeletedQuotes(outbox.redis);
         return end;
     } finally {
-        await outbox.redis.del(LEASE_KEY);
+        await releaseLease(outbox);
     }
 }
 
@@ -265,7 +212,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
             });
         },
         deliverQueued: async (): Promise<void> => {
-            await outbox.redis.del(DRAIN_SCHEDULED_KEY);
+            await continuationStarted(outbox);
             await deliverQueued(outbox);
         },
     };
@@ -284,7 +231,7 @@ export async function forgetContent(queue: QueueDependencies, contentId: string)
     try {
         await removeDeletedQuotes(queue.redis);
     } finally {
-        await queue.redis.del(LEASE_KEY);
+        await releaseLease(queue);
     }
     // A message queued while this held the lease left itself to a drain, as to one under way: a drain follows.
     if ((await oldest(queue.redis)) !== undefined) {
