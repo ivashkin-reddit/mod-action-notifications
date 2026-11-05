@@ -70,10 +70,7 @@ async function clearFailuresAfterSuccess(store: MonitorStore): Promise<void> {
     });
 }
 
-/**
- * Reads the listings whose alerts are on and sends the alerts they call for; a successful run clears the failure
- * count.
- */
+/** Reads the listings whose alerts are on and sends the alerts they call for. */
 async function checkQueues(
     queues: ModerationQueues,
     thresholds: MonitorThresholds,
@@ -90,7 +87,12 @@ async function checkQueues(
         const items = await queues.reported();
         await alertIfOld({ alert: "reported", items, ageHours: thresholds.reportedAgeHours }, ports);
     }
+}
+
+/** A run that succeeded: the failure count clears, and so does the monitor's failing. */
+async function succeeded(ports: CheckModqueuePorts): Promise<void> {
     await clearFailuresAfterSuccess(ports.store);
+    await ports.health.note("monitor-success", 1);
     await ports.health.clear("monitor-failing");
 }
 
@@ -105,7 +107,10 @@ export async function checkModqueue(thresholds: MonitorThresholds, ports: CheckM
         await checkQueues(await ports.openQueues(), thresholds, ports);
     } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
+        await ports.health.note("monitor-failure", 1);
         await ports.health.raise("monitor-failing", reason);
         await countFailure(ports, reason);
+        return;
     }
+    await succeeded(ports);
 }

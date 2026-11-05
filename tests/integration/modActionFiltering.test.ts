@@ -4,7 +4,7 @@ import { removedPost } from "../fixtures/events.js";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
-import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
+import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -273,6 +273,6 @@ describe("autoModerator actions", (): void => {
         expect(app.slack.messages.map((message): string | undefined => lastLine(message))).toStrictEqual(
             Array<string>(6).fill("• *Status:* Origin AutoModerator"),
         );
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([]);
     });
 });

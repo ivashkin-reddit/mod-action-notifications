@@ -124,6 +124,7 @@ async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
  * them; one that cannot be read is left by another version of the app, and logged.
  */
 async function drop({ outbox }: Drain, queued: Queued, reason: DropReason): Promise<void> {
+    await outbox.health.note("alert-dropped", 1);
     if (reason === "expired") {
         await outbox.health.raise("alerts-expired", "");
     } else {
@@ -221,7 +222,9 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
         send: async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
             try {
-                if ((await enqueueQuoting(outbox.redis, message, quoting)) > 0) {
+                const dropped = await enqueueQuoting(outbox.redis, message, quoting);
+                if (dropped > 0) {
+                    await outbox.health.note("alert-dropped", dropped);
                     await outbox.health.raise("outbox-full", "");
                 }
             } catch (error) {

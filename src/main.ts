@@ -7,8 +7,8 @@ import { Devvit } from "@devvit/public-api";
 import {
     alertOnModAction,
     deliverQueuedAlerts,
-    alertOnPostDeletion,
-    forgetDeletedContent,
+    onCommentDelete,
+    onPostDelete,
     runModqueueMonitor,
     setUpModqueueMonitor,
 } from "./composition.js";
@@ -66,20 +66,18 @@ Devvit.addTrigger({
     },
 });
 
-// A deleted post or comment leaves the alerts still waiting for Slack. The alert about a deleted post names the post,
-// by the owner's decision (AGENTS.md).
+// A deleted post or comment leaves the alerts still waiting for Slack.
 Devvit.addTrigger({
     event: "PostDelete",
     onEvent: async (event: PostDeleteEvent, context: AppContext): Promise<void> => {
-        await forgetDeletedContent(event.postId, context);
-        await alertOnPostDeletion(event, context);
+        await onPostDelete(event, context);
     },
 });
 
 Devvit.addTrigger({
     event: "CommentDelete",
     onEvent: async (event: CommentDeleteEvent, context: AppContext): Promise<void> => {
-        await forgetDeletedContent(event.commentId, context);
+        await onCommentDelete(event, context);
     },
 });
 

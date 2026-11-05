@@ -4,7 +4,7 @@ import { bigPost, DeletionReason, DeletionSource, userDeletion } from "../fixtur
 import type { Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastField } from "../fixtures/messages.js";
-import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
+import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -60,7 +60,7 @@ describe("a user deleting their own post", (): void => {
 
         await app.fire("PostDelete", userDeletion());
 
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual(["post_deletion:alerted:t3_big"]);
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual(["post_deletion:alerted:t3_big"]);
         expect(app.context.redis.ttlSeconds("post_deletion:alerted:t3_big")).toBe(86_400);
     });
 

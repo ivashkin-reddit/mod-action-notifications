@@ -3,7 +3,7 @@ import { loadApp } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
-import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
+import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -49,7 +49,7 @@ describe("an action by one of Reddit's own accounts", (): void => {
             await app.fire("ModAction", removedPost({ moderator: { name: "reddit" } }));
         }
 
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([]);
         expect(lastLine(app.slack.messages[4])).toBe("• *Status:* Origin Reddit");
     });
 

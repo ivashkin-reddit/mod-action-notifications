@@ -1,6 +1,12 @@
 import type { TriggerContext } from "@devvit/public-api";
-import { clearCondition, createRedisConditionStore, raiseCondition } from "./health/index.js";
-import type { Condition } from "./health/index.js";
+import {
+    clearCondition,
+    createRedisConditionStore,
+    createRedisEventStore,
+    noteEvent,
+    raiseCondition,
+} from "./health/index.js";
+import type { Condition, HealthEvent } from "./health/index.js";
 import {
     createModListCache,
     createRedditModerationLookups,
@@ -64,6 +70,8 @@ export type AppContext = Readonly<{
             | "hSetNX"
             | "hGet"
             | "hGetAll"
+            | "hSet"
+            | "hIncrBy"
             | "hDel"
             | "zCard"
         >
@@ -137,6 +145,9 @@ function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
         clear: async (condition: Condition): Promise<void> => {
             await clearCondition(conditions, condition);
         },
+        note: async (event: HealthEvent, count: number): Promise<void> => {
+            await noteEvent(createRedisEventStore(context.redis), event, count);
+        },
     };
 }
 
@@ -177,6 +188,7 @@ function monitorJobPorts(context: AppContext): MonitorJobPorts {
 }
 
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
+    await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
     const config = await configOf(context);
     if (!(await webhookReady(context, config))) {
         return;
@@ -209,7 +221,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
     });
 }
 
-export async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext): Promise<void> {
+async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext): Promise<void> {
     const config = await configOf(context);
     if (!alertsConfigured(config)) {
         return;
@@ -228,12 +240,28 @@ export type CommentDeleteEvent = Readonly<{ commentId: string }>;
  * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, and stays out of any queued
  * later, whether or not a webhook is set. Logs rather than rejects, so a trigger goes on to its other work.
  */
-export async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
+async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
     try {
         await forgetContent({ redis: context.redis, scheduler: context.scheduler }, contentId);
     } catch (error) {
         console.error("[deletions] Could not take a deleted post or comment out of queued alerts:", error);
     }
+}
+
+/**
+ * A post was deleted: its text leaves queued alerts, then a user's own deletion of a high-score post is alerted.
+ * The alert about a deleted post names the post, by the owner's decision (AGENTS.md).
+ */
+export async function onPostDelete(event: PostDeleteEvent, context: AppContext): Promise<void> {
+    await noteEvent(createRedisEventStore(context.redis), "post-delete", 1);
+    await forgetDeletedContent(event.postId, context);
+    await alertOnPostDeletion(event, context);
+}
+
+/** A comment was deleted: its text leaves queued alerts. */
+export async function onCommentDelete(event: CommentDeleteEvent, context: AppContext): Promise<void> {
+    await noteEvent(createRedisEventStore(context.redis), "comment-delete", 1);
+    await forgetDeletedContent(event.commentId, context);
 }
 
 /** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while no webhook is set. */

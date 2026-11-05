@@ -1,4 +1,15 @@
 import type { Condition, InForce } from "../domain/conditions.js";
+import type { Counts, HealthEvent, LastSeen } from "../domain/events.js";
+
+/** Where what the app has done is kept: when each event last happened, and each UTC day's counts. */
+export interface EventStore {
+    /** Notes `count` of the event at `at`, in ms since the epoch. */
+    readonly note: (event: HealthEvent, count: number, at: number) => Promise<void>;
+    /** Rejects when Redis cannot be read. */
+    readonly lastSeen: () => Promise<LastSeen>;
+    /** The counts of a UTC day such as 2026-11-04. Rejects when Redis cannot be read. */
+    readonly counts: (day: string) => Promise<Counts>;
+}
 
 /** Where the conditions in force are kept. */
 export interface ConditionStore {

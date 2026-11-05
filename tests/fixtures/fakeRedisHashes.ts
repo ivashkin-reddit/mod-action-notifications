@@ -10,6 +10,10 @@ export interface HashCommands {
     readonly hGet: Mock<(key: string, field: string) => Promise<string | undefined>>;
     /** Every field and value; {} when there is no hash. */
     readonly hGetAll: Mock<(key: string) => Promise<Record<string, string>>>;
+    /** Sets the fields and returns how many were new. */
+    readonly hSet: Mock<(key: string, fieldValues: Readonly<Record<string, string>>) => Promise<number>>;
+    /** Adds to the field's number, 0 when unset, and returns the result. */
+    readonly hIncrBy: Mock<(key: string, field: string, value: number) => Promise<number>>;
     /** Removes the fields and returns how many the hash had. */
     readonly hDel: Mock<(key: string, fields: readonly string[]) => Promise<number>>;
 }
@@ -37,6 +41,17 @@ export function hashCommands(keyspace: Keyspace): HashCommands {
             async (key: string): Promise<Record<string, string>> =>
                 await Promise.resolve({ ...fieldsAt(keyspace, key) }),
         ),
+        hSet: vi.fn(async (key: string, fieldValues: Readonly<Record<string, string>>): Promise<number> => {
+            const fields = fieldMap(keyspace, key);
+            const added = Object.keys(fieldValues).filter((field: string): boolean => !fields.has(field)).length;
+            keep(keyspace, key, { kind: "hash", fields: { ...fieldsAt(keyspace, key), ...fieldValues } });
+            return await Promise.resolve(added);
+        }),
+        hIncrBy: vi.fn(async (key: string, field: string, value: number): Promise<number> => {
+            const next = Number(fieldMap(keyspace, key).get(field) ?? 0) + value;
+            keep(keyspace, key, { kind: "hash", fields: { ...fieldsAt(keyspace, key), [field]: String(next) } });
+            return await Promise.resolve(next);
+        }),
         hDel: vi.fn(async (key: string, fields: readonly string[]): Promise<number> => {
             const all = fieldMap(keyspace, key);
             const removed = fields.filter((field: string): boolean => all.delete(field)).length;

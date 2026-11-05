@@ -7,7 +7,7 @@ import {
     setUpModqueueMonitor,
 } from "./composition.js";
 import type { AppContext } from "./composition.js";
-import { createRedisConditionStore, statusLines } from "./health/index.js";
+import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
 import type { MonitorState, StatusInput, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
@@ -113,13 +113,17 @@ function webhookState(config: AppConfig): StatusInput["webhook"] {
 export async function botStatus(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
     const config = await configOf(context);
     const job = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
+    const events = createRedisEventStore(context.redis);
+    const now = Date.now();
     const lines = statusLines({
-        now: Date.now(),
+        now,
         version: context.appVersion,
         webhook: webhookState(config),
         monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
         problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
         queue: await queueState(context.redis).catch(readFailed),
+        lastSeen: await events.lastSeen().catch(readFailed),
+        today: await events.counts(dayOf(now)).catch(readFailed),
     });
     return { lines: lines.map(({ label, value }: StatusLine): { label: string; value: string } => ({ label, value })) };
 }

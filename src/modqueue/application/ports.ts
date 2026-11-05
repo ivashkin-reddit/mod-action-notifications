@@ -18,6 +18,8 @@ export interface MonitorHealth {
     /** The monitor is failing; `detail` says why its last run failed. */
     readonly raise: (condition: "monitor-failing", detail: string) => Promise<void>;
     readonly clear: (condition: "monitor-failing") => Promise<void>;
+    /** A run succeeded, or failed. */
+    readonly note: (event: "monitor-success" | "monitor-failure", count: number) => Promise<void>;
 }
 
 /** The kinds of queue alert, each throttled on its own. */

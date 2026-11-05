@@ -1,5 +1,6 @@
 import { conditionSummary } from "./conditions.js";
 import type { InForce } from "./conditions.js";
+import type { Counts, LastSeen } from "./events.js";
 
 /**
  * What Show Bot Status tells moderators, who cannot read the app's logs: how the app is set up and doing, line by
@@ -23,6 +24,9 @@ export interface StatusInput {
     readonly monitor: MonitorState;
     readonly problems: readonly InForce[] | undefined;
     readonly queue: QueueState | undefined;
+    readonly lastSeen: LastSeen | undefined;
+    /** Today's counts, by UTC day. */
+    readonly today: Counts | undefined;
 }
 
 /** One line of the status: what it is about, and what it says. */
@@ -75,6 +79,56 @@ function problemsText(problems: readonly InForce[] | undefined, now: number): st
               .join("\n");
 }
 
+const NONE_LATELY = "none in the last week";
+
+/** How long ago `at` was; none in the last week when it is undefined. */
+function ago(at: number | undefined, now: number): string {
+    return at === undefined ? NONE_LATELY : `${durationText(now - at)} ago`;
+}
+
+function capitalised(text: string): string {
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+function lastDeliveredText(lastSeen: LastSeen | undefined, now: number): string {
+    return lastSeen === undefined ? UNKNOWN : capitalised(ago(lastSeen["alert-delivered"], now));
+}
+
+/** The monitor's latest run, and whether it failed: whichever of its last success and failure came later. */
+function lastRunText(lastSeen: LastSeen | undefined, now: number): string {
+    if (lastSeen === undefined) {
+        return UNKNOWN;
+    }
+    const success = lastSeen["monitor-success"] ?? 0;
+    const failure = lastSeen["monitor-failure"] ?? 0;
+    if (success === 0 && failure === 0) {
+        return capitalised(NONE_LATELY);
+    }
+    return failure > success ? `${ago(failure, now)}, failed` : `${ago(success, now)}, succeeded`;
+}
+
+function lastEventsText(lastSeen: LastSeen | undefined, now: number): string {
+    if (lastSeen === undefined) {
+        return UNKNOWN;
+    }
+    return [
+        `Mod action: ${ago(lastSeen["mod-action"], now)}`,
+        `Post deleted: ${ago(lastSeen["post-delete"], now)}`,
+        `Comment deleted: ${ago(lastSeen["comment-delete"], now)}`,
+    ].join("\n");
+}
+
+/** A day's counts in a line: mod actions, alerts delivered and dropped, monitor runs and failures. */
+export function countsText(counts: Counts): string {
+    const failures = counts["monitor-failure"] ?? 0;
+    const runs = (counts["monitor-success"] ?? 0) + failures;
+    return [
+        counted(counts["mod-action"] ?? 0, "mod action"),
+        `${counted(counts["alert-delivered"] ?? 0, "alert")} delivered, ${String(counts["alert-dropped"] ?? 0)} dropped`,
+        `${counted(runs, "monitor run")}, ${String(failures)} failed`,
+    ].join("; ");
+}
+
 function waitingText(queue: QueueState | undefined, now: number): string {
     if (queue === undefined) {
         return UNKNOWN;
@@ -113,6 +167,10 @@ export function statusLines(input: StatusInput): readonly StatusLine[] {
         { label: "Slack webhook", value: WEBHOOK_TEXT[input.webhook] },
         { label: "Current problems", value: problemsText(input.problems, input.now) },
         { label: "Alerts waiting", value: waitingText(input.queue, input.now) },
+        { label: "Last alert delivered", value: lastDeliveredText(input.lastSeen, input.now) },
         { label: "Modqueue monitor", value: monitorText(input.monitor) },
+        { label: "Last monitor run", value: lastRunText(input.lastSeen, input.now) },
+        { label: "Last events", value: lastEventsText(input.lastSeen, input.now) },
+        { label: "Today (UTC)", value: input.today === undefined ? UNKNOWN : countsText(input.today) },
     ];
 }

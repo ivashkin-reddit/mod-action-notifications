@@ -4,7 +4,7 @@ import { removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import type { SlackMessage } from "../fixtures/fakeSlack.js";
 import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "../fixtures/messages.js";
-import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
+import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -50,7 +50,10 @@ describe("an activity spike", (): void => {
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([ACTIVITY_KEY, "mod_actions:reported:ModAction_1"]);
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([
+            ACTIVITY_KEY,
+            "mod_actions:reported:ModAction_1",
+        ]);
         await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toStrictEqual([
             { member: "ModAction_1", score: NOW.getTime() },
         ]);
@@ -167,7 +170,7 @@ describe("an activity spike", (): void => {
 
         await app.fire("ModAction", removedPost({ subreddit: undefined }));
 
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([]);
         expect(app.slack.requests).toHaveLength(1);
     });
 

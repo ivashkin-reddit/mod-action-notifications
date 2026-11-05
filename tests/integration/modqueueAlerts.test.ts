@@ -3,7 +3,7 @@ import { loadApp } from "../fixtures/app.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastField, NOW_SECONDS } from "../fixtures/messages.js";
 import { freshQueue, queuedComment, queuedPost } from "../fixtures/queue.js";
-import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
+import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -227,7 +227,7 @@ describe("the modqueue monitor", (): void => {
             "⚠️ Modqueue Alert: 1 items pending",
             "⏰ Unmoderated Content Alert: 1 items over 1h old",
         ]);
-        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([
             "mod_actions:throttle:modqueue_size",
             "mod_actions:throttle:modqueue_unmoderated",
         ]);

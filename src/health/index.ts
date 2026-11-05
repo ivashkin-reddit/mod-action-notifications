@@ -3,7 +3,10 @@
  * and logged when they start.
  */
 export { clearCondition, raiseCondition } from "./application/conditions.js";
+export { noteEvent } from "./application/events.js";
 export type { ConditionStore } from "./application/ports.js";
 export type { Condition } from "./domain/conditions.js";
+export { dayOf, type HealthEvent } from "./domain/events.js";
 export { statusLines, type MonitorState, type QueueState, type StatusInput, type StatusLine } from "./domain/status.js";
 export { createRedisConditionStore } from "./infrastructure/redisConditionStore.js";
+export { createRedisEventStore } from "./infrastructure/redisEventStore.js";

@@ -11,6 +11,7 @@ import type { FakeSlack, SlackRequest } from "./fakeSlack.js";
 export type FakeHealth = Readonly<{
     raise: Mock<(condition: string, detail: string) => Promise<void>>;
     clear: Mock<(condition: string) => Promise<void>>;
+    note: Mock<(event: string, count: number) => Promise<void>>;
 }>;
 
 /** What the Slack outbox's unit tests build it from, and the fakes behind it. */
@@ -33,6 +34,9 @@ export function outboxFakes(): OutboxFakes {
             await Promise.resolve();
         }),
         clear: vi.fn(async (): Promise<void> => {
+            await Promise.resolve();
+        }),
+        note: vi.fn(async (): Promise<void> => {
             await Promise.resolve();
         }),
     };
