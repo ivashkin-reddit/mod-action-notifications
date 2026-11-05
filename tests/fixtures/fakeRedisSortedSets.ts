@@ -12,6 +12,8 @@ export interface SortedSetCommands {
     readonly zRemRangeByScore: Mock<(key: string, min: number, max: number) => Promise<number>>;
     readonly zRemRangeByRank: Mock<(key: string, start: number, stop: number) => Promise<number>>;
     readonly zScore: Mock<(key: string, member: string) => Promise<number | undefined>>;
+    /** How many members the sorted set has; 0 when there is none. */
+    readonly zCard: Mock<(key: string) => Promise<number>>;
     /**
      * ZRANGE by score (members scored from `start` to `stop`) or by rank (negative ranks count from the end),
      * lowest first: the forms the app uses. Any other form rejects rather than answer differently from Redis.
@@ -97,6 +99,9 @@ export function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
             async (key: string, member: string): Promise<number | undefined> =>
                 // Through a Map: a member named like an Object property ("constructor") is not in the set.
                 await Promise.resolve(new Map(Object.entries(scoresAt(keyspace, key))).get(member)),
+        ),
+        zCard: vi.fn(
+            async (key: string): Promise<number> => await Promise.resolve(Object.keys(scoresAt(keyspace, key)).length),
         ),
         zRange: vi.fn(
             async (key: string, start: number, stop: number, options?: Readonly<{ by: string }>): Promise<ZMember[]> =>

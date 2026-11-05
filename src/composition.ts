@@ -63,7 +63,9 @@ export type AppContext = Readonly<{
             | "zScore"
             | "hSetNX"
             | "hGet"
+            | "hGetAll"
             | "hDel"
+            | "zCard"
         >
     >;
     reddit: Readonly<

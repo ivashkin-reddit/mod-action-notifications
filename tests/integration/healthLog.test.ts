@@ -59,7 +59,7 @@ describe("a missing webhook", (): void => {
             await app.fire("ModAction", removedPost());
 
             await expect(app.context.redis.hGetAll("health:conditions")).resolves.toStrictEqual({
-                "webhook-missing": String(NOW.getTime()),
+                "webhook-missing": JSON.stringify({ since: NOW.getTime(), detail: "" }),
             });
             expect(app.context.redis.ttlSeconds("health:conditions")).toBe(7 * DAY_SECONDS);
             expect(app.context.redis.ttlSeconds("health:reminder:webhook-missing")).toBe(DAY_SECONDS);

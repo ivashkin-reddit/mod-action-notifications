@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import type { App } from "../fixtures/app.js";
+import { removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -10,6 +11,7 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 
 const TEST_OPTIONS = { timeout: 5000 };
 const JOB_ID_KEY = "modqueue_monitor_job_id";
+const HOUR = 3_600_000;
 
 /** Presses Show Bot Status, and returns what the form it shows says, by label. */
 async function status(
@@ -122,6 +124,58 @@ describe("the Show Bot Status menu item", (): void => {
 
         await expect(status(app)).resolves.toMatchObject({
             "Slack webhook": "Not a Slack webhook URL, so no alerts are sent",
+        });
+    });
+});
+
+describe("the problems Show Bot Status shows", (): void => {
+    it("are none on a working app", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        await expect(status(app)).resolves.toMatchObject({ "Current problems": "None", "Alerts waiting": "None" });
+    });
+
+    it("include each one in force, with what the app saw and for how long", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.slack.respond(404);
+        await app.fire("ModAction", removedPost());
+        await app.advance(3 * HOUR);
+
+        await expect(status(app)).resolves.toMatchObject({
+            "Current problems":
+                "For 3 hours: Slack is refusing alerts (HTTP 404: error), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.",
+        });
+    });
+
+    it(
+        "include alerts waiting for Slack, and how long the oldest has waited",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.slack.respond(503, 503, 503, 503);
+            await app.fire("ModAction", removedPost());
+            await app.advance(2 * HOUR);
+
+            await expect(status(app)).resolves.toMatchObject({ "Alerts waiting": "1, the oldest for 2 hours" });
+        },
+    );
+
+    it("say so when Redis cannot be read", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.redis.hGetAll.mockRejectedValue(new Error("redis down"));
+        app.context.redis.zCard.mockRejectedValue(new Error("redis down"));
+
+        await expect(status(app)).resolves.toMatchObject({
+            "Current problems": "Unknown: Redis could not be read",
+            "Alerts waiting": "Unknown: Redis could not be read",
         });
     });
 });

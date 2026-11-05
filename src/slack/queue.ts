@@ -85,6 +85,15 @@ export async function enqueue(redis: QueueRedis, message: SlackMessage, quoting:
     return await redis.zRemRangeByRank(QUEUE_KEY, 0, -(MAX_QUEUED + 1));
 }
 
+/** How many messages wait, and when the oldest was queued. */
+export async function queueState(
+    redis: Readonly<Pick<QueueRedis, "zRange">> & Readonly<Pick<TriggerContext["redis"], "zCard">>,
+): Promise<Readonly<{ waiting: number; oldestQueuedAt: number | undefined }>> {
+    const waiting = await redis.zCard(QUEUE_KEY);
+    const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
+    return { waiting, oldestQueuedAt: first?.score };
+}
+
 export async function oldest(redis: QueueRedis): Promise<Queued | undefined> {
     const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
     return first === undefined ? undefined : queuedOf(first);

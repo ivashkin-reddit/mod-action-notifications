@@ -44,7 +44,7 @@ export async function clearCondition(store: ConditionStore, condition: Condition
 }
 
 async function start(store: ConditionStore, condition: Condition, detail: string): Promise<void> {
-    const started = await store.start(condition, Date.now());
+    const started = await store.start(condition, Date.now(), detail);
     const reminder = await store.claimReminder(condition, REMINDER_SECONDS);
     if (started) {
         log(conditionStarted(condition, detail));

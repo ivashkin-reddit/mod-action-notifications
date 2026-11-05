@@ -1,9 +1,10 @@
 import type { TriggerContext } from "@devvit/public-api";
 import type { ConditionStore } from "../application/ports.js";
-import type { Condition } from "../domain/conditions.js";
+import { isCondition } from "../domain/conditions.js";
+import type { Condition, InForce } from "../domain/conditions.js";
 
 /**
- * The conditions in force: a hash of when each started, by condition. Kept for a week from when the app last met
+ * The conditions in force: a hash of when each started and what the app saw then, by condition, as JSON. Kept for a week from when the app last met
  * one, so a condition nothing meets any more is forgotten.
  */
 const CONDITIONS_KEY = "health:conditions";
@@ -16,19 +17,46 @@ function reminderKey(condition: Condition): string {
     return `health:reminder:${condition}`;
 }
 
-type ConditionRedis = Readonly<Pick<TriggerContext["redis"], "hSetNX" | "hGet" | "hDel" | "set" | "expire">>;
+type ConditionRedis = Readonly<
+    Pick<TriggerContext["redis"], "hSetNX" | "hGet" | "hGetAll" | "hDel" | "set" | "expire">
+>;
+
+/** What the hash holds for a condition; undefined for a value this version cannot read. */
+function recordOf(json: string): Readonly<{ since: number; detail: string }> | undefined {
+    try {
+        const parsed: unknown = JSON.parse(json);
+        return typeof parsed === "object" &&
+            parsed !== null &&
+            "since" in parsed &&
+            typeof parsed.since === "number" &&
+            "detail" in parsed &&
+            typeof parsed.detail === "string"
+            ? { since: parsed.since, detail: parsed.detail }
+            : undefined;
+    } catch {
+        // Not JSON: not a value this version wrote.
+        return undefined;
+    }
+}
 
 export function createRedisConditionStore(redis: ConditionRedis): ConditionStore {
     return {
-        start: async (condition: Condition, since: number): Promise<boolean> => {
-            const started = (await redis.hSetNX(CONDITIONS_KEY, condition, String(since))) === 1;
+        start: async (condition: Condition, since: number, detail: string): Promise<boolean> => {
+            const started = (await redis.hSetNX(CONDITIONS_KEY, condition, JSON.stringify({ since, detail }))) === 1;
             await redis.expire(CONDITIONS_KEY, CONDITIONS_MEMORY_SECONDS);
             return started;
         },
         since: async (condition: Condition): Promise<number | undefined> => {
-            const since = await redis.hGet(CONDITIONS_KEY, condition);
-            return since === undefined ? undefined : Number(since);
+            const record = await redis.hGet(CONDITIONS_KEY, condition);
+            return record === undefined ? undefined : recordOf(record)?.since;
         },
+        inForce: async (): Promise<readonly InForce[]> =>
+            Object.entries(await redis.hGetAll(CONDITIONS_KEY)).flatMap(
+                ([condition, json]: readonly [string, string]): InForce[] => {
+                    const record = recordOf(json);
+                    return isCondition(condition) && record !== undefined ? [{ condition, ...record }] : [];
+                },
+            ),
         claimReminder: async (condition: Condition, seconds: number): Promise<boolean> =>
             (await redis.set(reminderKey(condition), "1", {
                 nx: true,

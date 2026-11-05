@@ -7,5 +7,6 @@
  */
 export type { DeliveryCondition, DeliveryConditions } from "./conditions.js";
 export { createSlackOutbox, forgetContent, type SlackOutbox } from "./outbox.js";
+export { queueState } from "./queue.js";
 export { OUTBOX_JOB_NAME } from "./schedule.js";
 export { createWebhookSender, sendTestMessage } from "./webhook.js";

@@ -1,3 +1,6 @@
+import { conditionSummary } from "./conditions.js";
+import type { InForce } from "./conditions.js";
+
 /**
  * What Show Bot Status tells moderators, who cannot read the app's logs: how the app is set up and doing, line by
  * line.
@@ -8,11 +11,18 @@ export type MonitorState =
     | Readonly<{ enabled: boolean; job: "none" | "one-off" | "unknown" }>
     | Readonly<{ enabled: boolean; job: "scheduled"; cron: string }>;
 
-/** What the status reports, gathered from the settings, the scheduler and Redis. */
+/** The alerts waiting for Slack: how many, and when the oldest was queued, in ms since the epoch. */
+export type QueueState = Readonly<{ waiting: number; oldestQueuedAt: number | undefined }>;
+
+/** What the status reports, gathered from the settings, the scheduler and Redis; undefined for what Redis could not give. */
 export interface StatusInput {
+    /** When the status is shown, in ms since the epoch. */
+    readonly now: number;
     readonly version: string;
     readonly webhook: "set" | "missing" | "invalid";
     readonly monitor: MonitorState;
+    readonly problems: readonly InForce[] | undefined;
+    readonly queue: QueueState | undefined;
 }
 
 /** One line of the status: what it is about, and what it says. */
@@ -28,6 +38,54 @@ const WEBHOOK_TEXT: Readonly<Record<StatusInput["webhook"], string>> = {
 };
 
 const SET_UP = "Use Setup Modqueue Monitoring.";
+const UNKNOWN = "Unknown: Redis could not be read";
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+
+function counted(count: number, unit: string): string {
+    return `${String(count)} ${unit}${count === 1 ? "" : "s"}`;
+}
+
+/** A length of time in its largest whole unit, rounded down: "3 hours". */
+export function durationText(ms: number): string {
+    const minutes = Math.floor(ms / MS_PER_MINUTE);
+    if (minutes < 1) {
+        return "less than a minute";
+    }
+    const hours = Math.floor(minutes / MINUTES_PER_HOUR);
+    if (hours < 1) {
+        return counted(minutes, "minute");
+    }
+    const days = Math.floor(hours / HOURS_PER_DAY);
+    return days < 1 ? counted(hours, "hour") : counted(days, "day");
+}
+
+function problemsText(problems: readonly InForce[] | undefined, now: number): string {
+    if (problems === undefined) {
+        return UNKNOWN;
+    }
+    return problems.length === 0
+        ? "None"
+        : problems
+              .map(
+                  (problem: InForce): string =>
+                      `For ${durationText(now - problem.since)}: ${conditionSummary(problem)}`,
+              )
+              .join("\n");
+}
+
+function waitingText(queue: QueueState | undefined, now: number): string {
+    if (queue === undefined) {
+        return UNKNOWN;
+    }
+    if (queue.waiting === 0) {
+        return "None";
+    }
+    const oldest =
+        queue.oldestQueuedAt === undefined ? "" : `, the oldest for ${durationText(now - queue.oldestQueuedAt)}`;
+    return `${String(queue.waiting)}${oldest}`;
+}
 
 function monitorText(monitor: MonitorState): string {
     if (monitor.job === "unknown") {
@@ -53,6 +111,8 @@ export function statusLines(input: StatusInput): readonly StatusLine[] {
     return [
         { label: "App version", value: input.version },
         { label: "Slack webhook", value: WEBHOOK_TEXT[input.webhook] },
+        { label: "Current problems", value: problemsText(input.problems, input.now) },
+        { label: "Alerts waiting", value: waitingText(input.queue, input.now) },
         { label: "Modqueue monitor", value: monitorText(input.monitor) },
     ];
 }

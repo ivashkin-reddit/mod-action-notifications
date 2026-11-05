@@ -7,7 +7,7 @@ import {
     setUpModqueueMonitor,
 } from "./composition.js";
 import type { AppContext } from "./composition.js";
-import { statusLines } from "./health/index.js";
+import { createRedisConditionStore, statusLines } from "./health/index.js";
 import type { MonitorState, StatusInput, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
@@ -19,7 +19,7 @@ import type { SimulateFormValues } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import type { AppConfig } from "./settings/index.js";
-import { createWebhookSender, sendTestMessage } from "./slack/delivery.js";
+import { createWebhookSender, queueState, sendTestMessage } from "./slack/delivery.js";
 
 /**
  * The composition root's menu actions: what each menu item and form does for the moderator who invoked it, and the
@@ -93,6 +93,12 @@ function monitorState(enabled: boolean, job: MonitorJobStatus): MonitorState {
     }
 }
 
+/** What the status shows when Redis cannot say: unknown, with the failure logged. */
+function readFailed(error: unknown): undefined {
+    console.warn("[menu] Could not read Redis for the bot status:", error);
+    return undefined;
+}
+
 function webhookState(config: AppConfig): StatusInput["webhook"] {
     if (config.slackWebhookUrlInvalid) {
         return "invalid";
@@ -108,9 +114,12 @@ export async function botStatus(context: MenuContext): Promise<{ lines: { label:
     const config = await configOf(context);
     const job = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
     const lines = statusLines({
+        now: Date.now(),
         version: context.appVersion,
         webhook: webhookState(config),
         monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
+        problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
+        queue: await queueState(context.redis).catch(readFailed),
     });
     return { lines: lines.map(({ label, value }: StatusLine): { label: string; value: string } => ({ label, value })) };
 }
