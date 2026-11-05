@@ -176,8 +176,7 @@ describe("the Slack outbox", (): void => {
 
         expect(app.slack.messages.map((message): string => message.text)).toStrictEqual(["fresh"]);
         expect(console.error).toHaveBeenCalledWith(
-            "Dropped a Slack message that was unreadable or queued over a day ago",
-            { queuedAt: new Date(NOW.getTime() - DAY - 1).toISOString() },
+            "[health] Alerts are being dropped after waiting a day without reaching Slack.",
         );
     });
 
@@ -191,10 +190,7 @@ describe("the Slack outbox", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(app.context.redis.keys()).not.toContain(QUEUE_KEY);
-        expect(console.error).toHaveBeenCalledWith(
-            "Dropped a Slack message that was unreadable or queued over a day ago",
-            { queuedAt: new Date(0).toISOString() },
-        );
+        expect(console.warn).toHaveBeenCalledWith("[outbox] Dropped a queued alert it could not read");
     });
 
     it("keeps at most 500 messages, dropping the oldest, logged", TEST_OPTIONS, async (): Promise<void> => {
@@ -213,7 +209,9 @@ describe("the Slack outbox", (): void => {
 
         await app.fire("ModAction", removal(0));
 
-        expect(console.error).toHaveBeenCalledWith("Slack outbox is full: dropped its oldest messages", { dropped: 1 });
+        expect(console.error).toHaveBeenCalledWith(
+            "[health] The alert queue is full: 500 alerts are waiting, so the oldest are dropped as new ones come.",
+        );
         expect(app.slack.messages[0]?.text).toBe("queued 1");
     });
 

@@ -2,7 +2,8 @@
  * A condition: a problem that lasts, such as alerts having nowhere to go. The app logs one when it starts rather
  * than each time it meets it, as Devvit keeps only 5,000 log entries.
  */
-export type Condition = "webhook-missing" | "webhook-invalid" | "slack-refusing" | "slack-unreachable";
+export type Condition =
+    "webhook-missing" | "webhook-invalid" | "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired";
 
 export type LogLevel = "error" | "warn" | "info";
 
@@ -43,6 +44,17 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         started: (detail: string): string =>
             `Slack is not taking alerts (${detail}), so they wait in the queue. Alerts are dropped after a day, or beyond 500 waiting.`,
         resolved: "Slack is taking alerts again.",
+    },
+    "outbox-full": {
+        level: "error",
+        started: (): string =>
+            "The alert queue is full: 500 alerts are waiting, so the oldest are dropped as new ones come.",
+        resolved: "The alert queue has emptied: no more alerts are dropped for want of room.",
+    },
+    "alerts-expired": {
+        level: "error",
+        started: (): string => "Alerts are being dropped after waiting a day without reaching Slack.",
+        resolved: "The alert queue has emptied: no more alerts are dropped for their age.",
     },
 };
 

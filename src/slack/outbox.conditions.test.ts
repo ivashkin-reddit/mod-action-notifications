@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { drive } from "../../tests/fixtures/app.js";
 import type { Outcome } from "../../tests/fixtures/fakeSlack.js";
-import { outboxFakes } from "../../tests/fixtures/outbox.js";
+import { outboxFakes, queued } from "../../tests/fixtures/outbox.js";
 import type { OutboxFakes } from "../../tests/fixtures/outbox.js";
 import { createSlackOutbox } from "./outbox.js";
 import type { SlackOutbox } from "./outbox.js";
 
 const TEST_OPTIONS = { timeout: 5000 };
+const QUEUE_KEY = "slack_outbox";
+const DAY = 86_400_000;
 
 /** An outbox on fake Redis, scheduler and Slack, with the clock frozen at NOW. */
 function fakeOutbox(): OutboxFakes & Readonly<{ outbox: SlackOutbox }> {
@@ -46,14 +48,48 @@ describe("the conditions a drain reports", (): void => {
         },
     );
 
-    it("end with an alert Slack takes", TEST_OPTIONS, async (): Promise<void> => {
+    it("include the queue being full, as a new alert pushes out the oldest", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const { conditions, outbox } = fakeOutbox();
+        const { conditions, outbox, redis, slack } = fakeOutbox();
+        for (let index = 0; index < 500; index += 1) {
+            await redis.zAdd(QUEUE_KEY, queued(`m${String(index)}`, 500 - index));
+        }
+        slack.respond(503, 503, 503, 503);
 
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.send({ text: "one too many" }));
 
-        expect(conditions.raise).not.toHaveBeenCalled();
-        expect(conditions.clear.mock.calls).toStrictEqual([["slack-refusing"], ["slack-unreachable"]]);
+        expect(conditions.raise.mock.calls[0]).toStrictEqual(["outbox-full", ""]);
     });
+
+    it("include an alert dropped after waiting a day", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { conditions, outbox, redis } = fakeOutbox();
+        await redis.zAdd(QUEUE_KEY, queued("stale", DAY + 1));
+
+        await drive(outbox.deliverQueued());
+
+        expect(conditions.raise.mock.calls).toStrictEqual([["alerts-expired", ""]]);
+    });
+
+    it(
+        "end with an alert Slack takes, and those of the queue once it empties",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { conditions, outbox } = fakeOutbox();
+
+            await drive(outbox.send({ text: "hello" }));
+
+            expect(conditions.raise).not.toHaveBeenCalled();
+            expect(conditions.clear.mock.calls).toStrictEqual([
+                ["slack-refusing"],
+                ["slack-unreachable"],
+                ["outbox-full"],
+                ["alerts-expired"],
+            ]);
+        },
+    );
 });

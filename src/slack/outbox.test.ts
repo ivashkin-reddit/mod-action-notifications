@@ -49,24 +49,28 @@ describe("sending through the outbox", (): void => {
         expect(console.error).toHaveBeenCalledWith("Failed to queue a Slack message; sending it directly:", failure);
     });
 
-    it("keeps at most 500 messages, dropping the oldest, logged", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
+    it(
+        "keeps at most 500 messages, dropping the oldest, and says the queue is full",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
 
-        const { outbox, redis, slack } = fakeOutbox();
-        await redis.set(LEASE_KEY, "another drain", { expiration: new Date(NOW.getTime() + LEASE_MS) });
-        for (let index = 0; index < 500; index += 1) {
-            await redis.zAdd(QUEUE_KEY, queued(`old ${String(index)}`, DAY - index));
-        }
+            const { conditions, outbox, redis, slack } = fakeOutbox();
+            await redis.set(LEASE_KEY, "another drain", { expiration: new Date(NOW.getTime() + LEASE_MS) });
+            for (let index = 0; index < 500; index += 1) {
+                await redis.zAdd(QUEUE_KEY, queued(`old ${String(index)}`, DAY - index));
+            }
 
-        await drive(outbox.send({ text: "newest" }));
+            await drive(outbox.send({ text: "newest" }));
 
-        expect(slack.requests).toStrictEqual([]);
+            expect(slack.requests).toStrictEqual([]);
 
-        const [oldestLeft] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
+            const [oldestLeft] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
 
-        expect(oldestLeft?.member).toContain('"id":"old 1"');
-        expect(console.error).toHaveBeenCalledWith("Slack outbox is full: dropped its oldest messages", { dropped: 1 });
-    });
+            expect(oldestLeft?.member).toContain('"id":"old 1"');
+            expect(conditions.raise).toHaveBeenCalledWith("outbox-full", "");
+        },
+    );
 });
 
 describe("a drain of the outbox", (): void => {
@@ -111,12 +115,12 @@ describe("a drain of the outbox", (): void => {
     });
 
     it(
-        "drops, logged and unsent, a message queued over a day ago and any it cannot read",
+        "drops unsent a message queued over a day ago, saying so, and any it cannot read, logged",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const { outbox, redis, slack } = fakeOutbox();
+            const { conditions, outbox, redis, slack } = fakeOutbox();
             await redis.zAdd(QUEUE_KEY, queued("stale", DAY + 1));
             await redis.zAdd(QUEUE_KEY, { member: "not json", score: NOW.getTime() });
             await redis.zAdd(QUEUE_KEY, {
@@ -128,11 +132,11 @@ describe("a drain of the outbox", (): void => {
             await drive(outbox.deliverQueued());
 
             expect(texts(slack.messages)).toStrictEqual(["fresh"]);
-            expect(
-                vi
-                    .mocked(console.error)
-                    .mock.calls.filter((call: readonly unknown[]): boolean => String(call[0]).startsWith("Dropped")),
-            ).toHaveLength(3);
+            expect(conditions.raise.mock.calls).toStrictEqual([["alerts-expired", ""]]);
+            expect(vi.mocked(console.warn).mock.calls).toStrictEqual([
+                ["[outbox] Dropped a queued alert it could not read"],
+                ["[outbox] Dropped a queued alert it could not read"],
+            ]);
         },
     );
 

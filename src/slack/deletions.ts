@@ -32,17 +32,18 @@ export async function anyDeleted(redis: DeletionRedis, contentIds: readonly stri
     return scores.some((score: number | undefined): boolean => score !== undefined);
 }
 
-/** Queues the message, without its quotes when content it quotes is already deleted, so they are never stored. */
+/**
+ * Queues the message, without its quotes when content it quotes is already deleted, so they are never stored; returns
+ * how many of the oldest messages it pushed out of a full queue.
+ */
 export async function enqueueQuoting(
     redis: DeletionRedis,
     message: SlackMessage,
     quoting: Quoting | undefined,
-): Promise<void> {
-    if (quoting !== undefined && (await anyDeleted(redis, quoting.contentIds))) {
-        await enqueue(redis, quoting.withoutQuotes, undefined);
-        return;
-    }
-    await enqueue(redis, message, quoting);
+): Promise<number> {
+    return quoting !== undefined && (await anyDeleted(redis, quoting.contentIds))
+        ? await enqueue(redis, quoting.withoutQuotes, undefined)
+        : await enqueue(redis, message, quoting);
 }
 
 function quotesAny(queued: QueuedQuoting, contentIds: readonly string[]): boolean {

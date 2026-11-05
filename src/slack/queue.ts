@@ -76,15 +76,13 @@ function memberOf({ id, queuedAt }: Stamp, message: SlackMessage, quoting: Quoti
     );
 }
 
-export async function enqueue(redis: QueueRedis, message: SlackMessage, quoting: Quoting | undefined): Promise<void> {
+/** Queues the message, and returns how many of the oldest messages it pushed out of a full queue. */
+export async function enqueue(redis: QueueRedis, message: SlackMessage, quoting: Quoting | undefined): Promise<number> {
     const queuedAt = Date.now();
     const member = memberOf({ id: `${String(queuedAt)}:${String(Math.random())}`, queuedAt }, message, quoting);
     await redis.zAdd(QUEUE_KEY, { member, score: queuedAt });
     await redis.expire(QUEUE_KEY, MAX_AGE_SECONDS);
-    const dropped = await redis.zRemRangeByRank(QUEUE_KEY, 0, -(MAX_QUEUED + 1));
-    if (dropped > 0) {
-        console.error("Slack outbox is full: dropped its oldest messages", { dropped });
-    }
+    return await redis.zRemRangeByRank(QUEUE_KEY, 0, -(MAX_QUEUED + 1));
 }
 
 export async function oldest(redis: QueueRedis): Promise<Queued | undefined> {

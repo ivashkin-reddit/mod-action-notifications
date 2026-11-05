@@ -2,7 +2,7 @@ import { failureDetail } from "./webhook.js";
 import type { Delivery } from "./webhook.js";
 
 /** A lasting problem delivering alerts, which the outbox reports rather than logging each alert it affects. */
-export type DeliveryCondition = "slack-refusing" | "slack-unreachable";
+export type DeliveryCondition = "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired";
 
 /**
  * Where the outbox reports delivery conditions: the composition root gives it the health log's. Neither function

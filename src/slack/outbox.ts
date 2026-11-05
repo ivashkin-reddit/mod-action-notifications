@@ -93,13 +93,19 @@ async function deliverWithRetries(drain: Drain, message: SlackMessage, retryCoun
     return await deliverWithRetries(drain, message, retryCount + 1);
 }
 
+/** Why a queued message is dropped unsent: it cannot be read, or it was queued over a day ago. */
+type DropReason = "unreadable" | "expired";
+
 /**
- * What to send for a queued message: undefined for one unreadable or queued over a day ago, and its version without
- * quotes once content it quotes is deleted, which may happen while it waits, even while this drain is under way.
+ * What to send for a queued message, or why to drop it; its version without quotes once content it quotes is
+ * deleted, which may happen while it waits, even while this drain is under way.
  */
-async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Promise<SlackMessage | undefined> {
-    if (queued.message === undefined || Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND) {
-        return undefined;
+async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Promise<SlackMessage | DropReason> {
+    if (queued.message === undefined) {
+        return "unreadable";
+    }
+    if (Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND) {
+        return "expired";
     }
     return queued.quoting !== undefined && (await anyDeleted(redis, queued.quoting.contentIds))
         ? queued.quoting.withoutQuotes
@@ -113,14 +119,24 @@ async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
     return delivery;
 }
 
+/**
+ * Drops a queued message unsent. Alerts dropped for their age are a condition, which lasts while Slack does not take
+ * them; one that cannot be read is left by another version of the app, and logged.
+ */
+async function drop({ outbox }: Drain, queued: Queued, reason: DropReason): Promise<void> {
+    if (reason === "expired") {
+        await outbox.conditions.raise("alerts-expired", "");
+    } else {
+        console.warn("[outbox] Dropped a queued alert it could not read");
+    }
+    await remove(outbox.redis, queued);
+}
+
 /** Delivers the oldest message, or drops one too old or unreadable; a DrainEnd when the queue must wait. */
 async function deliverNext(drain: Drain, queued: Queued): Promise<DrainEnd | undefined> {
     const message = await messageToSend(drain.outbox, queued);
-    if (message === undefined) {
-        console.error("Dropped a Slack message that was unreadable or queued over a day ago", {
-            queuedAt: new Date(queued.queuedAt).toISOString(),
-        });
-        await remove(drain.outbox.redis, queued);
+    if (typeof message === "string") {
+        await drop(drain, queued, message);
         return undefined;
     }
     const delivery = await deliver(drain, message);
@@ -168,6 +184,12 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
     }
 }
 
+/** A drain emptied the queue, which is then neither full nor holding alerts a day old. */
+async function queueEmptied({ conditions }: OutboxDependencies): Promise<void> {
+    await conditions.clear("outbox-full");
+    await conditions.clear("alerts-expired");
+}
+
 async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
     const end = await drainUnderLease(outbox);
     if (end === undefined) {
@@ -179,6 +201,7 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
         await scheduleDrain(outbox, end.afterMs);
         return;
     }
+    await queueEmptied(outbox);
     // A message queued after the drain last looked, but before it let go of the lease, found the lease held, so its
     // sender left it to this drain. A later drain delivers it: one trigger delivers for at most one drain's time,
     // however fast messages arrive.
@@ -198,7 +221,9 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
         send: async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
             try {
-                await enqueueQuoting(outbox.redis, message, quoting);
+                if ((await enqueueQuoting(outbox.redis, message, quoting)) > 0) {
+                    await outbox.conditions.raise("outbox-full", "");
+                }
             } catch (error) {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself.
