@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import type { App } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
-import type { ScheduledJob } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import type { ZMember } from "../fixtures/fakeRedis.js";
+import type { ScheduledJob } from "../fixtures/fakeScheduler.js";
 import type { SlackRequest } from "../fixtures/fakeSlack.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>

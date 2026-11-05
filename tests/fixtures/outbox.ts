@@ -2,8 +2,9 @@ import { vi } from "vitest";
 import type { Mock } from "vitest";
 import { NOW } from "./app.js";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./fakeContext.js";
-import type { FakeContext, ScheduledJob } from "./fakeContext.js";
+import type { FakeContext } from "./fakeContext.js";
 import type { ZMember } from "./fakeRedis.js";
+import type { ScheduledJob } from "./fakeScheduler.js";
 import { createFakeSlack } from "./fakeSlack.js";
 import type { FakeSlack, SlackRequest } from "./fakeSlack.js";
 

@@ -2,6 +2,8 @@ import { vi } from "vitest";
 import type { Mock } from "vitest";
 import { createFakeRedis } from "./fakeRedis.js";
 import type { FakeRedis } from "./fakeRedis.js";
+import { createFakeScheduler } from "./fakeScheduler.js";
+import type { FakeScheduler } from "./fakeScheduler.js";
 
 /**
  * A stand-in for the Devvit context the app's handlers receive. It implements only the members the app uses, and
@@ -68,16 +70,6 @@ export interface ModLogEntry {
     readonly target?: Readonly<{ author: string }>;
 }
 
-/** A scheduled job: a cron job, or a one-off job due at `runAt`. */
-export interface ScheduledJob {
-    readonly id: string;
-    readonly name: string;
-    readonly cron?: string;
-    readonly runAt?: Date;
-}
-
-type JobOptions = Readonly<{ name: string; cron?: string; runAt?: Date }>;
-
 export interface Toast {
     readonly text: string;
     readonly appearance?: string;
@@ -104,6 +96,9 @@ export interface FakeUser {
     readonly username: string;
     readonly getModPermissionsForSubreddit: Mock<(subredditName: string) => Promise<string[]>>;
 }
+
+/** A modmail notification, as `reddit.modMail.createModNotification` takes it. */
+export type ModNotification = Readonly<{ subject: string; bodyMarkdown: string; subredditId: string }>;
 
 export interface FakeReddit {
     /** The mod list's usernames. */
@@ -134,6 +129,10 @@ export interface FakeReddit {
             readonly get: (count: number) => Promise<readonly ModLogEntry[]>;
         }
     >;
+    readonly modMail: Readonly<{
+        /** Sends a notification to the subreddit's modmail, and returns its conversation's ID. */
+        createModNotification: Mock<(notification: ModNotification) => Promise<string>>;
+    }>;
 }
 
 type FakeSubreddit = Readonly<
@@ -198,38 +197,13 @@ function createFakeReddit(subredditName: string): FakeReddit {
             }
             return await Promise.resolve(post);
         }),
+        modMail: {
+            createModNotification: vi.fn(async (): Promise<string> => await Promise.resolve("modmail-1")),
+        },
         getModerationLog: vi.fn((): { readonly get: (count: number) => Promise<readonly ModLogEntry[]> } => ({
             get: async (count: number): Promise<readonly ModLogEntry[]> =>
                 await Promise.resolve(reddit.modLog.slice(0, count)),
         })),
-    });
-}
-
-export interface FakeScheduler {
-    jobs: readonly ScheduledJob[];
-    readonly runJob: Mock<(job: JobOptions) => Promise<string>>;
-    readonly cancelJob: Mock<(id: string) => Promise<void>>;
-    readonly listJobs: Mock<() => Promise<readonly ScheduledJob[]>>;
-}
-
-function createFakeScheduler(): FakeScheduler {
-    const scheduler: Pick<FakeScheduler, "jobs"> = { jobs: [] };
-    let nextId = 1;
-    return Object.assign(scheduler, {
-        runJob: vi.fn(async ({ name, cron, runAt }: JobOptions): Promise<string> => {
-            const id = `job-${String(nextId)}`;
-            nextId += 1;
-            scheduler.jobs = [
-                ...scheduler.jobs,
-                { id, name, ...(cron === undefined ? {} : { cron }), ...(runAt === undefined ? {} : { runAt }) },
-            ];
-            return await Promise.resolve(id);
-        }),
-        cancelJob: vi.fn(async (id: string): Promise<void> => {
-            scheduler.jobs = scheduler.jobs.filter((job: ScheduledJob): boolean => job.id !== id);
-            await Promise.resolve();
-        }),
-        listJobs: vi.fn(async (): Promise<readonly ScheduledJob[]> => await Promise.resolve(scheduler.jobs)),
     });
 }
 

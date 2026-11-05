@@ -1,12 +1,13 @@
 import type { TriggerContext } from "@devvit/public-api";
 import {
     clearCondition,
+    createModmailNotices,
     createRedisConditionStore,
     createRedisEventStore,
     noteEvent,
     raiseCondition,
 } from "./health/index.js";
-import type { Condition, HealthEvent } from "./health/index.js";
+import type { Condition, ConditionPorts, HealthEvent, NoticeReddit } from "./health/index.js";
 import {
     createModListCache,
     createRedditModerationLookups,
@@ -81,7 +82,8 @@ export type AppContext = Readonly<{
             TriggerContext["reddit"],
             "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog" | "getPostById"
         >
-    >;
+    > &
+        NoticeReddit;
     scheduler: Readonly<Pick<TriggerContext["scheduler"], "runJob" | "cancelJob" | "listJobs">>;
     /** Identifies the installation: one app process can serve several. */
     subredditId: string;
@@ -103,9 +105,17 @@ export function alertsConfigured(config: AppConfig): boolean {
     return config.slackWebhookUrl !== "";
 }
 
+/** Where the installation's health conditions are kept, and where moderators are told of them. */
+function conditionPorts(context: AppContext): ConditionPorts {
+    return {
+        store: createRedisConditionStore(context.redis),
+        notices: createModmailNotices(context.reddit, context.subredditId),
+    };
+}
+
 /** Whether alerts can be sent, noting for the health log whether the webhook URL is missing or not a Slack one. */
 async function webhookReady(context: AppContext, config: AppConfig): Promise<boolean> {
-    const conditions = createRedisConditionStore(context.redis);
+    const conditions = conditionPorts(context);
     const missing = !alertsConfigured(config) && !config.slackWebhookUrlInvalid;
     await (missing ? raiseCondition(conditions, "webhook-missing", "") : clearCondition(conditions, "webhook-missing"));
     await (config.slackWebhookUrlInvalid
@@ -137,7 +147,7 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
 
 /** The installation's health log, where the outbox and the monitor report lasting problems. */
 function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
-    const conditions = createRedisConditionStore(context.redis);
+    const conditions = conditionPorts(context);
     return {
         raise: async (condition: Condition, detail: string): Promise<void> => {
             await raiseCondition(conditions, condition, detail);

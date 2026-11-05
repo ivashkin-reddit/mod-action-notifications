@@ -12,13 +12,21 @@ const CONDITIONS_KEY = "health:conditions";
 const CONDITIONS_MEMORY_SECONDS = 604_800;
 const MS_PER_SECOND = 1000;
 
+/** Which conditions moderators were sent a notice of: a hash of when, by condition. */
+const NOTICED_KEY = "health:noticed";
+
+/** Present while a condition's modmail notice is claimed. */
+function noticeKey(condition: Condition): string {
+    return `health:notice:${condition}`;
+}
+
 /** Present while a condition's reminder is claimed. */
 function reminderKey(condition: Condition): string {
     return `health:reminder:${condition}`;
 }
 
 type ConditionRedis = Readonly<
-    Pick<TriggerContext["redis"], "hSetNX" | "hGet" | "hGetAll" | "hDel" | "set" | "expire">
+    Pick<TriggerContext["redis"], "hSetNX" | "hSet" | "hGet" | "hGetAll" | "hDel" | "set" | "expire">
 >;
 
 /** What the hash holds for a condition; undefined for a value this version cannot read. */
@@ -63,5 +71,15 @@ export function createRedisConditionStore(redis: ConditionRedis): ConditionStore
                 expiration: new Date(Date.now() + seconds * MS_PER_SECOND),
             })) !== "",
         end: async (condition: Condition): Promise<boolean> => (await redis.hDel(CONDITIONS_KEY, [condition])) === 1,
+        claimNotice: async (condition: Condition, seconds: number): Promise<boolean> =>
+            (await redis.set(noticeKey(condition), "1", {
+                nx: true,
+                expiration: new Date(Date.now() + seconds * MS_PER_SECOND),
+            })) !== "",
+        recordNotice: async (condition: Condition): Promise<void> => {
+            await redis.hSet(NOTICED_KEY, { [condition]: String(Date.now()) });
+            await redis.expire(NOTICED_KEY, CONDITIONS_MEMORY_SECONDS);
+        },
+        endNotice: async (condition: Condition): Promise<boolean> => (await redis.hDel(NOTICED_KEY, [condition])) === 1,
     };
 }

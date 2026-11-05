@@ -1,6 +1,11 @@
 import { conditionContinuing, conditionResolved, conditionStarted, REMINDER_SECONDS } from "../domain/conditions.js";
-import type { Condition, LogLine } from "../domain/conditions.js";
-import type { ConditionStore } from "./ports.js";
+import type { Condition, InForce, LogLine } from "../domain/conditions.js";
+import { NOTICE_PERIOD_SECONDS, noticeDue, problemNotice, resolvedNotice } from "../domain/notices.js";
+import type { Notice } from "../domain/notices.js";
+import type { ConditionStore, ModeratorNotices } from "./ports.js";
+
+/** What a condition is recorded in, and where moderators are told of one. */
+export type ConditionPorts = Readonly<{ store: ConditionStore; notices: ModeratorNotices }>;
 
 function log({ level, text }: LogLine): void {
     switch (level) {
@@ -30,29 +35,60 @@ async function recording(condition: Condition, record: () => Promise<void>): Pro
     }
 }
 
-async function end(store: ConditionStore, condition: Condition): Promise<void> {
-    if (await store.end(condition)) {
-        log(conditionResolved(condition));
+/** Sends moderators a notice; when modmail cannot take it, logs that, as the work it is about goes on. */
+async function tell({ notices }: ConditionPorts, condition: Condition, notice: Notice): Promise<boolean> {
+    try {
+        await notices.send(notice);
+        return true;
+    } catch (error) {
+        console.warn("[health] Could not send moderators a modmail notice:", { condition, error });
+        return false;
     }
 }
 
-/** Notes that the condition is not in force, logging it when it has just ended. Never rejects. */
-export async function clearCondition(store: ConditionStore, condition: Condition): Promise<void> {
+async function end(ports: ConditionPorts, condition: Condition): Promise<void> {
+    if (!(await ports.store.end(condition))) {
+        return;
+    }
+    log(conditionResolved(condition));
+    if (await ports.store.endNotice(condition)) {
+        await tell(ports, condition, resolvedNotice(condition));
+    }
+}
+
+/**
+ * Notes that the condition is not in force, logging it when it has just ended, and telling moderators when they
+ * were told it had started. Never rejects.
+ */
+export async function clearCondition(ports: ConditionPorts, condition: Condition): Promise<void> {
     await recording(condition, async (): Promise<void> => {
-        await end(store, condition);
+        await end(ports, condition);
     });
 }
 
-async function start(store: ConditionStore, condition: Condition, detail: string): Promise<void> {
-    const started = await store.start(condition, Date.now(), detail);
-    const reminder = await store.claimReminder(condition, REMINDER_SECONDS);
+/** Tells moderators of the condition, when it has lasted long enough and they were not told of it within the day. */
+async function noticeIfDue(ports: ConditionPorts, problem: InForce): Promise<void> {
+    if (
+        noticeDue(problem.condition, problem.since, Date.now()) &&
+        (await ports.store.claimNotice(problem.condition, NOTICE_PERIOD_SECONDS)) &&
+        (await tell(ports, problem.condition, problemNotice(problem)))
+    ) {
+        await ports.store.recordNotice(problem.condition);
+    }
+}
+
+async function start(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {
+    const now = Date.now();
+    const started = await ports.store.start(condition, now, detail);
+    const reminder = await ports.store.claimReminder(condition, REMINDER_SECONDS);
+    const since = started ? now : await ports.store.since(condition);
     if (started) {
         log(conditionStarted(condition, detail));
-        return;
-    }
-    const since = reminder ? await store.since(condition) : undefined;
-    if (since !== undefined) {
+    } else if (reminder && since !== undefined) {
         log(conditionContinuing(condition, detail, since));
+    }
+    if (since !== undefined) {
+        await noticeIfDue(ports, { condition, since, detail });
     }
 }
 
@@ -60,8 +96,8 @@ async function start(store: ConditionStore, condition: Condition, detail: string
  * Notes that the condition is in force, logging it when it has just started, and then once a day; `detail` says what
  * the app saw of it. Never rejects.
  */
-export async function raiseCondition(store: ConditionStore, condition: Condition, detail: string): Promise<void> {
+export async function raiseCondition(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {
     await recording(condition, async (): Promise<void> => {
-        await start(store, condition, detail);
+        await start(ports, condition, detail);
     });
 }
