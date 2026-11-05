@@ -8,7 +8,7 @@ import { createFakeSlack } from "./fakeSlack.js";
 import type { FakeSlack, SlackRequest } from "./fakeSlack.js";
 
 /** The conditions the outbox reports, recorded: each call names the condition, and for a raise, its detail. */
-export type FakeConditions = Readonly<{
+export type FakeHealth = Readonly<{
     raise: Mock<(condition: string, detail: string) => Promise<void>>;
     clear: Mock<(condition: string) => Promise<void>>;
 }>;
@@ -16,11 +16,9 @@ export type FakeConditions = Readonly<{
 /** What the Slack outbox's unit tests build it from, and the fakes behind it. */
 export type OutboxFakes = Readonly<
     {
-        dependencies: Readonly<
-            { webhookUrl: string; conditions: FakeConditions } & Pick<FakeContext, "redis" | "scheduler">
-        >;
+        dependencies: Readonly<{ webhookUrl: string; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">>;
         slack: FakeSlack;
-        conditions: FakeConditions;
+        health: FakeHealth;
     } & Pick<FakeContext, "redis" | "scheduler">
 >;
 
@@ -30,7 +28,7 @@ export function outboxFakes(): OutboxFakes {
     const { context } = createFakeContext(defaultSettings());
     const slack = createFakeSlack();
     vi.stubGlobal("fetch", slack.fetch);
-    const conditions: FakeConditions = {
+    const health: FakeHealth = {
         raise: vi.fn(async (): Promise<void> => {
             await Promise.resolve();
         }),
@@ -39,11 +37,11 @@ export function outboxFakes(): OutboxFakes {
         }),
     };
     return {
-        dependencies: { webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler, conditions },
+        dependencies: { webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler, health },
         redis: context.redis,
         scheduler: context.scheduler,
         slack,
-        conditions,
+        health,
     };
 }
 

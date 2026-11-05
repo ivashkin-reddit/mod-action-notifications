@@ -20,7 +20,7 @@ import {
 } from "./modqueue/index.js";
 import type {
     ModerationQueues,
-    MonitorConditions,
+    MonitorHealth,
     MonitorJobPorts,
     MonitoringSetup,
     MonitorThresholds,
@@ -36,7 +36,7 @@ import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.j
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { createSlackOutbox, forgetContent } from "./slack/delivery.js";
-import type { DeliveryConditions, SlackOutbox } from "./slack/delivery.js";
+import type { DeliveryHealth, SlackOutbox } from "./slack/delivery.js";
 
 /**
  * The composition root's wiring: for each trigger and scheduler job, read the settings and build the capability's
@@ -128,7 +128,7 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
 }
 
 /** The installation's health log, where the outbox and the monitor report lasting problems. */
-function healthConditions(context: AppContext): DeliveryConditions & MonitorConditions {
+function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
     const conditions = createRedisConditionStore(context.redis);
     return {
         raise: async (condition: Condition, detail: string): Promise<void> => {
@@ -146,7 +146,7 @@ function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
         webhookUrl: config.slackWebhookUrl,
         redis: context.redis,
         scheduler: context.scheduler,
-        conditions: healthConditions(context),
+        health: healthReports(context),
     });
 }
 
@@ -205,7 +205,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
         openQueues: async (): Promise<ModerationQueues> => await openRedditQueues(context.reddit),
         store: createRedisMonitorStore(context.redis),
         alerts: createSlackModqueueAlerts(outboxOf(context, config).send, config.alertChannel),
-        conditions: healthConditions(context),
+        health: healthReports(context),
     });
 }
 

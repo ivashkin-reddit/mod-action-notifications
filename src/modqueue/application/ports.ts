@@ -14,7 +14,7 @@ export interface ModerationQueues {
  * Where the monitor reports that it is failing, a condition the health log reports once rather than on every run.
  * Neither function rejects.
  */
-export interface MonitorConditions {
+export interface MonitorHealth {
     /** The monitor is failing; `detail` says why its last run failed. */
     readonly raise: (condition: "monitor-failing", detail: string) => Promise<void>;
     readonly clear: (condition: "monitor-failing") => Promise<void>;

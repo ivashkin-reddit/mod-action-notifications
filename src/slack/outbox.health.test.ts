@@ -21,24 +21,24 @@ describe("the conditions a drain reports", (): void => {
     it("include Slack refusing an alert, with Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const { conditions, outbox, slack } = fakeOutbox();
+        const { health, outbox, slack } = fakeOutbox();
         slack.respond(404);
 
         await drive(outbox.send({ text: "hello" }));
 
-        expect(conditions.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404: error"]]);
+        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404: error"]]);
     });
 
     // An answer from something between the app and Slack, such as an HTML error page, must not fill the log.
     it("give at most 100 characters of Slack's answer", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const { conditions, outbox, slack } = fakeOutbox();
+        const { health, outbox, slack } = fakeOutbox();
         slack.respond({ status: 404, body: `${"x".repeat(100)}and more` });
 
         await drive(outbox.send({ text: "hello" }));
 
-        expect(conditions.raise.mock.calls).toStrictEqual([["slack-refusing", `HTTP 404: ${"x".repeat(100)}`]]);
+        expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", `HTTP 404: ${"x".repeat(100)}`]]);
     });
 
     it.each([
@@ -51,19 +51,19 @@ describe("the conditions a drain reports", (): void => {
         async (_label: string, outcomes: readonly Outcome[], detail: string): Promise<void> => {
             expect.hasAssertions();
 
-            const { conditions, outbox, slack } = fakeOutbox();
+            const { health, outbox, slack } = fakeOutbox();
             slack.respond(...outcomes, ...outcomes, ...outcomes, ...outcomes);
 
             await drive(outbox.send({ text: "hello" }));
 
-            expect(conditions.raise.mock.calls).toStrictEqual([["slack-unreachable", detail]]);
+            expect(health.raise.mock.calls).toStrictEqual([["slack-unreachable", detail]]);
         },
     );
 
     it("include the queue being full, as a new alert pushes out the oldest", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const { conditions, outbox, redis, slack } = fakeOutbox();
+        const { health, outbox, redis, slack } = fakeOutbox();
         for (let index = 0; index < 500; index += 1) {
             await redis.zAdd(QUEUE_KEY, queued(`m${String(index)}`, 500 - index));
         }
@@ -71,18 +71,18 @@ describe("the conditions a drain reports", (): void => {
 
         await drive(outbox.send({ text: "one too many" }));
 
-        expect(conditions.raise.mock.calls[0]).toStrictEqual(["outbox-full", ""]);
+        expect(health.raise.mock.calls[0]).toStrictEqual(["outbox-full", ""]);
     });
 
     it("include an alert dropped after waiting a day", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const { conditions, outbox, redis } = fakeOutbox();
+        const { health, outbox, redis } = fakeOutbox();
         await redis.zAdd(QUEUE_KEY, queued("stale", DAY + 1));
 
         await drive(outbox.deliverQueued());
 
-        expect(conditions.raise.mock.calls).toStrictEqual([["alerts-expired", ""]]);
+        expect(health.raise.mock.calls).toStrictEqual([["alerts-expired", ""]]);
     });
 
     it(
@@ -91,12 +91,12 @@ describe("the conditions a drain reports", (): void => {
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const { conditions, outbox } = fakeOutbox();
+            const { health, outbox } = fakeOutbox();
 
             await drive(outbox.send({ text: "hello" }));
 
-            expect(conditions.raise).not.toHaveBeenCalled();
-            expect(conditions.clear.mock.calls).toStrictEqual([
+            expect(health.raise).not.toHaveBeenCalled();
+            expect(health.clear.mock.calls).toStrictEqual([
                 ["slack-refusing"],
                 ["slack-unreachable"],
                 ["outbox-full"],

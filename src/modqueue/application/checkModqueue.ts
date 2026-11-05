@@ -9,13 +9,13 @@ import {
     OLDEST_ITEMS_LISTED,
 } from "../domain/monitoring.js";
 import type { MonitorThresholds, QueueItem } from "../domain/monitoring.js";
-import type { ModerationQueues, ModqueueAlerts, MonitorConditions, MonitorStore } from "./ports.js";
+import type { ModerationQueues, ModqueueAlerts, MonitorHealth, MonitorStore } from "./ports.js";
 
 export interface CheckModqueuePorts {
     readonly openQueues: () => Promise<ModerationQueues>;
     readonly store: MonitorStore;
     readonly alerts: ModqueueAlerts;
-    readonly conditions: MonitorConditions;
+    readonly health: MonitorHealth;
 }
 
 async function alertIfQueueTooLong(
@@ -91,7 +91,7 @@ async function checkQueues(
         await alertIfOld({ alert: "reported", items, ageHours: thresholds.reportedAgeHours }, ports);
     }
     await clearFailuresAfterSuccess(ports.store);
-    await ports.conditions.clear("monitor-failing");
+    await ports.health.clear("monitor-failing");
 }
 
 /**
@@ -105,7 +105,7 @@ export async function checkModqueue(thresholds: MonitorThresholds, ports: CheckM
         await checkQueues(await ports.openQueues(), thresholds, ports);
     } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        await ports.conditions.raise("monitor-failing", reason);
+        await ports.health.raise("monitor-failing", reason);
         await countFailure(ports, reason);
     }
 }

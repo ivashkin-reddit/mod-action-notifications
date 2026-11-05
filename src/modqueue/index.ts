@@ -9,7 +9,7 @@
 export { isMonitoringEnabled, type MonitorThresholds } from "./domain/monitoring.js";
 export { checkModqueue } from "./application/checkModqueue.js";
 
-export type { ModerationQueues, MonitorConditions } from "./application/ports.js";
+export type { ModerationQueues, MonitorHealth } from "./application/ports.js";
 export {
     monitorJobStatus,
     setupMonitoring,

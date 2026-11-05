@@ -1,8 +1,8 @@
 import type { TriggerContext } from "@devvit/public-api";
-import { reportDelivery } from "./conditions.js";
-import type { DeliveryConditions } from "./conditions.js";
 import { anyDeleted, enqueueQuoting, noteDeleted, queueQuotes, removeDeletedQuotes } from "./deletions.js";
 import type { DeletionRedis } from "./deletions.js";
+import { reportDelivery } from "./health.js";
+import type { DeliveryHealth } from "./health.js";
 import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
@@ -44,7 +44,7 @@ export type OutboxDependencies = QueueDependencies &
         /** An https URL. */
         webhookUrl: string;
         /** Where lasting delivery problems are reported. */
-        conditions: DeliveryConditions;
+        health: DeliveryHealth;
     }>;
 
 export interface SlackOutbox {
@@ -115,7 +115,7 @@ async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Pro
 /** One message's delivery within a drain, reporting what it says about Slack. */
 async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
     const delivery = await deliverWithRetries(drain, message, 0);
-    await reportDelivery(drain.outbox.conditions, delivery);
+    await reportDelivery(drain.outbox.health, delivery);
     return delivery;
 }
 
@@ -125,7 +125,7 @@ async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
  */
 async function drop({ outbox }: Drain, queued: Queued, reason: DropReason): Promise<void> {
     if (reason === "expired") {
-        await outbox.conditions.raise("alerts-expired", "");
+        await outbox.health.raise("alerts-expired", "");
     } else {
         console.warn("[outbox] Dropped a queued alert it could not read");
     }
@@ -185,9 +185,9 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
 }
 
 /** A drain emptied the queue, which is then neither full nor holding alerts a day old. */
-async function queueEmptied({ conditions }: OutboxDependencies): Promise<void> {
-    await conditions.clear("outbox-full");
-    await conditions.clear("alerts-expired");
+async function queueEmptied({ health }: OutboxDependencies): Promise<void> {
+    await health.clear("outbox-full");
+    await health.clear("alerts-expired");
 }
 
 async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
@@ -222,7 +222,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
         send: async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
             try {
                 if ((await enqueueQuoting(outbox.redis, message, quoting)) > 0) {
-                    await outbox.conditions.raise("outbox-full", "");
+                    await outbox.health.raise("outbox-full", "");
                 }
             } catch (error) {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
