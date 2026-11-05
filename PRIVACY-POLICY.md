@@ -72,6 +72,7 @@ All data is used **solely** to send real-time notifications to your subreddit's 
 - Detect rapid-fire moderation activity
 - Alert on high modqueue volume
 - Notify when high-scoring posts are deleted
+- Optionally, post a daily summary of the Bot's own activity (counts only) to Slack
 
 ### 4.3 No Secondary Uses
 

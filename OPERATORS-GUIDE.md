@@ -21,7 +21,8 @@ Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────
 | A deleted comment (`CommentDelete` trigger)      | Takes the comment out of queued alerts.                                                         |
 | The `modqueueMonitor` job, every 15 minutes      | Checks the modqueue, unmoderated and reports listings against your thresholds.                  |
 | The `slackOutbox` job, scheduled as needed       | Delivers alerts still waiting in the queue.                                                     |
-| Install and upgrade (`AppInstall`, `AppUpgrade`) | Schedules or cancels the modqueue monitor to match your settings.                               |
+| The `dailySummary` job, at 08:00 UTC each day    | Posts the summary of the day before, when the Daily Summary setting is on.                      |
+| Install and upgrade (`AppInstall`, `AppUpgrade`) | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary job.    |
 | The mod tools menu                               | Runs the four menu actions, for moderators only.                                                |
 
 ## Deploying
@@ -99,6 +100,7 @@ Moderators set these under the app's settings for the subreddit. The stored name
 | Old Reported Content Alert (Hours) (`reportedContentAgeHours`)                                    | a whole number of 0 or more           | Alert when reported content is at least this many hours old.                                                 |
 | Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                             | Also alert for AutoModerator's actions.                                                                      |
 | Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more           | Alert when a user deletes their own post with at least this score.                                           |
+| Daily Summary (`dailySummary`)                                                                    | on or off                             | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.              |
 
 A threshold of 0 turns its alert off. Turning all three modqueue thresholds off turns the monitor off once **Setup Modqueue Monitoring** runs.
 
@@ -110,6 +112,19 @@ A threshold of 0 turns its alert off. Turning all three modqueue thresholds off 
 - If the settings can't be read at all, the app uses the last settings it read for that subreddit, logging the failure.
 
 **Channels.** The channel settings need a legacy incoming webhook. A webhook created by a Slack app ignores them and posts to the channel it was created for.
+
+## Daily summary
+
+With the Daily Summary setting on, the `dailySummary` job posts to the notification channel at 08:00 UTC. It covers the UTC day before:
+
+- mod actions the app heard of;
+- alerts delivered and dropped;
+- modqueue monitor runs and failures;
+- the problems in force as it is sent.
+
+It goes through the outbox like any alert. It is also a heartbeat: if it stops arriving, Reddit has stopped calling the app, or the app can no longer reach Slack.
+
+Setup (install, upgrade, or **Setup Modqueue Monitoring**) keeps one summary job scheduled whether the setting is on or off, as Devvit has no event for a change of settings; the job reads the setting each morning. Each day's summary is claimed in Redis, so a job that runs twice sends it once.
 
 ## Alerts in detail
 
@@ -214,6 +229,7 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 | `health:conditions`                                               | the health conditions in force, each with when it started                               | 7 days from when one was last met | 7 conditions     |
 | `health:last`                                                     | when each event (a trigger, an alert delivered or dropped, a monitor run) last happened | 7 days from the last              | 7 events         |
 | `health:count:{day}`                                              | how many of each event a UTC day saw                                                    | 8 days                            | 7 counts a day   |
+| `health:summary:{day}`                                            | that the summary of a UTC day was sent                                                  | 2 days                            | 1 per day        |
 | `health:notice:{condition}`                                       | that moderators were sent a notice of the condition within the day                      | 1 day                             | 1 per condition  |
 | `health:noticed`                                                  | the conditions moderators were sent a notice of, so their end is sent                   | 7 days from the last              | 7 conditions     |
 | `health:reminder:{condition}`                                     | that a condition was logged within the day                                              | 1 day                             | 1 per condition  |

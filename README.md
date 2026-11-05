@@ -22,6 +22,8 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Deleted high-score posts.** When a user deletes their own post after it scored highly, a common way to hide content from moderators, the app tells you the post's title, author and score.
 
+**Daily summary.** Turn on the Daily Summary setting for a morning post of the day before's numbers, and any problems.
+
 **Problems in modmail.** If alerts stop reaching Slack (a revoked webhook, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
 **Built for busy days.** Slack accepts about one message a second from a webhook. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
@@ -38,20 +40,21 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 
 ## Settings
 
-| Setting                               | What it does                                                                         | Default                         |
-| ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------- |
-| Slack Webhook URL                     | Where alerts are sent. Only a `https://hooks.slack.com/` address is accepted.        | none                            |
-| Enabled Mod Actions                   | Which moderator actions send an alert.                                               | removals, spam, bans and unbans |
-| Excluded Moderators                   | Moderators whose actions never send an alert, separated by commas (useful for bots). | none                            |
-| Flag Unknown Moderators               | Send actions by accounts not on the mod list as security alerts.                     | on                              |
-| Include Mod Note                      | Show moderator notes in alerts. Reddit includes notes for bans only.                 | on                              |
-| Notification Channel                  | Slack channel for regular alerts.                                                    | the webhook's own channel       |
-| Alert Channel                         | Slack channel for security, modqueue and deleted-post alerts.                        | the notification channel        |
-| Modqueue Size Alert Threshold         | Alert when the modqueue holds at least this many items.                              | 50                              |
-| Unmoderated Content Age Alert (Hours) | Alert when content has waited this long without a moderator reviewing it.            | 24                              |
-| Old Reported Content Alert (Hours)    | Alert when reported content is this old and still waiting.                           | 24                              |
-| Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                        | off                             |
-| Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                   | 100                             |
+| Setting                               | What it does                                                                                                                                                                                    | Default                         |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Slack Webhook URL                     | Where alerts are sent. Only a `https://hooks.slack.com/` address is accepted.                                                                                                                   | none                            |
+| Enabled Mod Actions                   | Which moderator actions send an alert.                                                                                                                                                          | removals, spam, bans and unbans |
+| Excluded Moderators                   | Moderators whose actions never send an alert, separated by commas (useful for bots).                                                                                                            | none                            |
+| Flag Unknown Moderators               | Send actions by accounts not on the mod list as security alerts.                                                                                                                                | on                              |
+| Include Mod Note                      | Show moderator notes in alerts. Reddit includes notes for bans only.                                                                                                                            | on                              |
+| Notification Channel                  | Slack channel for regular alerts.                                                                                                                                                               | the webhook's own channel       |
+| Alert Channel                         | Slack channel for security, modqueue and deleted-post alerts.                                                                                                                                   | the notification channel        |
+| Modqueue Size Alert Threshold         | Alert when the modqueue holds at least this many items.                                                                                                                                         | 50                              |
+| Unmoderated Content Age Alert (Hours) | Alert when content has waited this long without a moderator reviewing it.                                                                                                                       | 24                              |
+| Old Reported Content Alert (Hours)    | Alert when reported content is this old and still waiting.                                                                                                                                      | 24                              |
+| Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                   | off                             |
+| Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                              | 100                             |
+| Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working. | off                             |
 
 Setting a threshold to 0 turns that alert off. The channel settings only work with Slack's legacy incoming webhooks. A webhook created by a Slack app always posts to the channel chosen when it was created.
 
