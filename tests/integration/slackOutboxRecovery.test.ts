@@ -68,8 +68,9 @@ describe("recovering the Slack outbox", (): void => {
         await app.runJob("slackOutbox");
 
         expect(outboxJobs(app.context.scheduler.jobs)).toHaveLength(1);
+        // Only when Slack was last sent a message, which expires a minute after.
         expect(app.context.redis.keys().filter((key: string): boolean => key.startsWith("slack_outbox"))).toStrictEqual(
-            [],
+            ["slack_outbox_last_sent"],
         );
     });
 

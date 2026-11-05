@@ -41,7 +41,7 @@ const STILL_RUNNING = Symbol("still running");
  * Settles `work`, advancing fake time only while it waits on a timer (a Slack retry backoff), so delays happen
  * exactly as long as the app asks for.
  */
-async function drive(work: Readonly<Promise<void>>): Promise<void> {
+export async function drive(work: Readonly<Promise<void>>): Promise<void> {
     const outcome = await Promise.race([
         work,
         vi.advanceTimersToNextTimerAsync().then((): typeof STILL_RUNNING => STILL_RUNNING),

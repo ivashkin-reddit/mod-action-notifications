@@ -83,29 +83,40 @@ function comparable(name: string | undefined): string | undefined {
     return isBlank(name) ? undefined : name.toLowerCase();
 }
 
-/**
- * The first entry describing this ban: the one with its ID; else one for the same user by the same moderator (or
- * by anyone, when the action names no moderator); else one by the same moderator when the action names no user;
- * else one within two minutes of it for the same user (or for anyone, when the action names no user).
- */
-export function matchBanLogEntry(entries: readonly BanLogEntry[], modAction: ModAction): BanLogEntry | undefined {
+/** Ways an entry can describe a ban, the surest first. */
+function banLogMatchers(modAction: ModAction): readonly ((entry: BanLogEntry) => boolean)[] {
     const target = comparable(modAction.target?.author);
     const moderator = comparable(modAction.moderatorName);
     const occurredAt = modAction.occurredAt.getTime();
+    return [
+        (entry: BanLogEntry): boolean => !isBlank(modAction.id) && entry.id === modAction.id,
+        (entry: BanLogEntry): boolean =>
+            target !== undefined &&
+            comparable(entry.targetAuthor) === target &&
+            (moderator === undefined || comparable(entry.moderatorName) === moderator),
+        (entry: BanLogEntry): boolean =>
+            moderator !== undefined && target === undefined && comparable(entry.moderatorName) === moderator,
+        (entry: BanLogEntry): boolean =>
+            Math.abs(entry.createdAt.getTime() - occurredAt) <= BAN_LOG_MATCH_WINDOW_MS &&
+            (target === undefined || comparable(entry.targetAuthor) === target),
+    ];
+}
 
-    return entries.find((entry: BanLogEntry): boolean => {
-        const entryTarget = comparable(entry.targetAuthor);
-        const entryModerator = comparable(entry.moderatorName);
-        const withinWindow = Math.abs(entry.createdAt.getTime() - occurredAt) <= BAN_LOG_MATCH_WINDOW_MS;
-        return (
-            (!isBlank(modAction.id) && entry.id === modAction.id) ||
-            (target !== undefined &&
-                entryTarget === target &&
-                (moderator === undefined || entryModerator === moderator)) ||
-            (moderator !== undefined && entryModerator === moderator && target === undefined) ||
-            (withinWindow && (target === undefined || entryTarget === target))
-        );
-    });
+/**
+ * The entry describing this ban: the one with its ID; else the first for the same user by the same moderator (or
+ * by anyone, when the action names no moderator); else the first by the same moderator when the action names no
+ * user; else the first within two minutes of it for the same user (or for anyone, when the action names no user).
+ * The mod log lists the newest first, and Devvit can deliver a ban after a newer one, so each way of matching is
+ * tried across every entry before the next.
+ */
+export function matchBanLogEntry(entries: readonly BanLogEntry[], modAction: ModAction): BanLogEntry | undefined {
+    for (const matches of banLogMatchers(modAction)) {
+        const entry = entries.find(matches);
+        if (entry !== undefined) {
+            return entry;
+        }
+    }
+    return undefined;
 }
 
 /** `value`, or `fallback` when `value` is blank and `fallback` is not. */

@@ -1,4 +1,4 @@
-import type { SettingsFormField, TriggerContext } from "@devvit/public-api";
+import type { SettingsFormField } from "@devvit/public-api";
 
 const DEFAULT_MODQUEUE_THRESHOLD = 50;
 const DEFAULT_UNMODERATED_AGE_HOURS = 24;
@@ -178,8 +178,10 @@ export interface AppConfig {
     readonly postDeletionUpvoteThreshold: number;
 }
 
-type SettingsReader = Readonly<Pick<TriggerContext["settings"], "get">>;
-type SettingValue = Awaited<ReturnType<SettingsReader["get"]>>;
+// Devvit's client lets a caller name the type a setting comes back as, but checks nothing: a saved value can be
+// anything, so each is read as unknown and parsed. Devvit's client satisfies this.
+type SettingsReader = Readonly<{ get: (name: string) => Promise<unknown> }>;
+type SettingValue = unknown;
 
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {

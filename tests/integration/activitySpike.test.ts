@@ -105,12 +105,10 @@ describe("an activity spike", (): void => {
         const app = await loadApp(devvit);
 
         for (let count = 0; count < 4; count += 1) {
-            await app.fire("ModAction", removedPost());
+            await app.fire("ModAction", removedPost({ actionedAt: NOW }));
         }
-        await app.advance(MINUTE);
-        await app.fire("ModAction", removedPost());
-        await app.advance(1);
-        await app.fire("ModAction", removedPost());
+        await app.fire("ModAction", removedPost({ actionedAt: new Date(NOW.getTime() + MINUTE) }));
+        await app.fire("ModAction", removedPost({ actionedAt: new Date(NOW.getTime() + MINUTE + 1) }));
 
         expect(lastLine(app.slack.messages[4])).toBe("• *Status:* Activity spike 5 actions / 1 min");
         expect(lastLine(app.slack.messages[5])).toBe(WHEN_NOW.replace("12:00:00", "12:01:00"));
@@ -140,7 +138,7 @@ describe("an activity spike", (): void => {
         const app = await loadApp(devvit);
 
         for (let count = 0; count < 105; count += 1) {
-            await app.fire("ModAction", removedPost());
+            await app.fire("ModAction", removedPost({ actionedAt: NOW }));
         }
 
         await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toHaveLength(

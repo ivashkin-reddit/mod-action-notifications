@@ -231,7 +231,8 @@ describe("the modqueue monitor", (): void => {
             "mod_actions:throttle:modqueue_size",
             "mod_actions:throttle:modqueue_unmoderated",
         ]);
-        expect(app.context.redis.ttlSeconds("mod_actions:throttle:modqueue_unmoderated")).toBe(3600);
+        // An hour from when it was claimed: the second alert then waited 1.1 s to keep Slack's pace.
+        expect(app.context.redis.ttlSeconds("mod_actions:throttle:modqueue_unmoderated")).toBe(3600 - 1.1);
     });
 
     it("sends both alerts to the alert channel", TEST_OPTIONS, async (): Promise<void> => {

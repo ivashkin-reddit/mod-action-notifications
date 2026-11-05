@@ -82,7 +82,7 @@ describe("the Slack outbox", (): void => {
             ).toStrictEqual([1100, 1100, 1100, 1100]);
             expect(
                 app.context.redis.keys().filter((key: string): boolean => key.startsWith("slack_outbox")),
-            ).toStrictEqual(["slack_outbox_recovery_scheduled"]);
+            ).toStrictEqual(["slack_outbox_last_sent", "slack_outbox_recovery_scheduled"]);
         },
     );
 

@@ -152,6 +152,16 @@ export const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
         source: 'export * from "../../modqueue/domain/monitoring.js";',
     },
     {
+        rule: "a fixture does not import app code, only its types",
+        file: "tests/fixtures/modActions.ts",
+        source: 'export { isBlank } from "../../src/moderation/domain/modAction.js";',
+    },
+    {
+        rule: "an integration test does not import a domain type",
+        file: "tests/integration/bans.test.ts",
+        source: 'export type { ModAction } from "../../src/moderation/domain/modAction.js";',
+    },
+    {
         rule: "tests reach the app only through main.ts",
         file: "tests/fixtures/app.ts",
         source: 'export * from "../../src/composition.js";',
@@ -239,5 +249,13 @@ export const ALLOWED_IMPORTS: readonly ImportCase[] = [
         rule: "a unit test in a shared module imports that module",
         file: "src/slack/outbox.test.ts",
         source: 'export * from "./outbox.js";',
+    },
+    {
+        rule: "a fixture imports domain and application types, to build what a unit test passes in",
+        file: "tests/fixtures/modActions.ts",
+        source: [
+            'export type { ModAction } from "../../src/moderation/domain/modAction.js";',
+            'export type { ModerationRecords } from "../../src/moderation/application/ports.js";',
+        ].join("\n"),
     },
 ];

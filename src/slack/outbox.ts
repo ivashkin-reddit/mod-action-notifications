@@ -13,6 +13,13 @@ const LEASE_KEY = "slack_outbox_lease";
 const DRAIN_SCHEDULED_KEY = "slack_outbox_drain_scheduled";
 /** Present while a drain is scheduled to follow one that may die before it finishes. */
 const RECOVERY_SCHEDULED_KEY = "slack_outbox_recovery_scheduled";
+/**
+ * When a drain last sent Slack a message, in ms since the epoch: the next drain keeps the pace from it, as each
+ * alert that arrives after a drain has finished starts a drain of its own.
+ */
+const LAST_SENT_KEY = "slack_outbox_last_sent";
+/** Long enough to outlast the pause between two messages. */
+const LAST_SENT_MEMORY_MS = 60_000;
 
 const MS_PER_SECOND = 1000;
 /** Slack takes about one message a second from a webhook. */
@@ -112,6 +119,18 @@ async function enqueue({ redis }: OutboxDependencies, message: SlackMessage): Pr
     }
 }
 
+/** When a drain last sent Slack a message; 0 when none has lately. */
+async function whenLastSent({ redis }: OutboxDependencies): Promise<number> {
+    const at = Number(await redis.get(LAST_SENT_KEY));
+    return Number.isFinite(at) ? at : 0;
+}
+
+/** Notes that a request went to Slack now. Only the drain holding the lease sends, so drains cannot race on it. */
+async function noteSent({ redis }: OutboxDependencies): Promise<void> {
+    const now = Date.now();
+    await redis.set(LAST_SENT_KEY, String(now), { expiration: new Date(now + LAST_SENT_MEMORY_MS) });
+}
+
 async function oldest({ redis }: OutboxDependencies): Promise<Queued | undefined> {
     const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
     return first === undefined ? undefined : queuedOf(first.member);
@@ -120,6 +139,7 @@ async function oldest({ redis }: OutboxDependencies): Promise<Queued | undefined
 /** One message's delivery within a drain: retried after rate limiting and failures, while the drain has time. */
 async function deliverWithRetries(drain: Drain, message: SlackMessage, retryCount: number): Promise<Delivery> {
     const delivery = await attemptDelivery(drain.outbox.webhookUrl, message);
+    await noteSent(drain.outbox);
     if (
         delivery.outcome !== "retry" ||
         retryCount >= MAX_RETRIES_PER_DRAIN ||
@@ -217,7 +237,7 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
         if ((await oldest(outbox)) !== undefined) {
             await scheduleRecovery(outbox);
         }
-        return await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, 0);
+        return await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
     } finally {
         await outbox.redis.del(LEASE_KEY);
     }

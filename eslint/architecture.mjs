@@ -117,6 +117,12 @@ const policies = [
             ],
         },
     },
+    // A fixture may name a domain or application type, to build the values and ports a unit test passes in. A type
+    // import leaves nothing at run time, so integration tests still reach the app only through main.ts.
+    {
+        from: { element: { type: "tests", fileInternalPath: "fixtures/**" } },
+        allow: { to: { element: { type: ["domain", "application"] } }, dependency: { kind: "type" } },
+    },
 ];
 
 const ARCHITECTURE_FILES = [`src/**/*.${TYPESCRIPT}`, `tests/**/*.${TYPESCRIPT}`];
