@@ -9,6 +9,7 @@ export {
     escapeText,
     inChannel,
     quote,
+    withoutTitle,
     type DirectSlackSender,
     type SlackMessage,
     type SlackSender,

@@ -10,13 +10,14 @@ import {
     deliverQueuedAlerts,
     alertOnPostDeletion,
     botStatus,
+    forgetDeletedContent,
     invokedByModerator,
     runModqueueMonitor,
     sendSimulatedModAction,
     setUpModqueueMonitor,
     testSlackConnection,
 } from "./composition.js";
-import type { AppContext, BotStatus, ConnectionTest, InvokerContext } from "./composition.js";
+import type { AppContext, BotStatus, CommentDeleteEvent, ConnectionTest, InvokerContext } from "./composition.js";
 import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
@@ -129,10 +130,20 @@ Devvit.addTrigger({
     },
 });
 
+// A deleted post or comment leaves the alerts still waiting for Slack. The alert about a deleted post names the post,
+// by the owner's decision (AGENTS.md).
 Devvit.addTrigger({
     event: "PostDelete",
     onEvent: async (event: PostDeleteEvent, context: AppContext): Promise<void> => {
+        await forgetDeletedContent(event.postId, context);
         await alertOnPostDeletion(event, context);
+    },
+});
+
+Devvit.addTrigger({
+    event: "CommentDelete",
+    onEvent: async (event: CommentDeleteEvent, context: AppContext): Promise<void> => {
+        await forgetDeletedContent(event.commentId, context);
     },
 });
 

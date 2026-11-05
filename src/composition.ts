@@ -45,7 +45,7 @@ import {
 import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.js";
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
-import { createSlackOutbox, createWebhookSender, sendTestMessage } from "./slack/delivery.js";
+import { createSlackOutbox, createWebhookSender, forgetContent, sendTestMessage } from "./slack/delivery.js";
 import type { SlackOutbox } from "./slack/delivery.js";
 
 /**
@@ -70,6 +70,7 @@ export type AppContext = Readonly<{
             | "zRemRangeByScore"
             | "zRemRangeByRank"
             | "zRange"
+            | "zScore"
         >
     >;
     reddit: Readonly<
@@ -260,6 +261,21 @@ export async function alertOnPostDeletion(event: PostDeleteEvent, context: AppCo
         claims: createRedisDeletionClaims(context.redis),
         alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
     });
+}
+
+/** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */
+export type CommentDeleteEvent = Readonly<{ commentId: string }>;
+
+/**
+ * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, and stays out of any queued
+ * later, whether or not a webhook is set. Logs rather than rejects, so a trigger goes on to its other work.
+ */
+export async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
+    try {
+        await forgetContent({ redis: context.redis, scheduler: context.scheduler }, contentId);
+    } catch (error) {
+        console.error("Failed to take deleted content out of queued Slack alerts:", error);
+    }
 }
 
 /** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while no webhook is set. */

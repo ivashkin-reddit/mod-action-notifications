@@ -5,7 +5,10 @@ export interface ModActionTarget {
     readonly permalink: string | undefined;
     /** The content's text, or a post's title when it has none. */
     readonly body: string | undefined;
-    readonly isComment: boolean;
+    /** The post the action was on, or the comment's post; undefined for an action on a user. */
+    readonly postId: string | undefined;
+    /** The comment the action was on; undefined for an action on a post or a user. */
+    readonly commentId: string | undefined;
 }
 
 /** For an unban or unmute: the ban or mute it lifts. */
@@ -41,6 +44,11 @@ export interface ModAction {
     readonly banDurationLabel: string | undefined;
     readonly relatedAction: RelatedAction | undefined;
     readonly activitySpike: ActivitySpike | undefined;
+}
+
+/** A user, as the target of an action on them rather than on their content. */
+export function userTarget(username: string): ModActionTarget {
+    return { author: username, permalink: undefined, body: undefined, postId: undefined, commentId: undefined };
 }
 
 export function isBlank(value: string | undefined): value is "" | undefined {

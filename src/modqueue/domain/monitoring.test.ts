@@ -15,7 +15,7 @@ const HOUR = 3_600_000;
 
 /** An item created `hoursAgo` hours before NOW. */
 function item(kind: QueueItem["kind"], hoursAgo: number, permalink = `/${kind}/${String(hoursAgo)}`): QueueItem {
-    return { kind, createdAt: new Date(NOW.getTime() - hoursAgo * HOUR), permalink };
+    return { kind, id: "t3_p", postId: "t3_p", createdAt: new Date(NOW.getTime() - hoursAgo * HOUR), permalink };
 }
 
 const OFF: MonitorThresholds = { queueSizeThreshold: 0, unmoderatedAgeHours: 0, reportedAgeHours: 0 };
@@ -85,6 +85,8 @@ describe("how long an item has waited", (): void => {
 
         const waited: QueueItem = {
             kind: "post",
+            id: "t3_p",
+            postId: "t3_p",
             createdAt: new Date(NOW.getTime() - 2 * HOUR - 59 * 60_000),
             permalink: "/p",
         };

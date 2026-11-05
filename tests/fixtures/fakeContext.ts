@@ -52,6 +52,8 @@ export function defaultSettings(): Settings {
 export interface QueueItem {
     readonly id: string;
     readonly title?: string;
+    /** A comment's post; a post has none. */
+    readonly postId?: string;
     readonly createdAt: Date;
     readonly permalink: string;
 }

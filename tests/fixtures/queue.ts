@@ -19,7 +19,12 @@ export function queuedPost(id: string, ageHours: number): QueueItem {
 
 /** A comment that has waited in the modqueue for `ageHours` at NOW. */
 export function queuedComment(id: string, ageHours: number): QueueItem {
-    return { id: `t1_${id}`, createdAt: waitingSince(ageHours), permalink: `/r/testsub/comments/p/c/${id}/` };
+    return {
+        id: `t1_${id}`,
+        postId: "t3_p",
+        createdAt: waitingSince(ageHours),
+        permalink: `/r/testsub/comments/p/c/${id}/`,
+    };
 }
 
 /** `size` posts that have only just arrived. */

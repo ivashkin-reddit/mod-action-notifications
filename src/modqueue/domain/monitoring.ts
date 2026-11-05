@@ -1,6 +1,10 @@
 /** An item waiting in the modqueue. */
 export interface QueueItem {
     readonly kind: "post" | "comment";
+    /** The post's or comment's ID. */
+    readonly id: string;
+    /** The post's ID, or the comment's post's. */
+    readonly postId: string;
     readonly createdAt: Date;
     readonly permalink: string;
 }

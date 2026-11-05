@@ -3,6 +3,7 @@ import { loadApp } from "../fixtures/app.js";
 import { bigPost, removedPost, userDeletion } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { MINUTE } from "../fixtures/messages.js";
+import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -140,6 +141,6 @@ describe("a post deletion delivered again", (): void => {
 
         await app.fire("PostDelete", userDeletion());
 
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesOutbox(app.context.redis)).toStrictEqual([]);
     });
 });

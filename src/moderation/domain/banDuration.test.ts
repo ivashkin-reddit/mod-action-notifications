@@ -33,7 +33,7 @@ const BAN = modAction({
     id: "ModAction_ban",
     type: "banuser",
     moderatorName: "AliceMod",
-    target: { author: "Troll", permalink: undefined, body: undefined, isComment: false },
+    target: { author: "Troll", permalink: undefined, body: undefined, postId: undefined, commentId: undefined },
 });
 
 describe("a ban length", (): void => {

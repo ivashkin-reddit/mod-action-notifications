@@ -110,6 +110,7 @@ All data is stored temporarily in Reddit's Redis infrastructure with automatic e
 | --------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
 | Ban/mute history                              | 90 days          | Pair unbans/unmutes with the bans/mutes they lift                |
 | Queued Slack notifications                    | Up to 1 day      | Deliver notifications at the rate Slack accepts                  |
+| IDs of posts and comments deleted on Reddit   | 1 day            | Leave deleted content out of notifications not yet sent          |
 | Moderator activity                            | 1 hour           | Detect rapid-fire actions                                        |
 | Alert throttling                              | 1 hour           | Prevent notification spam                                        |
 | Alerts already sent (mod action and post IDs) | 1 day            | Avoid sending an alert twice when Reddit delivers an event again |
@@ -145,7 +146,7 @@ When users delete their posts, comments, or accounts on Reddit:
 
 - Post/comment content is removed from our cache within 7-90 days (automatic TTL expiration)
 - Account deletions: User IDs are removed from all stored data
-- The bot respects Reddit's PostDelete and CommentDelete events
+- The bot listens for Reddit's PostDelete and CommentDelete events: a deleted post's or comment's text and title are taken out of notifications not yet sent to Slack, and left out of any sent afterwards, apart from the notification that reports a deleted post (section 2.2). Only the content's ID is kept, for a day.
 
 ### 8.2 Opting Out
 

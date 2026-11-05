@@ -270,8 +270,9 @@ describe("the Slack outbox", (): void => {
 
         const app = await loadApp(devvit);
         await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "late"));
-        // The drain looks twice before it lets go: once as it takes the lease, and once to deliver.
-        app.context.redis.zRange.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+        // The drain looks three times before it lets go: as it takes the lease, to deliver, and for messages quoting
+        // deleted content.
+        app.context.redis.zRange.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
         await app.runJob("slackOutbox");
 

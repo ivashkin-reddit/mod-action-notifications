@@ -145,7 +145,7 @@ describe("an action delivered again", (): void => {
 });
 
 describe("a ban without a length", (): void => {
-    const target = { author: "Troll", permalink: undefined, body: undefined, isComment: false };
+    const target = { author: "Troll", permalink: undefined, body: undefined, postId: undefined, commentId: undefined };
     const ban = modAction({ type: "banuser", target });
     const entry: BanLogEntry = {
         id: "ModAction_1",
@@ -194,7 +194,7 @@ describe("a ban without a length", (): void => {
 });
 
 describe("an unban", (): void => {
-    const target = { author: "Troll", permalink: undefined, body: undefined, isComment: false };
+    const target = { author: "Troll", permalink: undefined, body: undefined, postId: undefined, commentId: undefined };
     const ban = modAction({
         id: "ModAction_ban",
         type: "banuser",

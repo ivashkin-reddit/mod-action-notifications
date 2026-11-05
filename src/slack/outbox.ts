@@ -1,13 +1,16 @@
 import type { TriggerContext } from "@devvit/public-api";
-import type { SlackMessage, SlackSender } from "./message.js";
+import { anyDeleted, enqueueQuoting, noteDeleted, queueQuotes, removeDeletedQuotes } from "./deletions.js";
+import type { DeletionRedis } from "./deletions.js";
+import type { Quoting, SlackMessage, SlackSender } from "./message.js";
+import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
+import type { Queued } from "./queue.js";
 import { attemptDelivery, backoffMs, createWebhookSender, logFailure, wait } from "./webhook.js";
 import type { Delivery } from "./webhook.js";
 
 /** The scheduler job that delivers what an earlier drain left queued; the composition root registers it. */
 export const OUTBOX_JOB_NAME = "slackOutbox";
 
-// The queue, a sorted set of messages scored by when each was queued, and its bookkeeping, each of which expires.
-const QUEUE_KEY = "slack_outbox";
+// The queue's bookkeeping, each key of which expires.
 const LEASE_KEY = "slack_outbox_lease";
 /** Present while a drain is scheduled to continue where one left off. */
 const DRAIN_SCHEDULED_KEY = "slack_outbox_drain_scheduled";
@@ -36,10 +39,6 @@ const LEASE_MARGIN_MS = 5000;
  * drain that dies holds the queue for at most this long.
  */
 const LEASE_MS = DRAIN_BUDGET_MS + SEND_INTERVAL_MS + FETCH_TIMEOUT_MS + LEASE_MARGIN_MS;
-/** A message queued longer than this is dropped: it is no longer news. A day. */
-const MAX_AGE_SECONDS = 86_400;
-/** At most this many messages wait; beyond that the oldest are dropped. */
-const MAX_QUEUED = 500;
 /** Within one drain, a message is retried this many times before the queue waits for a later drain. */
 const MAX_RETRIES_PER_DRAIN = 3;
 /** A later drain runs this long after Slack failed to take a message, unless Slack said when to retry. */
@@ -47,33 +46,26 @@ const RETRY_LATER_MS = 30_000;
 /** A later drain runs this soon after one that used up its time with messages left. */
 const CONTINUE_SOON_MS = 1000;
 
-type OutboxRedis = Readonly<
-    Pick<TriggerContext["redis"], "get" | "set" | "del" | "expire" | "zAdd" | "zRange" | "zRem" | "zRemRangeByRank">
->;
+type OutboxRedis = DeletionRedis & Readonly<Pick<TriggerContext["redis"], "get" | "set" | "del">>;
 type OutboxScheduler = Readonly<Pick<TriggerContext["scheduler"], "runJob">>;
 
-export type OutboxDependencies = Readonly<{
-    /** An https URL. */
-    webhookUrl: string;
-    redis: OutboxRedis;
-    scheduler: OutboxScheduler;
-}>;
+/** What the queue itself needs: enough to forget deleted content, which takes no webhook. */
+export type QueueDependencies = Readonly<{ redis: OutboxRedis; scheduler: OutboxScheduler }>;
+
+export type OutboxDependencies = QueueDependencies &
+    Readonly<{
+        /** An https URL. */
+        webhookUrl: string;
+    }>;
 
 export interface SlackOutbox {
     /**
      * Queues the message, then delivers the queue, oldest first, at Slack's pace; sends it directly when the queue
-     * cannot be written. Never rejects.
+     * cannot be written. A message quoting content already deleted is queued without the quotes. Never rejects.
      */
     readonly send: SlackSender;
     /** Delivers what is queued, as the scheduled job. Rejects when the queue cannot be read. */
     readonly deliverQueued: () => Promise<void>;
-}
-
-/** A queued message, or, for a member this app cannot read, `message` undefined. */
-interface Queued {
-    readonly member: string;
-    readonly queuedAt: number;
-    readonly message: SlackMessage | undefined;
 }
 
 /** Why a drain stopped: the queue is empty, or what is left waits `afterMs` for a later drain. */
@@ -81,42 +73,14 @@ type DrainEnd = Readonly<{ until: "empty" }> | Readonly<{ until: "later"; afterM
 
 type Drain = Readonly<{ outbox: OutboxDependencies; deadline: number }>;
 
-function parsed(json: string): unknown {
-    try {
-        return JSON.parse(json);
-    } catch {
-        // Not JSON: not a member this app wrote.
-        return undefined;
-    }
-}
-
-/** Whether a queued value is a message. The app writes these members itself, so their text is the check. */
-function isSlackMessage(value: unknown): value is SlackMessage {
-    return typeof value === "object" && value !== null && "text" in value && typeof value.text === "string";
-}
-
-function queuedOf(member: string): Queued {
-    const stored = parsed(member);
-    if (typeof stored !== "object" || stored === null || !("queuedAt" in stored) || !("message" in stored)) {
-        return { member, queuedAt: 0, message: undefined };
-    }
-    const { queuedAt, message } = stored;
-    return {
-        member,
-        queuedAt: typeof queuedAt === "number" ? queuedAt : 0,
-        message: isSlackMessage(message) ? message : undefined,
-    };
-}
-
-async function enqueue({ redis }: OutboxDependencies, message: SlackMessage): Promise<void> {
-    const queuedAt = Date.now();
-    const member = JSON.stringify({ id: `${String(queuedAt)}:${String(Math.random())}`, queuedAt, message });
-    await redis.zAdd(QUEUE_KEY, { member, score: queuedAt });
-    await redis.expire(QUEUE_KEY, MAX_AGE_SECONDS);
-    const dropped = await redis.zRemRangeByRank(QUEUE_KEY, 0, -(MAX_QUEUED + 1));
-    if (dropped > 0) {
-        console.error("Slack outbox is full: dropped its oldest messages", { dropped });
-    }
+/** Takes the lease that lets one drain, or one rewrite of the queue, work on it at a time; false when it is held. */
+async function lease({ redis }: QueueDependencies): Promise<boolean> {
+    return (
+        (await redis.set(LEASE_KEY, String(Date.now()), {
+            nx: true,
+            expiration: new Date(Date.now() + LEASE_MS),
+        })) !== ""
+    );
 }
 
 /** When a drain last sent Slack a message; 0 when none has lately. */
@@ -129,11 +93,6 @@ async function whenLastSent({ redis }: OutboxDependencies): Promise<number> {
 async function noteSent({ redis }: OutboxDependencies): Promise<void> {
     const now = Date.now();
     await redis.set(LAST_SENT_KEY, String(now), { expiration: new Date(now + LAST_SENT_MEMORY_MS) });
-}
-
-async function oldest({ redis }: OutboxDependencies): Promise<Queued | undefined> {
-    const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
-    return first === undefined ? undefined : queuedOf(first.member);
 }
 
 /** One message's delivery within a drain: retried after rate limiting and failures, while the drain has time. */
@@ -155,27 +114,43 @@ async function deliverWithRetries(drain: Drain, message: SlackMessage, retryCoun
     return await deliverWithRetries(drain, message, retryCount + 1);
 }
 
-async function drop({ redis }: OutboxDependencies, queued: Queued): Promise<void> {
-    console.error("Dropped a Slack message that was unreadable or queued over a day ago", {
-        queuedAt: new Date(queued.queuedAt).toISOString(),
-    });
-    await redis.zRem(QUEUE_KEY, [queued.member]);
+/**
+ * What to send for a queued message: undefined for one unreadable or queued over a day ago, and its version without
+ * quotes once content it quotes is deleted, which may happen while it waits, even while this drain is under way.
+ */
+async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Promise<SlackMessage | undefined> {
+    if (queued.message === undefined || Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND) {
+        return undefined;
+    }
+    return queued.quoting !== undefined && (await anyDeleted(redis, queued.quoting.contentIds))
+        ? queued.quoting.withoutQuotes
+        : queued.message;
+}
+
+/** One message's delivery within a drain, logging what Slack would not take. */
+async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
+    const delivery = await deliverWithRetries(drain, message, 0);
+    if (delivery.outcome !== "delivered") {
+        logFailure(delivery.failure, message);
+    }
+    return delivery;
 }
 
 /** Delivers the oldest message, or drops one too old or unreadable; a DrainEnd when the queue must wait. */
 async function deliverNext(drain: Drain, queued: Queued): Promise<DrainEnd | undefined> {
-    if (queued.message === undefined || Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND) {
-        await drop(drain.outbox, queued);
+    const message = await messageToSend(drain.outbox, queued);
+    if (message === undefined) {
+        console.error("Dropped a Slack message that was unreadable or queued over a day ago", {
+            queuedAt: new Date(queued.queuedAt).toISOString(),
+        });
+        await remove(drain.outbox.redis, queued);
         return undefined;
     }
-    const delivery = await deliverWithRetries(drain, queued.message, 0);
-    if (delivery.outcome !== "delivered") {
-        logFailure(delivery.failure, queued.message);
-    }
+    const delivery = await deliver(drain, message);
     if (delivery.outcome === "retry") {
         return { until: "later", afterMs: delivery.retryAfterMs ?? RETRY_LATER_MS };
     }
-    await drain.outbox.redis.zRem(QUEUE_KEY, [queued.member]);
+    await remove(drain.outbox.redis, queued);
     return undefined;
 }
 
@@ -184,7 +159,7 @@ async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
     if (Date.now() >= drain.deadline) {
         return { until: "later", afterMs: CONTINUE_SOON_MS };
     }
-    const queued = await oldest(drain.outbox);
+    const queued = await oldest(drain.outbox.redis);
     if (queued === undefined) {
         return { until: "empty" };
     }
@@ -196,7 +171,7 @@ async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
 }
 
 /** Schedules one drain to continue later; a continuation already scheduled covers this one. */
-async function scheduleDrain({ redis, scheduler }: OutboxDependencies, afterMs: number): Promise<void> {
+async function scheduleDrain({ redis, scheduler }: QueueDependencies, afterMs: number): Promise<void> {
     const runAt = new Date(Date.now() + afterMs);
     const claimed =
         (await redis.set(DRAIN_SCHEDULED_KEY, runAt.toISOString(), {
@@ -223,21 +198,22 @@ async function scheduleRecovery({ redis, scheduler }: OutboxDependencies): Promi
     }
 }
 
-/** Drains the queue while holding the lease; undefined when another drain holds it, and will deliver the queue. */
+/**
+ * Drains the queue while holding the lease; undefined when another drain holds it, and will deliver the queue. Before
+ * it lets go, it takes deleted content's quotes out of what is left: only the lease holder does, so none is taken
+ * from a message part way through being sent, and a deletion noted while it held the lease is covered.
+ */
 async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | undefined> {
-    const leased =
-        (await outbox.redis.set(LEASE_KEY, String(Date.now()), {
-            nx: true,
-            expiration: new Date(Date.now() + LEASE_MS),
-        })) !== "";
-    if (!leased) {
+    if (!(await lease(outbox))) {
         return undefined;
     }
     try {
-        if ((await oldest(outbox)) !== undefined) {
+        if ((await oldest(outbox.redis)) !== undefined) {
             await scheduleRecovery(outbox);
         }
-        return await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
+        const end = await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
+        await removeDeletedQuotes(outbox.redis);
+        return end;
     } finally {
         await outbox.redis.del(LEASE_KEY);
     }
@@ -257,7 +233,7 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
     // A message queued after the drain last looked, but before it let go of the lease, found the lease held, so its
     // sender left it to this drain. A later drain delivers it: one trigger delivers for at most one drain's time,
     // however fast messages arrive.
-    if ((await oldest(outbox)) !== undefined) {
+    if ((await oldest(outbox.redis)) !== undefined) {
         await scheduleDrain(outbox, CONTINUE_SOON_MS);
     }
 }
@@ -267,13 +243,13 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
  * delivered in full rather than rate-limited away. One drain delivers at a time (a lease); what it cannot deliver in
  * its time, or while Slack is failing, waits for a scheduled later drain, and what a drain that dies leaves waits for
  * a recovery drain after its lease expires. A message is delivered at least once: a request Slack took but whose
- * answer was lost, or that a dying drain made, is sent again.
+ * answer was lost, or that a dying drain made, is sent again. Content deleted on Reddit leaves the queue's messages.
  */
 export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
-        send: async (message: SlackMessage): Promise<void> => {
+        send: async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
             try {
-                await enqueue(outbox, message);
+                await enqueueQuoting(outbox.redis, message, quoting);
             } catch (error) {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself.
@@ -291,4 +267,25 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
             await deliverQueued(outbox);
         },
     };
+}
+
+/**
+ * Notes that Reddit deleted this post or comment, by its ID: from now on, each message quoting it is sent and stored
+ * without the quotes. Those queued lose them now, unless a drain holds the queue: it takes them out before it lets
+ * go. Needs no webhook, as messages wait in the queue while none is set. Rejects when Redis fails.
+ */
+export async function forgetContent(queue: QueueDependencies, contentId: string): Promise<void> {
+    await noteDeleted(queue.redis, contentId);
+    if (!(await queueQuotes(queue.redis, contentId)) || !(await lease(queue))) {
+        return;
+    }
+    try {
+        await removeDeletedQuotes(queue.redis);
+    } finally {
+        await queue.redis.del(LEASE_KEY);
+    }
+    // A message queued while this held the lease left itself to a drain, as to one under way: a drain follows.
+    if ((await oldest(queue.redis)) !== undefined) {
+        await scheduleDrain(queue, CONTINUE_SOON_MS);
+    }
 }

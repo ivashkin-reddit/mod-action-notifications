@@ -106,7 +106,13 @@ describe("what the app registers with Devvit", (): void => {
             .sort(byText);
 
         expect(registered).toStrictEqual([...devvitJson.blocks.triggers].sort(byText));
-        expect(registered).toStrictEqual(["onAppInstall", "onAppUpgrade", "onModAction", "onPostDelete"]);
+        expect(registered).toStrictEqual([
+            "onAppInstall",
+            "onAppUpgrade",
+            "onCommentDelete",
+            "onModAction",
+            "onPostDelete",
+        ]);
     });
 
     // Devvit 0.15 grants a Blocks app only the permissions devvit.json declares, whatever Devvit.configure says.

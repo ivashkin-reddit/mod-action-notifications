@@ -1,4 +1,4 @@
-import { escapeText, inChannel } from "../../slack/index.js";
+import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { AgedContentAlert, ModqueueAlerts, MonitorFailingAlert, QueueTooLongAlert } from "../application/ports.js";
 import { hoursWaiting } from "../domain/monitoring.js";
@@ -103,17 +103,42 @@ function monitorFailingMessage({ failures, error }: MonitorFailingAlert): SlackM
     };
 }
 
-/** Modqueue alerts as Slack messages, sent to the alert channel when one is set. */
+/** The Reddit content an age alert links to, each link with a post's title in it: each item, and a comment's post. */
+function linkedContent(items: readonly QueueItem[]): readonly string[] {
+    return [...new Set(items.flatMap((item: QueueItem): readonly string[] => [item.id, item.postId]))];
+}
+
+/** The alert as it reads once content it links to is deleted: its links without the posts' titles. */
+function withoutTitles(alert: AgedContentAlert): AgedContentAlert {
+    return {
+        ...alert,
+        oldest: alert.oldest.map((item: QueueItem): QueueItem => ({
+            ...item,
+            permalink: withoutTitle(item.permalink),
+        })),
+    };
+}
+
+/**
+ * Modqueue alerts as Slack messages, sent to the alert channel when one is set. An age alert names the content it
+ * links to, with its version without the posts' titles, to be sent instead if any of it is deleted before it goes.
+ */
 export function createSlackModqueueAlerts(send: SlackSender, alertChannel: string): ModqueueAlerts {
+    const sendAgedContent = async (style: AgedContentStyle, alert: AgedContentAlert): Promise<void> => {
+        await send(inChannel(agedContentMessage(style, alert), alertChannel), {
+            contentIds: linkedContent(alert.oldest),
+            withoutQuotes: inChannel(agedContentMessage(style, withoutTitles(alert)), alertChannel),
+        });
+    };
     return {
         queueTooLong: async (alert: QueueTooLongAlert): Promise<void> => {
             await send(inChannel(queueTooLongMessage(alert), alertChannel));
         },
         waitingTooLong: async (alert: AgedContentAlert): Promise<void> => {
-            await send(inChannel(agedContentMessage(UNMODERATED_STYLE, alert), alertChannel));
+            await sendAgedContent(UNMODERATED_STYLE, alert);
         },
         reportedContentOld: async (alert: AgedContentAlert): Promise<void> => {
-            await send(inChannel(agedContentMessage(REPORTED_STYLE, alert), alertChannel));
+            await sendAgedContent(REPORTED_STYLE, alert);
         },
         monitorFailing: async (alert: MonitorFailingAlert): Promise<void> => {
             await send(inChannel(monitorFailingMessage(alert), alertChannel));

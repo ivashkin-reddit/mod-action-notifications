@@ -23,6 +23,7 @@ export interface FakeRedis {
     readonly zRem: Mock<(key: string, members: readonly string[]) => Promise<number>>;
     readonly zRemRangeByScore: Mock<(key: string, min: number, max: number) => Promise<number>>;
     readonly zRemRangeByRank: Mock<(key: string, start: number, stop: number) => Promise<number>>;
+    readonly zScore: Mock<(key: string, member: string) => Promise<number | undefined>>;
     /**
      * ZRANGE by score (members scored from `start` to `stop`) or by rank (negative ranks count from the end),
      * lowest first: the forms the app uses. Any other form rejects rather than answer differently from Redis.
@@ -32,6 +33,8 @@ export interface FakeRedis {
     >;
     /** Live keys, sorted. */
     readonly keys: () => readonly string[];
+    /** The members of the sorted set at `key`, lowest score first; none when there is no set. */
+    readonly members: (key: string) => readonly string[];
     /** Seconds until `key` expires, or undefined when it does not expire (or does not exist). */
     readonly ttlSeconds: (key: string) => number | undefined;
     /** Writes a value directly, as an earlier app version might have left it. */
@@ -166,7 +169,10 @@ function rangeOf(
     return members.slice(rankIn(start, members.length), rankIn(stop, members.length) + 1);
 }
 
-type SortedSetCommands = Pick<FakeRedis, "zAdd" | "zRem" | "zRemRangeByScore" | "zRemRangeByRank" | "zRange">;
+type SortedSetCommands = Pick<
+    FakeRedis,
+    "zAdd" | "zRem" | "zRemRangeByScore" | "zRemRangeByRank" | "zScore" | "zRange"
+>;
 
 function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
     return {
@@ -199,6 +205,11 @@ function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
             );
             return await Promise.resolve(removed);
         }),
+        zScore: vi.fn(
+            async (key: string, member: string): Promise<number | undefined> =>
+                // Through a Map: a member named like an Object property ("constructor") is not in the set.
+                await Promise.resolve(new Map(Object.entries(scoresAt(keyspace, key))).get(member)),
+        ),
         zRange: vi.fn(
             async (key: string, start: number, stop: number, options?: Readonly<{ by: string }>): Promise<ZMember[]> =>
                 await Promise.resolve(rangeOf(scoresAt(keyspace, key), { start, stop, by: options?.by })),
@@ -213,6 +224,8 @@ export function createFakeRedis(): FakeRedis {
         ...sortedSetCommands(keyspace),
         keys: (): readonly string[] =>
             [...keyspace.keys()].sort((first: string, second: string): number => first.localeCompare(second)),
+        members: (key: string): readonly string[] =>
+            ranked(scoresAt(keyspace, key)).map(({ member }: ZMember): string => member),
         ttlSeconds: (key: string): number | undefined => {
             const expiresAt = keyspace.live(key)?.expiresAt;
             return expiresAt === undefined ? undefined : (expiresAt - Date.now()) / MS_PER_SECOND;

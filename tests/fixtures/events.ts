@@ -1,4 +1,5 @@
 import {
+    CommentDelete,
     DeletionReason,
     EventSource as DeletionSource,
     PostDelete,
@@ -26,7 +27,8 @@ export type ModActionFields = Readonly<{
     targetUser?: Named;
     targetPost?:
         Readonly<{ id?: string; title?: string; selftext?: string; permalink?: string; authorId?: string }> | undefined;
-    targetComment?: Readonly<{ id?: string; body?: string; permalink?: string; author?: string }> | undefined;
+    targetComment?:
+        Readonly<{ id?: string; postId?: string; body?: string; permalink?: string; author?: string }> | undefined;
 }>;
 
 export type PostDeleteFields = Readonly<{
@@ -37,6 +39,20 @@ export type PostDeleteFields = Readonly<{
     author?: Named;
     subreddit?: Named;
 }>;
+
+export type CommentDeleteFields = Readonly<{
+    commentId?: string;
+    postId?: string;
+    source?: DeletionSource;
+    reason?: DeletionReason;
+    deletedAt?: Date | undefined;
+    author?: Named;
+    subreddit?: Named;
+}>;
+
+export function commentDeleteEvent(fields: CommentDeleteFields): CommentDelete & Readonly<{ type: "CommentDelete" }> {
+    return { type: "CommentDelete", ...CommentDelete.fromPartial({ subreddit: { name: SUBREDDIT }, ...fields }) };
+}
 
 export function modActionEvent(fields: ModActionFields): ModAction & Readonly<{ type: "ModAction" }> {
     return { type: "ModAction", ...ModAction.fromPartial({ subreddit: { name: SUBREDDIT }, ...fields }) };

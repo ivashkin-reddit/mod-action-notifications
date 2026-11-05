@@ -1,4 +1,4 @@
-import { escapeText, inChannel, quote } from "../../slack/index.js";
+import { escapeText, inChannel, quote, withoutTitle } from "../../slack/index.js";
 import type { DirectSlackSender, SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
 import { banDurationText } from "../domain/banDuration.js";
@@ -40,7 +40,7 @@ function contentLine(target: ModActionTarget): readonly string[] {
     const permalink = target.permalink.startsWith("http")
         ? target.permalink
         : `https://www.reddit.com${target.permalink}`;
-    return [`• *Content:* <${permalink}|${target.isComment ? "View Comment" : "View Post"}>`];
+    return [`• *Content:* <${permalink}|${target.commentId === undefined ? "View Post" : "View Comment"}>`];
 }
 
 /** A quote of at most 200 characters of the content, written by whoever posted it; none for blank content. */
@@ -141,7 +141,7 @@ function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
 }
 
 function messageLines(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): readonly string[] {
-    const isComment = modAction.target?.isComment === true;
+    const isComment = modAction.target?.commentId !== undefined;
     return [
         ACTOR_STYLES[actor].header,
         `• *Action:* ${actionName(modAction.type, isComment)}`,
@@ -158,7 +158,7 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
     const unknownModerator = actor === "unknown-moderator";
     const style = ACTOR_STYLES[actor];
     const message: SlackMessage = {
-        text: style.text(actionTitle(modAction.type, modAction.target?.isComment === true)),
+        text: style.text(actionTitle(modAction.type, modAction.target?.commentId !== undefined)),
         username: "Reddit Mod Bot",
         icon_emoji: style.icon,
         attachments: [
@@ -174,11 +174,41 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
     return inChannel(message, unknownModerator ? presentation.alertChannel : presentation.notificationChannel);
 }
 
-/** Mod-action alerts as Slack messages, handed to `send`, which queues them. */
+/** The Reddit content an action's alert quotes: the comment's or post's text, and the post's title in its link. */
+function quotedContent(target: ModActionTarget | undefined): readonly string[] {
+    return [target?.commentId, target?.postId].filter((id: string | undefined): id is string => id !== undefined);
+}
+
+/** The action as its alert shows it once the content is deleted: without the content's text, or a title in its link. */
+function withoutContent(modAction: ModAction): ModAction {
+    const { target } = modAction;
+    return target === undefined
+        ? modAction
+        : {
+              ...modAction,
+              target: {
+                  ...target,
+                  body: undefined,
+                  permalink: target.permalink === undefined ? undefined : withoutTitle(target.permalink),
+              },
+          };
+}
+
+/**
+ * Mod-action alerts as Slack messages, handed to `send`, which queues them. An alert on a post or comment says so,
+ * with its version without the content, to be sent instead if the content is deleted before the alert goes.
+ */
 export function createSlackModActionAlerts(send: SlackSender, presentation: ModActionPresentation): ModActionAlerts {
     return {
         report: async (modAction: ModAction, actor: Actor): Promise<void> => {
-            await send(modActionMessage(modAction, presentation, actor));
+            const message = modActionMessage(modAction, presentation, actor);
+            const contentIds = quotedContent(modAction.target);
+            await (contentIds.length === 0
+                ? send(message)
+                : send(message, {
+                      contentIds,
+                      withoutQuotes: modActionMessage(withoutContent(modAction), presentation, actor),
+                  }));
         },
     };
 }

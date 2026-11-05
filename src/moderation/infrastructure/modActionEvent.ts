@@ -1,4 +1,4 @@
-import { isAutoModeratorName, isBlank } from "../domain/modAction.js";
+import { isAutoModeratorName, isBlank, userTarget } from "../domain/modAction.js";
 import type { ModAction, ModActionTarget } from "../domain/modAction.js";
 
 /** What the app reads from a ModAction trigger event; Devvit's event type satisfies it. */
@@ -10,7 +10,8 @@ export type ModActionEvent = Readonly<{
     moderator?: Readonly<{ name: string }> | undefined;
     targetUser?: Readonly<{ name: string }> | undefined;
     targetPost?: Readonly<{ id: string; permalink: string; selftext: string; title: string }> | undefined;
-    targetComment?: Readonly<{ id: string; author: string; permalink: string; body: string }> | undefined;
+    targetComment?:
+        Readonly<{ id: string; postId: string; author: string; permalink: string; body: string }> | undefined;
 }>;
 
 /** `value`, or `fallback` when `value` is blank. */
@@ -31,7 +32,8 @@ function targetOf(event: ModActionEvent): ModActionTarget | undefined {
             author: orIfBlank(username, targetComment.author),
             permalink: targetComment.permalink,
             body: targetComment.body,
-            isComment: true,
+            postId: isBlank(targetComment.postId) ? undefined : targetComment.postId,
+            commentId: targetComment.id,
         };
     }
     const author = isBlank(username) ? undefined : username;
@@ -40,10 +42,11 @@ function targetOf(event: ModActionEvent): ModActionTarget | undefined {
             author,
             permalink: targetPost.permalink,
             body: orIfBlank(targetPost.selftext, targetPost.title),
-            isComment: false,
+            postId: targetPost.id,
+            commentId: undefined,
         };
     }
-    return author === undefined ? undefined : { author, permalink: undefined, body: undefined, isComment: false };
+    return author === undefined ? undefined : userTarget(author);
 }
 
 /** When the action was taken: the event's `actionedAt`, or now for an event without a valid one. */

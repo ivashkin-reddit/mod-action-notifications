@@ -23,10 +23,17 @@ export interface SlackField {
 }
 
 /**
- * Hands a message over for delivery to Slack, which may come later: alerts are queued and delivered at Slack's
- * pace. Never rejects: what cannot be delivered is retried, then logged.
+ * What a message quotes from Reddit: the IDs of the posts and comments its text comes from (t3_ and t1_ IDs), and
+ * the same message without that text or their titles, to send instead once any of them is deleted on Reddit.
  */
-export type SlackSender = (message: SlackMessage) => Promise<void>;
+export type Quoting = Readonly<{ contentIds: readonly string[]; withoutQuotes: SlackMessage }>;
+
+/**
+ * Hands a message over for delivery to Slack, which may come later: alerts are queued and delivered at Slack's
+ * pace. A message that quotes Reddit content says so, and loses the quotes if that content is deleted before it is
+ * sent. Never rejects: what cannot be delivered is retried, then logged.
+ */
+export type SlackSender = (message: SlackMessage, quoting?: Quoting) => Promise<void>;
 
 /** Sends a message to Slack now, for a moderator waiting on the result: true when Slack accepted it. Never rejects. */
 export type DirectSlackSender = (message: SlackMessage) => Promise<boolean>;
@@ -56,4 +63,19 @@ export function inChannel(message: SlackMessage, name: string): SlackMessage {
         return message;
     }
     return { ...message, channel: name.startsWith("#") ? name : `#${name}` };
+}
+
+/**
+ * A Reddit permalink without the post's title in it: a post's `/r/sub/comments/abc/title/` becomes
+ * `/r/sub/comments/abc/`, and a comment's `/r/sub/comments/abc/title/def/` becomes `/r/sub/comments/abc/_/def/`.
+ * Reddit reads the link by its IDs, so it still opens the same post or comment. Other links are left as they are.
+ */
+export function withoutTitle(permalink: string): string {
+    const match = /\/comments\/(?<post>[\da-z]+)\/[^#/?]+(?:\/(?<comment>[\da-z]+))?\/?$/iu.exec(permalink);
+    const post = match?.groups?.["post"];
+    if (match === null || post === undefined) {
+        return permalink;
+    }
+    const comment = match.groups?.["comment"];
+    return `${permalink.slice(0, match.index)}/comments/${post}/${comment === undefined ? "" : `_/${comment}/`}`;
 }

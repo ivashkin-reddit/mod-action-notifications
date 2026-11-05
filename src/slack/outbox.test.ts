@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { drive, NOW } from "../../tests/fixtures/app.js";
-import { createFakeContext, defaultSettings, WEBHOOK_URL } from "../../tests/fixtures/fakeContext.js";
-import type { FakeContext, ScheduledJob } from "../../tests/fixtures/fakeContext.js";
-import type { ZMember } from "../../tests/fixtures/fakeRedis.js";
-import { createFakeSlack } from "../../tests/fixtures/fakeSlack.js";
-import type { FakeSlack, SlackRequest } from "../../tests/fixtures/fakeSlack.js";
+import { drains, outboxFakes, queued, sendTimes, texts } from "../../tests/fixtures/outbox.js";
+import type { OutboxFakes } from "../../tests/fixtures/outbox.js";
 import { createSlackOutbox } from "./outbox.js";
 import type { SlackOutbox } from "./outbox.js";
 
@@ -15,42 +12,10 @@ const LEASE_KEY = "slack_outbox_lease";
 const LEASE_MS = 46_100;
 const DAY = 86_400_000;
 
-type Outbox = Readonly<{ outbox: SlackOutbox; slack: FakeSlack } & Pick<FakeContext, "redis" | "scheduler">>;
-
 /** An outbox on fake Redis, scheduler and Slack, with the clock frozen at NOW. */
-function fakeOutbox(): Outbox {
-    vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
-    const { context } = createFakeContext(defaultSettings());
-    const slack = createFakeSlack();
-    vi.stubGlobal("fetch", slack.fetch);
-    return {
-        outbox: createSlackOutbox({ webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler }),
-        redis: context.redis,
-        scheduler: context.scheduler,
-        slack,
-    };
-}
-
-/** A message in the queue as an earlier send left it, queued `ago` ms before NOW. */
-function queued(text: string, ago = 0): ZMember {
-    const queuedAt = NOW.getTime() - ago;
-    return { member: JSON.stringify({ id: text, queuedAt, message: { text } }), score: queuedAt };
-}
-
-function texts(messages: FakeSlack["messages"]): string[] {
-    return messages.map((sent): string => sent.text);
-}
-
-/** When each request reached Slack, in ms after NOW. */
-function sendTimes(requests: readonly SlackRequest[]): number[] {
-    return requests.map((request: SlackRequest): number => request.sentAt - NOW.getTime());
-}
-
-/** When each scheduled drain is due, in ms after NOW. */
-function drains(jobs: readonly ScheduledJob[]): (number | undefined)[] {
-    return jobs.map((job: ScheduledJob): number | undefined =>
-        job.runAt === undefined ? undefined : job.runAt.getTime() - NOW.getTime(),
-    );
+function fakeOutbox(): OutboxFakes & Readonly<{ outbox: SlackOutbox }> {
+    const fakes = outboxFakes();
+    return { ...fakes, outbox: createSlackOutbox(fakes.dependencies) };
 }
 
 describe("sending through the outbox", (): void => {

@@ -1,5 +1,5 @@
 import { banLengthLabel, daysLabel } from "../domain/banDuration.js";
-import { isAutoModeratorName, isBlank } from "../domain/modAction.js";
+import { isAutoModeratorName, isBlank, userTarget } from "../domain/modAction.js";
 import type { ModAction } from "../domain/modAction.js";
 import type { SimulationAlerts } from "./ports.js";
 
@@ -46,10 +46,7 @@ function simulatedModAction(request: SimulationRequest, subredditName: string | 
         type: request.actionType,
         moderatorName,
         subredditName: subredditName ?? "unknown",
-        target:
-            request.targetUser === undefined
-                ? undefined
-                : { author: request.targetUser, permalink: undefined, body: undefined, isComment: false },
+        target: request.targetUser === undefined ? undefined : userTarget(request.targetUser),
         description: request.includeModNote ? (request.modNote ?? "Simulation note") : undefined,
         occurredAt: new Date(),
         isAutoModerator: isAutoModeratorName(moderatorName),

@@ -47,7 +47,10 @@ describe("whose discipline an action concerns", (): void => {
         ["no subreddit", { subredditName: undefined }],
         ["a blank subreddit", { subredditName: "" }],
         ["no target", { target: undefined }],
-        ["a target with no name", { target: { author: "", permalink: undefined, body: undefined, isComment: false } }],
+        [
+            "a target with no name",
+            { target: { author: "", permalink: undefined, body: undefined, postId: undefined, commentId: undefined } },
+        ],
     ])("is no one's for an action with %s", TEST_OPTIONS, (_label: string, fields: Readonly<object>): void => {
         expect.hasAssertions();
 
