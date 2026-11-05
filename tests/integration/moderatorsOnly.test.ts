@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp } from "./support/app.js";
-import { fakeUser } from "./support/fakeContext.js";
-import type { FakeDevvit } from "./support/fakeDevvit.js";
+import { loadApp } from "../fixtures/app.js";
+import { fakeUser } from "../fixtures/fakeContext.js";
+import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
-    (await import("./support/fakeDevvit.js")).createFakeDevvit(),
+    (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
 );
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 

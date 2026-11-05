@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp, NOW } from "./support/app.js";
-import { bigPost, DeletionReason, DeletionSource, userDeletion } from "./support/events.js";
-import type { Settings } from "./support/fakeContext.js";
-import type { FakeDevvit } from "./support/fakeDevvit.js";
-import { lastField } from "./support/messages.js";
-import { keysBesidesOutbox } from "./support/redisKeys.js";
+import { loadApp, NOW } from "../fixtures/app.js";
+import { bigPost, DeletionReason, DeletionSource, userDeletion } from "../fixtures/events.js";
+import type { Settings } from "../fixtures/fakeContext.js";
+import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import { lastField } from "../fixtures/messages.js";
+import { keysBesidesOutbox } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
-    (await import("./support/fakeDevvit.js")).createFakeDevvit(),
+    (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
 );
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 

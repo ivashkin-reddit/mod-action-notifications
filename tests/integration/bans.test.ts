@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp, NOW } from "./support/app.js";
-import { bannedUser } from "./support/events.js";
-import type { FakeDevvit } from "./support/fakeDevvit.js";
-import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "./support/messages.js";
+import { loadApp, NOW } from "../fixtures/app.js";
+import { bannedUser } from "../fixtures/events.js";
+import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "../fixtures/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
-    (await import("./support/fakeDevvit.js")).createFakeDevvit(),
+    (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
 );
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 

@@ -1,4 +1,4 @@
-// The import cases tests/architecture.test.ts lints: each forbidden one must be reported, each allowed one must not.
+// The import cases tests/integration/architecture.test.ts lints: each forbidden one must be reported, each allowed one must not.
 
 /** Source code to lint as if it were the content of `file`. */
 export interface ImportCase {
@@ -49,10 +49,10 @@ export const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
     },
     {
         rule: "a test does not mock the app's own modules",
-        file: "tests/bans.test.ts",
+        file: "tests/integration/bans.test.ts",
         source: [
             'import { vi } from "vitest";',
-            'vi.mock("../src/moderation/infrastructure/redditModeration.js", () => ({}));',
+            'vi.mock("../../src/moderation/infrastructure/redditModeration.js", () => ({}));',
         ].join("\n"),
         reportedBy: "no-restricted-syntax",
     },
@@ -144,17 +144,22 @@ export const FORBIDDEN_IMPORTS: readonly ImportCase[] = [
     {
         rule: "production code does not import test support",
         file: "src/slack/webhook.ts",
-        source: 'export * from "../../tests/support/fakeSlack.js";',
+        source: 'export * from "../../tests/fixtures/fakeSlack.js";',
+    },
+    {
+        rule: "a unit test does not import another capability",
+        file: "src/moderation/domain/discipline.test.ts",
+        source: 'export * from "../../modqueue/domain/monitoring.js";',
     },
     {
         rule: "tests reach the app only through main.ts",
-        file: "tests/support/app.ts",
+        file: "tests/fixtures/app.ts",
         source: 'export * from "../../src/composition.js";',
     },
     {
         rule: "tests do not import a module directly",
-        file: "tests/modActionMessage.test.ts",
-        source: 'export * from "../src/moderation/index.js";',
+        file: "tests/integration/modActionMessage.test.ts",
+        source: 'export * from "../../src/moderation/index.js";',
     },
 ];
 
@@ -205,13 +210,34 @@ export const ALLOWED_IMPORTS: readonly ImportCase[] = [
         source: 'export { Devvit } from "@devvit/public-api";\nexport * from "./composition.js";',
     },
     {
-        rule: "a test imports main.ts, test support and devvit.json",
-        file: "tests/registration.test.ts",
+        rule: "an integration test imports main.ts, test fixtures and devvit.json",
+        file: "tests/integration/registration.test.ts",
         source: [
-            'import devvitJson from "../devvit.json" with { type: "json" };',
-            'export * from "../src/main.js";',
-            'export * from "./support/app.js";',
+            'import devvitJson from "../../devvit.json" with { type: "json" };',
+            'export * from "../../src/main.js";',
+            'export * from "../fixtures/app.js";',
             "export { devvitJson };",
         ].join("\n"),
+    },
+    {
+        rule: "a unit test imports the file beside it and its test tools",
+        file: "src/moderation/domain/discipline.test.ts",
+        source: ['import { describe } from "vitest";', 'export * from "./discipline.js";', "export { describe };"].join(
+            "\n",
+        ),
+    },
+    {
+        rule: "a unit test of an adapter imports its module's ports and the test fixtures",
+        file: "src/moderation/infrastructure/redisModerationRecords.test.ts",
+        source: [
+            'export * from "./redisModerationRecords.js";',
+            'export type * from "../application/ports.js";',
+            'export * from "../../../tests/fixtures/fakeRedis.js";',
+        ].join("\n"),
+    },
+    {
+        rule: "a unit test in a shared module imports that module",
+        file: "src/slack/outbox.test.ts",
+        source: 'export * from "./outbox.js";',
     },
 ];

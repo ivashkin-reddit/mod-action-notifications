@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import devvitJson from "../devvit.json" with { type: "json" };
-import { loadApp } from "./support/app.js";
-import type { FakeDevvit } from "./support/fakeDevvit.js";
+import devvitJson from "../../devvit.json" with { type: "json" };
+import { loadApp } from "../fixtures/app.js";
+import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
-    (await import("./support/fakeDevvit.js")).createFakeDevvit(),
+    (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
 );
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 

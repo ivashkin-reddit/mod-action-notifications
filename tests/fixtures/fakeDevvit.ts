@@ -4,7 +4,7 @@
  *
  * Each test file mocks @devvit/public-api with one instance:
  *
- *   const devvit = await vi.hoisted(async () => (await import('./support/fakeDevvit.js')).createFakeDevvit());
+ *   const devvit = await vi.hoisted(async () => (await import('../fixtures/fakeDevvit.js')).createFakeDevvit());
  *   vi.mock('@devvit/public-api', () => ({ Devvit: devvit.api }));
  */
 

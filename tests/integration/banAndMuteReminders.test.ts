@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp, NOW } from "./support/app.js";
-import { bannedUser, modActionEvent } from "./support/events.js";
-import type { FakeDevvit } from "./support/fakeDevvit.js";
-import type { SlackMessage } from "./support/fakeSlack.js";
-import { lines, MINUTE, onlyMessage } from "./support/messages.js";
+import { loadApp, NOW } from "../fixtures/app.js";
+import { bannedUser, modActionEvent } from "../fixtures/events.js";
+import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import type { SlackMessage } from "../fixtures/fakeSlack.js";
+import { lines, MINUTE, onlyMessage } from "../fixtures/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
-    (await import("./support/fakeDevvit.js")).createFakeDevvit(),
+    (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
 );
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 

@@ -13,13 +13,13 @@ export const tests = defineConfig(
     {
         // Fakes implement Devvit's client methods with Devvit's own signatures, such as
         // RedisClient.zRange(key, start, stop, options), which take more parameters than max-params allows.
-        files: ["tests/support/fake*.ts"],
+        files: ["tests/fixtures/fake*.ts"],
         rules: {
             "@typescript-eslint/max-params": "off",
         },
     },
     {
-        files: ["**/*.test.ts"],
+        files: ["**/*.test.{ts,tsx,mts,cts}"],
         plugins: { vitest },
         settings: {
             vitest: {
@@ -45,7 +45,7 @@ export const tests = defineConfig(
             "max-statements": "off",
             // Tests replay trigger events one at a time, as Devvit delivers them: each must finish before the next starts.
             "no-await-in-loop": "off",
-            // Conflicts: tests mock @devvit/public-api with a fake Devvit (tests/support/fakeDevvit.ts) implementing only
+            // Conflicts: tests mock @devvit/public-api with a fake Devvit (tests/fixtures/fakeDevvit.ts) implementing only
             // the registration API the app calls; vi.mock(import(...)) requires the factory to return the module's type.
             "vitest/prefer-import-in-mock": "off",
             "@typescript-eslint/naming-convention": [

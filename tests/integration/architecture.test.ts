@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
-import { ALLOWED_IMPORTS, FORBIDDEN_IMPORTS } from "./support/architectureCases.js";
-import type { ImportCase } from "./support/architectureCases.js";
+import { ALLOWED_IMPORTS, FORBIDDEN_IMPORTS } from "./architectureCases.js";
+import type { ImportCase } from "./architectureCases.js";
 
 // Lints imports that break the architecture, and imports it must keep allowing, through the project's own ESLint
 // config. A dependency upgrade or config change that stops a boundary rule from firing fails here rather than
@@ -77,7 +77,7 @@ describe("architecture rules", (): void => {
 // capability's folder, or in a folder beside its layers, would count as the capability's interface and escape the
 // layer rules. These tests keep src to the layout the rules assume.
 
-const SRC = fileURLToPath(new URL("../src", import.meta.url));
+const SRC = fileURLToPath(new URL("../../src", import.meta.url));
 // The composition root.
 const EDGE_FILES = ["composition.ts", "main.ts"];
 // Modules without layers: each is its own files, importing only each other.

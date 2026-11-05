@@ -6,6 +6,9 @@ import { createConfig } from "eslint-plugin-boundaries/config";
 // src and tests belongs to an element, and an import between elements is an error unless a policy below allows it.
 // Policies are evaluated in order and the last one that matches decides.
 
+// Every extension TypeScript compiles, so a .tsx or .mts file is held to the same rules as a .ts one.
+const TYPESCRIPT = "{ts,tsx,mts,cts}";
+
 /** @type {import("eslint-plugin-boundaries").ElementDescriptors} */
 const ELEMENTS = [
     // A capability module's three layers: pure rules, use cases with their ports, and adapters.
@@ -16,8 +19,12 @@ const ELEMENTS = [
     { type: "module", pattern: "src/*", capture: ["module"], partialMatch: false },
     // The files directly under src: main.ts, which registers with Devvit, and composition.ts, which builds adapters.
     { type: "edge", pattern: "src", partialMatch: false },
+    // Integration tests and the fixtures they share.
     { type: "tests", pattern: "tests", partialMatch: false },
 ];
+
+/** A unit test beside the file it tests, `<file>.test.ts`: part of that file's element, and of this category. */
+const UNIT_TEST = "unit-test";
 
 const SAME_MODULE = { module: "{{from.element.captured.module}}" };
 const INTERFACE = "index.ts";
@@ -79,12 +86,14 @@ const policies = [
         },
     },
 
-    // Production code never imports a test or test support...
+    // Production code never imports a test or a fixture, and nothing imports a unit test, so none reaches the bundle
+    // Devvit builds from main.ts...
     {
-        disallow: { to: { element: { type: "tests" } } },
-        message: "Production code may not import a test or test support ({{dependency.source}}).",
+        disallow: { to: [{ element: { type: "tests" } }, { file: { categories: UNIT_TEST } }] },
+        message: "Only tests import a test fixture, and nothing imports a unit test ({{dependency.source}}).",
     },
-    // ...while tests reach the app only through what main.ts registers, plus test support, devvit.json and libraries.
+    // ...while integration tests reach the app only through what main.ts registers, plus fixtures, devvit.json and
+    // libraries...
     {
         from: { element: { type: "tests" } },
         allow: {
@@ -96,10 +105,20 @@ const policies = [
             ],
         },
     },
+    // ...and a unit test reaches the module it sits in, any of its layers, plus fixtures and libraries: it may test
+    // a domain file with vitest, or an adapter with a fake.
+    {
+        from: { file: { categories: UNIT_TEST } },
+        allow: {
+            to: [
+                { element: { type: ["domain", "application", "infrastructure", "module"], captured: SAME_MODULE } },
+                { element: { type: "tests" } },
+                { module: { origin: ["external", "core"] } },
+            ],
+        },
+    },
 ];
 
-// Every extension TypeScript compiles, so a .tsx or .mts file is held to the same rules as a .ts one.
-const TYPESCRIPT = "{ts,tsx,mts,cts}";
 const ARCHITECTURE_FILES = [`src/**/*.${TYPESCRIPT}`, `tests/**/*.${TYPESCRIPT}`];
 const CORE_FILES = [`src/*/domain/**/*.${TYPESCRIPT}`, `src/*/application/**/*.${TYPESCRIPT}`];
 
@@ -147,8 +166,10 @@ export const architecture = defineConfig(
         settings: { "import/resolver": { typescript: true } },
     },
     {
-        // Importing no library (the policies below) leaves the globals: these reach outside the process too.
+        // Importing no library (the policies below) leaves the globals: these reach outside the process too. A unit test
+        // beside the code may use them, fake timers included.
         files: CORE_FILES,
+        ignores: [`src/**/*.test.${TYPESCRIPT}`],
         rules: {
             "no-restricted-globals": ["error", ...IO_GLOBAL_NAMES],
             "no-restricted-properties": ["error", ...IO_GLOBAL_PROPERTIES],
@@ -177,8 +198,11 @@ export const architecture = defineConfig(
         settings: {
             "boundaries/root-path": path.resolve(import.meta.dirname, ".."),
             "boundaries/elements": ELEMENTS,
-            // devvit.json, which a test checks against what the app registers.
-            "boundaries/files": [{ pattern: "devvit.json", category: "devvit-config" }],
+            // devvit.json, which a test checks against what the app registers, and unit tests beside the code.
+            "boundaries/files": [
+                { pattern: "devvit.json", category: "devvit-config" },
+                { pattern: `src/**/*.test.${TYPESCRIPT}`, category: UNIT_TEST },
+            ],
         },
         rules: {
             "boundaries/dependencies": [
