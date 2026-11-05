@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp } from "../fixtures/app.js";
+import { loadApp, NOW } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
+import { createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
 import type { ModNotification } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
@@ -11,7 +12,8 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 
 const TEST_OPTIONS = { timeout: 5000 };
 const MINUTE = 60_000;
-const DAY = 86_400_000;
+const DAY_SECONDS = 86_400;
+const DAY = DAY_SECONDS * 1000;
 /** Slack failing every attempt one drain makes at an alert, so the alert waits in the queue. */
 const SLACK_DOWN = [503, 503, 503, 503] as const;
 
@@ -158,7 +160,49 @@ describe("a missing webhook", (): void => {
     });
 });
 
+// Stored data: renaming these keys would lose what installations hold.
+describe("the notices sent", (): void => {
+    it(
+        "are claimed for a day each, and kept for a week so their end is sent",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.slack.respond(404);
+
+            await app.fire("ModAction", removedPost());
+
+            await expect(app.context.redis.hGetAll("health:noticed")).resolves.toStrictEqual({
+                "slack-refusing": String(NOW.getTime()),
+            });
+            expect(app.context.redis.ttlSeconds("health:noticed")).toBe(7 * DAY_SECONDS);
+            expect(app.context.redis.ttlSeconds("health:notice:slack-refusing")).toBe(DAY_SECONDS);
+        },
+    );
+});
+
 describe("a notice modmail cannot take", (): void => {
+    it(
+        "is not sent for an installation Devvit names by something other than a subreddit ID",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            const { context: installation } = createFakeContext(defaultSettings(), "not-a-subreddit");
+            app.slack.respond(404);
+
+            await app.fire("ModAction", removedPost(), installation);
+
+            expect(installation.reddit.modMail.createModNotification).not.toHaveBeenCalled();
+            expect(console.warn).toHaveBeenCalledWith("[health] Could not send moderators a modmail notice:", {
+                condition: "slack-refusing",
+                error: new Error("Not a subreddit ID: not-a-subreddit"),
+            });
+        },
+    );
+
     it("is logged, and the work it was about goes on", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
