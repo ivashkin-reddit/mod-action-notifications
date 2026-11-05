@@ -81,7 +81,7 @@ Devvit.addTrigger({
     },
 });
 
-// The modqueue monitor. A failing run rejects, so the scheduler records it.
+// The modqueue monitor. A run that fails reports the monitor as failing, in the health log, and resolves.
 Devvit.addSchedulerJob({
     name: MONITOR_JOB_NAME,
     onRun: async (_event: unknown, context: AppContext): Promise<void> => {

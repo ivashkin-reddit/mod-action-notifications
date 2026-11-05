@@ -3,7 +3,13 @@
  * than each time it meets it, as Devvit keeps only 5,000 log entries.
  */
 export type Condition =
-    "webhook-missing" | "webhook-invalid" | "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired";
+    | "webhook-missing"
+    | "webhook-invalid"
+    | "slack-refusing"
+    | "slack-unreachable"
+    | "outbox-full"
+    | "alerts-expired"
+    | "monitor-failing";
 
 export type LogLevel = "error" | "warn" | "info";
 
@@ -55,6 +61,12 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         level: "error",
         started: (): string => "Alerts are being dropped after waiting a day without reaching Slack.",
         resolved: "The alert queue has emptied: no more alerts are dropped for their age.",
+    },
+    "monitor-failing": {
+        level: "error",
+        started: (detail: string): string =>
+            `The modqueue monitor is failing (${detail}), so no modqueue alerts are sent until it recovers.`,
+        resolved: "The modqueue monitor is working again.",
     },
 };
 

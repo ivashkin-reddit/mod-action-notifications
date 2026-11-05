@@ -117,6 +117,27 @@ describe("a Slack that refuses alerts", (): void => {
     });
 });
 
+// Devvit records nothing an app can read about a failed scheduler run, so a run that fails logs it and resolves.
+describe("a failing modqueue monitor", (): void => {
+    it("is logged once while it fails, and as recovered once a run succeeds", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 5 });
+        app.context.reddit.modQueueAll
+            .mockRejectedValueOnce(new Error("reddit 503"))
+            .mockRejectedValueOnce(new Error("reddit 503"));
+        await app.runJob("modqueueMonitor");
+        await app.runJob("modqueueMonitor");
+
+        await app.runJob("modqueueMonitor");
+
+        expect(console.error).toHaveBeenCalledExactlyOnceWith(
+            "[health] The modqueue monitor is failing (reddit 503), so no modqueue alerts are sent until it recovers.",
+        );
+        expect(console.info).toHaveBeenCalledExactlyOnceWith("[health] The modqueue monitor is working again.");
+    });
+});
+
 describe("recording a condition", (): void => {
     it("never stops an alert, and says so when Redis fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

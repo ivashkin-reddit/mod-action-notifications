@@ -18,7 +18,13 @@ import {
     openRedditQueues,
     setupMonitoring,
 } from "./modqueue/index.js";
-import type { ModerationQueues, MonitorJobPorts, MonitoringSetup, MonitorThresholds } from "./modqueue/index.js";
+import type {
+    ModerationQueues,
+    MonitorConditions,
+    MonitorJobPorts,
+    MonitoringSetup,
+    MonitorThresholds,
+} from "./modqueue/index.js";
 import {
     alertOnUserDeletion,
     createRedditPostLookup,
@@ -117,8 +123,8 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
     return { upvoteThreshold: config.postDeletionUpvoteThreshold };
 }
 
-/** The installation's health log, where the outbox reports lasting delivery problems. */
-function deliveryConditions(context: AppContext): DeliveryConditions {
+/** The installation's health log, where the outbox and the monitor report lasting problems. */
+function healthConditions(context: AppContext): DeliveryConditions & MonitorConditions {
     const conditions = createRedisConditionStore(context.redis);
     return {
         raise: async (condition: Condition, detail: string): Promise<void> => {
@@ -136,7 +142,7 @@ function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
         webhookUrl: config.slackWebhookUrl,
         redis: context.redis,
         scheduler: context.scheduler,
-        conditions: deliveryConditions(context),
+        conditions: healthConditions(context),
     });
 }
 
@@ -188,6 +194,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
         openQueues: async (): Promise<ModerationQueues> => await openRedditQueues(context.reddit),
         store: createRedisMonitorStore(context.redis),
         alerts: createSlackModqueueAlerts(outboxOf(context, config).send, config.alertChannel),
+        conditions: healthConditions(context),
     });
 }
 

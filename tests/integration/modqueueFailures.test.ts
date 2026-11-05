@@ -12,17 +12,22 @@ const TEST_OPTIONS = { timeout: 5000 };
 const FAILURE_KEY = "scheduler_failure_count";
 const HOUR = 3_600_000;
 
+/** The health log's line for the monitor failing, with why. */
+function failing(reason: string): string {
+    return `[health] The modqueue monitor is failing (${reason}), so no modqueue alerts are sent until it recovers.`;
+}
+
 describe("a failing modqueue monitor run", (): void => {
-    it("fails the job, logs the error and counts the failure for an hour", TEST_OPTIONS, async (): Promise<void> => {
+    it("logs the monitor as failing, and counts the failure for an hour", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
         const error = new Error("reddit 503");
         app.context.reddit.modQueueAll.mockRejectedValue(error);
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow(error);
+        await app.runJob("modqueueMonitor");
 
-        expect(console.error).toHaveBeenCalledWith("Failed to check modqueue:", error);
+        expect(console.error).toHaveBeenCalledWith(failing("reddit 503"));
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
         expect(app.context.redis.ttlSeconds(FAILURE_KEY)).toBe(3600);
         expect(app.slack.requests).toStrictEqual([]);
@@ -38,7 +43,7 @@ describe("a failing modqueue monitor run", (): void => {
             app.context.reddit.modQueueAll.mockRejectedValue(new Error("reddit 503"));
 
             for (let run = 0; run < 6; run += 1) {
-                await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
+                await app.runJob("modqueueMonitor");
             }
 
             const alert = {
@@ -79,7 +84,7 @@ describe("a failing modqueue monitor run", (): void => {
             app.context.reddit.modQueueAll.mockRejectedValue(new Error(""));
 
             for (let run = 0; run < 3; run += 1) {
-                await expect(app.runJob("modqueueMonitor")).rejects.toThrow(new Error(""));
+                await app.runJob("modqueueMonitor");
             }
 
             const [message] = app.slack.messages;
@@ -99,12 +104,12 @@ describe("a failing modqueue monitor run", (): void => {
         const app = await loadApp(devvit);
         app.context.reddit.modQueueAll.mockRejectedValue(new Error("reddit 503"));
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
+        await app.runJob("modqueueMonitor");
 
         await app.advance(HOUR);
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
+        await app.runJob("modqueueMonitor");
+        await app.runJob("modqueueMonitor");
 
         expect(app.slack.requests).toStrictEqual([]);
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("2");
@@ -116,13 +121,13 @@ describe("a failing modqueue monitor run", (): void => {
         const app = await loadApp(devvit);
         app.context.reddit.modQueueAll.mockRejectedValueOnce(new Error("one")).mockRejectedValueOnce(new Error("two"));
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("one");
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("two");
+        await app.runJob("modqueueMonitor");
+        await app.runJob("modqueueMonitor");
 
         await app.runJob("modqueueMonitor");
         app.context.reddit.modQueueAll.mockRejectedValueOnce(new Error("three"));
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("three");
+        await app.runJob("modqueueMonitor");
 
         expect(app.slack.requests).toStrictEqual([]);
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
@@ -134,7 +139,7 @@ describe("a failing modqueue monitor run", (): void => {
         const app = await loadApp(devvit);
         app.context.reddit.modQueueAll.mockRejectedValue("reddit said no");
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toBe("reddit said no");
+        await app.runJob("modqueueMonitor");
 
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
     });
@@ -148,25 +153,21 @@ describe("a failing modqueue monitor run", (): void => {
         const failure = new Error("reddit down");
         app.context.reddit.getCurrentSubreddit.mockRejectedValue(failure);
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit down");
+        await app.runJob("modqueueMonitor");
 
         await expect(app.context.redis.get(FAILURE_KEY)).resolves.toBe("1");
-        expect(console.error).toHaveBeenCalledWith("Failed to check modqueue:", failure);
+        expect(console.error).toHaveBeenCalledWith(failing("reddit down"));
     });
 
-    it(
-        "still fails the job with the original error when counting the failure fails",
-        TEST_OPTIONS,
-        async (): Promise<void> => {
-            expect.hasAssertions();
+    it("still reports the failure when counting it fails", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
 
-            const app = await loadApp(devvit);
-            app.context.reddit.modQueueAll.mockRejectedValue(new Error("reddit 503"));
-            app.context.redis.incrBy.mockRejectedValue(new Error("redis down"));
+        const app = await loadApp(devvit);
+        app.context.reddit.modQueueAll.mockRejectedValue(new Error("reddit 503"));
+        app.context.redis.incrBy.mockRejectedValue(new Error("redis down"));
 
-            await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
+        await app.runJob("modqueueMonitor");
 
-            expect(console.error).toHaveBeenCalledWith("Failed to track scheduler failures:", new Error("redis down"));
-        },
-    );
+        expect(console.error).toHaveBeenCalledWith("Failed to track scheduler failures:", new Error("redis down"));
+    });
 });

@@ -100,13 +100,14 @@ describe("the old reported content alert", (): void => {
         expect(app.context.reddit.reportsAll).not.toHaveBeenCalled();
     });
 
-    it("fails the run when the reports cannot be read, counting the failure", TEST_OPTIONS, async (): Promise<void> => {
+    it("counts a failure to read the reports", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, ONLY_REPORTED);
         app.context.reddit.reportsAll.mockRejectedValue(new Error("reddit 503"));
 
-        await expect(app.runJob("modqueueMonitor")).rejects.toThrow("reddit 503");
+        await app.runJob("modqueueMonitor");
+
         await expect(app.context.redis.get("scheduler_failure_count")).resolves.toBe("1");
     });
 });
