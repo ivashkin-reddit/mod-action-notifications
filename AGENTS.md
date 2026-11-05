@@ -63,4 +63,6 @@ A modular monolith on Devvit Blocks: one module per business capability, two sha
 
 ## Dependencies
 
-`typescript` stays on `~6.0`: TypeScript 7 drops the compiler API that typescript-eslint parses with. Move to 7 once a typescript-eslint release's `typescript` peer range includes it.
+Dependabot proposes updates ([.github/dependabot.yml](.github/dependabot.yml)): one weekly pull request for minor and patch versions, one per major version, and one for GitHub Actions.
+
+`typescript` stays on `~6.0`, and the Dependabot config holds it there: TypeScript 7 drops the compiler API that typescript-eslint parses with. Move to 7 once a typescript-eslint release's `typescript` peer range includes it.

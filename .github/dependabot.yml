@@ -1,0 +1,23 @@
+# Dependency updates: npm packages and the GitHub Actions the workflows use, checked weekly.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # One pull request for everything short of a major version; each major version gets its own.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # WORKAROUND: TypeScript is held on 6
+      #   cause: TypeScript 7 drops the compiler API that typescript-eslint parses with.
+      #   blocked: no typescript-eslint release's typescript peer range includes 7 yet.
+      #   fix: upgrade TypeScript together with a typescript-eslint release that supports 7, then delete this entry.
+      #   until: a typescript-eslint release's typescript peer range includes 7 (AGENTS.md, Dependencies).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
