@@ -214,6 +214,8 @@ Slack accepts about one message a second from an incoming webhook. Every alert t
 | `health:conditions`                                               | the health conditions in force, each with when it started                               | 7 days from when one was last met | 7 conditions     |
 | `health:last`                                                     | when each event (a trigger, an alert delivered or dropped, a monitor run) last happened | 7 days from the last              | 7 events         |
 | `health:count:{day}`                                              | how many of each event a UTC day saw                                                    | 8 days                            | 7 counts a day   |
+| `health:notice:{condition}`                                       | that moderators were sent a notice of the condition within the day                      | 1 day                             | 1 per condition  |
+| `health:noticed`                                                  | the conditions moderators were sent a notice of, so their end is sent                   | 7 days from the last              | 7 conditions     |
 | `health:reminder:{condition}`                                     | that a condition was logged within the day                                              | 1 day                             | 1 per condition  |
 | `slack_outbox_deleted`                                            | the IDs of posts and comments deleted on Reddit, by time                                | 1 day and 1 second                | one per deletion |
 | `slack_outbox_lease`                                              | which run is delivering                                                                 | 46.1 seconds                      | 1 key            |
@@ -293,15 +295,17 @@ Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`
 
 **Health conditions.** A problem that lasts is a condition. It is logged once when it starts, once a day while it lasts (`Since <time>: …`), and once, at INFO, when it ends. This keeps it from filling the 5,000 entries.
 
-| Condition                              | Level | Starts when                                                        | Ends when                      |
-| -------------------------------------- | ----- | ------------------------------------------------------------------ | ------------------------------ |
-| No Slack webhook URL is set            | WARN  | a mod action finds no webhook set                                  | a mod action finds one         |
-| The webhook URL is not a Slack one     | ERROR | a mod action finds a URL saved before the app checked it on saving | a mod action finds a Slack one |
-| Slack is refusing alerts               | ERROR | Slack refuses an alert (4xx other than 429), which is dropped      | Slack takes an alert           |
-| Slack is not taking alerts             | WARN  | a run leaves an alert queued after Slack failed or timed out       | Slack takes an alert           |
-| The alert queue is full                | ERROR | a new alert pushes the oldest of 500 out                           | a run empties the queue        |
-| Alerts are dropped after waiting a day | ERROR | a run drops an alert queued over a day ago                         | a run empties the queue        |
-| The modqueue monitor is failing        | ERROR | a monitor run fails                                                | a monitor run succeeds         |
+| Condition                              | Level | Starts when                                                        | Ends when                      | Modmail            |
+| -------------------------------------- | ----- | ------------------------------------------------------------------ | ------------------------------ | ------------------ |
+| No Slack webhook URL is set            | WARN  | a mod action finds no webhook set                                  | a mod action finds one         | never              |
+| The webhook URL is not a Slack one     | ERROR | a mod action finds a URL saved before the app checked it on saving | a mod action finds a Slack one | at once            |
+| Slack is refusing alerts               | ERROR | Slack refuses an alert (4xx other than 429), which is dropped      | Slack takes an alert           | at once            |
+| Slack is not taking alerts             | WARN  | a run leaves an alert queued after Slack failed or timed out       | Slack takes an alert           | after half an hour |
+| The alert queue is full                | ERROR | a new alert pushes the oldest of 500 out                           | a run empties the queue        | at once            |
+| Alerts are dropped after waiting a day | ERROR | a run drops an alert queued over a day ago                         | a run empties the queue        | at once            |
+| The modqueue monitor is failing        | ERROR | a monitor run fails                                                | a monitor run succeeds         | after half an hour |
+
+**Modmail notices.** Slack may be the very thing that is broken, so a condition moderators must act on also goes to the subreddit's modmail, as a notification from the app's account (in modmail's Notifications). The Modmail column says when. A notice gives the problem, what the app saw, what to do and when it started. Each condition is sent at most once a day, so a problem that comes and goes doesn't flood modmail, and again each day it lasts. Its end is sent too, when its start was. A notice modmail can't take (for example if the app's account is banned) is logged as `[health] Could not send moderators a modmail notice:`.
 
 Lines that need attention besides those:
 

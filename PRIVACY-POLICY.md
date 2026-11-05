@@ -94,7 +94,13 @@ We **do not**:
 - Only the Slack workspace you configure receives notifications
 - Slack's data handling is governed by [Slack's Privacy Policy](https://slack.com/trust/privacy/privacy-policy)
 
-### 5.2 Reddit's Devvit Platform
+### 5.2 Your Subreddit's Modmail
+
+- When the Bot cannot deliver notifications to Slack, or its modqueue monitoring keeps failing, it sends a notification about its own problem to your subreddit's modmail, from the app's account
+- These notifications describe the Bot's problem and what to do; they contain no Reddit content or user data
+- At most one is sent per problem per day, and one when the problem is over
+
+### 5.3 Reddit's Devvit Platform
 
 - Configuration settings are stored in Reddit's secure Devvit infrastructure
 - We do not operate any external servers or databases

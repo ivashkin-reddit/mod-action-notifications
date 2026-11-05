@@ -22,6 +22,8 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Deleted high-score posts.** When a user deletes their own post after it scored highly, a common way to hide content from moderators, the app tells you the post's title, author and score.
 
+**Problems in modmail.** If alerts stop reaching Slack (a revoked webhook, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
+
 **Built for busy days.** Slack accepts about one message a second from a webhook. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
 
 ## Getting started
