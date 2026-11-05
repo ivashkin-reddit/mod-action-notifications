@@ -10,6 +10,10 @@ A change is done when every step in [.github/workflows/test.yml](.github/workflo
 
 `npm run playtest` (`devvit playtest`) is the only check against Reddit itself and needs the user's Reddit login: hand that step to the user, naming what to exercise.
 
+## Documentation
+
+[README.md](README.md) tells moderators what the app does and how to set it up, in plain terms; Reddit's app review reads it. [OPERATORS-GUIDE.md](OPERATORS-GUIDE.md) holds how it works: alert handling, delivery, stored data, deployment and troubleshooting. A change to behaviour, settings, stored data or a user-facing message updates whichever of them describes it, and [PRIVACY-POLICY.md](PRIVACY-POLICY.md) when it changes what is stored or sent.
+
 ## Architecture
 
 A modular monolith on Devvit Blocks: one module per business capability, two shared modules, and a composition root.

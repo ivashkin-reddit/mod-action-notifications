@@ -75,13 +75,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         type: "string",
         name: "alertChannel",
         label: "Alert Channel",
-        helpText: "Separate channel for unknown moderator alerts (optional, uses main channel if empty)",
+        helpText:
+            "Channel for security, modqueue and deleted-post alerts (optional; uses the notification channel if empty)",
     },
     {
         type: "number",
         name: "modqueueThreshold",
         label: "Modqueue Size Alert Threshold",
-        helpText: "Send alert when modqueue exceeds this many items (0 to disable)",
+        helpText: "Alert when the modqueue holds at least this many items (0 to disable)",
         defaultValue: DEFAULT_MODQUEUE_THRESHOLD,
         onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
             wholeNumberProblem(value),
