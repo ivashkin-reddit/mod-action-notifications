@@ -1,11 +1,11 @@
-import type { TriggerContext } from "@devvit/public-api";
 import { anyDeleted, enqueueQuoting, noteDeleted, queueQuotes, removeDeletedQuotes } from "./deletions.js";
-import type { DeletionRedis } from "./deletions.js";
+import { callWithRetries, waitAfter, whenLastSent } from "./drain.js";
+import type { Drain, DrainEnd, OutboxDependencies, QueueDependencies } from "./drain.js";
 import { reportDelivery } from "./health.js";
-import type { DeliveryHealth } from "./health.js";
 import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
+import { oldestRedaction, queueRedactions, redactNext } from "./redactions.js";
 import {
     continuationStarted,
     CONTINUE_SOON_MS,
@@ -16,36 +16,11 @@ import {
     scheduleRecovery,
     SEND_INTERVAL_MS,
 } from "./schedule.js";
-import { backoffMs, createDirectSender, postMessage, wait } from "./webApi.js";
-import type { Delivery } from "./webApi.js";
-
-// The drain's bookkeeping, which expires.
-/**
- * When a drain last sent Slack a message, in ms since the epoch: the next drain keeps the pace from it, as each
- * alert that arrives after a drain has finished starts a drain of its own.
- */
-const LAST_SENT_KEY = "slack_outbox_last_sent";
-/** Long enough to outlast the pause between two messages. */
-const LAST_SENT_MEMORY_MS = 60_000;
+import { rememberSent, takeSent } from "./sent.js";
+import { createDirectSender, postMessage, wait } from "./webApi.js";
+import type { Delivery, Posted } from "./webApi.js";
 
 const MS_PER_SECOND = 1000;
-/** Within one drain, a message is retried this many times before the queue waits for a later drain. */
-const MAX_RETRIES_PER_DRAIN = 3;
-/** A later drain runs this long after Slack failed to take a message, unless Slack said when to retry. */
-const RETRY_LATER_MS = 30_000;
-type OutboxRedis = DeletionRedis & Readonly<Pick<TriggerContext["redis"], "get" | "set" | "del">>;
-type OutboxScheduler = Readonly<Pick<TriggerContext["scheduler"], "runJob">>;
-
-/** What the queue itself needs: enough to forget deleted content, which takes no bot token. */
-export type QueueDependencies = Readonly<{ redis: OutboxRedis; scheduler: OutboxScheduler }>;
-
-export type OutboxDependencies = QueueDependencies &
-    Readonly<{
-        /** The Slack app's bot token. */
-        token: string;
-        /** Where lasting delivery problems are reported. */
-        health: DeliveryHealth;
-    }>;
 
 export interface SlackOutbox {
     /**
@@ -57,50 +32,17 @@ export interface SlackOutbox {
     readonly deliverQueued: () => Promise<void>;
 }
 
-/** Why a drain stopped: the queue is empty, or what is left waits `afterMs` for a later drain. */
-type DrainEnd = Readonly<{ until: "empty" }> | Readonly<{ until: "later"; afterMs: number }>;
-
-type Drain = Readonly<{ outbox: OutboxDependencies; deadline: number }>;
-
-/** When a drain last sent Slack a message; 0 when none has lately. */
-async function whenLastSent({ redis }: OutboxDependencies): Promise<number> {
-    const at = Number(await redis.get(LAST_SENT_KEY));
-    return Number.isFinite(at) ? at : 0;
-}
-
-/** Notes that a request went to Slack now. Only the drain holding the lease sends, so drains cannot race on it. */
-async function noteSent({ redis }: OutboxDependencies): Promise<void> {
-    const now = Date.now();
-    await redis.set(LAST_SENT_KEY, String(now), { expiration: new Date(now + LAST_SENT_MEMORY_MS) });
-}
-
-/** One message's delivery within a drain: retried after rate limiting and failures, while the drain has time. */
-async function deliverWithRetries(drain: Drain, message: SlackMessage, retryCount: number): Promise<Delivery> {
-    const delivery = await postMessage(drain.outbox.token, message);
-    await noteSent(drain.outbox);
-    if (
-        delivery.outcome !== "retry" ||
-        retryCount >= MAX_RETRIES_PER_DRAIN ||
-        (delivery.failure.kind === "error" && delivery.failure.ranOutOfTime)
-    ) {
-        return delivery;
-    }
-    const delay = delivery.retryAfterMs ?? backoffMs(retryCount);
-    if (Date.now() + delay >= drain.deadline) {
-        return delivery;
-    }
-    await wait(delay);
-    return await deliverWithRetries(drain, message, retryCount + 1);
-}
-
 /** Why a queued message is dropped unsent: it cannot be read, or it was queued over a day ago. */
 type DropReason = "unreadable" | "expired";
+
+/** What to post for a queued message: the message, and what it quotes when it goes with its quotes. */
+type ToSend = Readonly<{ message: SlackMessage; quoting: Quoting | undefined }>;
 
 /**
  * What to send for a queued message, or why to drop it; its version without quotes once content it quotes is
  * deleted, which may happen while it waits, even while this drain is under way.
  */
-async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Promise<SlackMessage | DropReason> {
+async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Promise<ToSend | DropReason> {
     if (queued.message === undefined) {
         return "unreadable";
     }
@@ -108,15 +50,8 @@ async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Pro
         return "expired";
     }
     return queued.quoting !== undefined && (await anyDeleted(redis, queued.quoting.contentIds))
-        ? queued.quoting.withoutQuotes
-        : queued.message;
-}
-
-/** One message's delivery within a drain, reporting what it says about Slack. */
-async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
-    const delivery = await deliverWithRetries(drain, message, 0);
-    await reportDelivery(drain.outbox.health, delivery);
-    return delivery;
+        ? { message: queued.quoting.withoutQuotes, quoting: undefined }
+        : { message: queued.message, quoting: queued.quoting };
 }
 
 /**
@@ -133,35 +68,100 @@ async function drop({ outbox }: Drain, queued: Queued, reason: DropReason): Prom
     await remove(outbox.redis, queued);
 }
 
+/**
+ * Remembers where Slack put an alert it took with quotes of Reddit content, so a later deletion of that content can
+ * take it out. Content deleted while the alert was on its way found nothing to take it out of, so the alert is
+ * redacted at once. When Redis cannot remember it, the alert keeps its quotes, and that is reported. An alert
+ * without quotes, or one whose place Slack did not say, is not remembered.
+ */
+async function rememberQuoting(
+    { outbox }: Drain,
+    delivery: Delivery<Posted>,
+    quoting: Quoting | undefined,
+): Promise<void> {
+    if (delivery.outcome !== "delivered" || quoting === undefined || delivery.answer.ts === "") {
+        return;
+    }
+    const posted = delivery.answer;
+    try {
+        await rememberSent(outbox.redis, posted, quoting);
+        if (await anyDeleted(outbox.redis, quoting.contentIds)) {
+            await queueRedactions(outbox.redis, [{ posted, withoutQuotes: quoting.withoutQuotes }]);
+        }
+    } catch (error) {
+        await outbox.health.raise(
+            "redactions-failing",
+            `could not remember where an alert went: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+}
+
+/** Posts a message within a drain, reporting what Slack's answer says about Slack. */
+async function post(drain: Drain, message: SlackMessage): Promise<Delivery<Posted>> {
+    const { health, token } = drain.outbox;
+    const delivery = await callWithRetries(
+        drain,
+        async (): Promise<Delivery<Posted>> => await postMessage(token, message),
+    );
+    await reportDelivery(health, delivery);
+    return delivery;
+}
+
 /** Delivers the oldest message, or drops one too old or unreadable; a DrainEnd when the queue must wait. */
 async function deliverNext(drain: Drain, queued: Queued): Promise<DrainEnd | undefined> {
-    const message = await messageToSend(drain.outbox, queued);
-    if (typeof message === "string") {
-        await drop(drain, queued, message);
+    const toSend = await messageToSend(drain.outbox, queued);
+    if (typeof toSend === "string") {
+        await drop(drain, queued, toSend);
         return undefined;
     }
-    const delivery = await deliver(drain, message);
+    const delivery = await post(drain, toSend.message);
     if (delivery.outcome === "retry") {
-        return { until: "later", afterMs: delivery.retryAfterMs ?? RETRY_LATER_MS };
+        return waitAfter(delivery.retryAfterMs);
     }
     await remove(drain.outbox.redis, queued);
+    await rememberQuoting(drain, delivery, toSend.quoting);
     return undefined;
 }
 
-/** Delivers queued messages one at a time, `SEND_INTERVAL_MS` apart, until the queue empties or must wait. */
-async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
-    if (Date.now() >= drain.deadline) {
-        return { until: "later", afterMs: CONTINUE_SOON_MS };
-    }
+/** What a drain does next: deliver the oldest alert, else make the oldest redaction; undefined when none waits. */
+async function nextWork(drain: Drain): Promise<(() => Promise<DrainEnd | undefined>) | undefined> {
     const queued = await oldest(drain.outbox.redis);
-    if (queued === undefined) {
-        return { until: "empty" };
+    if (queued !== undefined) {
+        return async (): Promise<DrainEnd | undefined> => await deliverNext(drain, queued);
     }
+    const redaction = await oldestRedaction(drain.outbox.redis);
+    return redaction === undefined
+        ? undefined
+        : async (): Promise<DrainEnd | undefined> => await redactNext(drain, redaction);
+}
+
+/** Waits until `SEND_INTERVAL_MS` after the last call to Slack. */
+async function keepPace(lastSentAt: number): Promise<void> {
     const pause = lastSentAt + SEND_INTERVAL_MS - Date.now();
     if (pause > 0) {
         await wait(pause);
     }
-    return (await deliverNext(drain, queued)) ?? (await drainQueue(drain, Date.now()));
+}
+
+/**
+ * Delivers queued messages one at a time, `SEND_INTERVAL_MS` apart, then makes waiting redactions at the same pace,
+ * until nothing is left or what is left must wait. Alerts go first: they are news, and a redaction can wait.
+ */
+async function drainQueue(drain: Drain, lastSentAt: number): Promise<DrainEnd> {
+    if (Date.now() >= drain.deadline) {
+        return { until: "later", afterMs: CONTINUE_SOON_MS };
+    }
+    const work = await nextWork(drain);
+    if (work === undefined) {
+        return { until: "empty" };
+    }
+    await keepPace(lastSentAt);
+    return (await work()) ?? (await drainQueue(drain, Date.now()));
+}
+
+/** Whether alerts or redactions wait. */
+async function anyWaiting({ redis }: QueueDependencies): Promise<boolean> {
+    return (await oldest(redis)) !== undefined || (await oldestRedaction(redis)) !== undefined;
 }
 
 /**
@@ -174,7 +174,7 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
         return undefined;
     }
     try {
-        if ((await oldest(outbox.redis)) !== undefined) {
+        if (await anyWaiting(outbox)) {
             await scheduleRecovery(outbox);
         }
         const end = await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
@@ -206,7 +206,7 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
     // A message queued after the drain last looked, but before it let go of the lease, found the lease held, so its
     // sender left it to this drain. A later drain delivers it: one trigger delivers for at most one drain's time,
     // however fast messages arrive.
-    if ((await oldest(outbox.redis)) !== undefined) {
+    if (await anyWaiting(outbox)) {
         await scheduleDrain(outbox, CONTINUE_SOON_MS);
     }
 }
@@ -216,7 +216,8 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
  * delivered in full rather than rate-limited away. One drain delivers at a time (a lease); what it cannot deliver in
  * its time, or while Slack is failing, waits for a scheduled later drain, and what a drain that dies leaves waits for
  * a recovery drain after its lease expires. A message is delivered at least once: a request Slack took but whose
- * answer was lost, or that a dying drain made, is sent again. Content deleted on Reddit leaves the queue's messages.
+ * answer was lost, or that a dying drain made, is sent again. Content deleted on Reddit leaves the queue's messages,
+ * and is taken out of the alerts already in Slack that quote it.
  */
 export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
@@ -229,7 +230,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
                 }
             } catch (error) {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
-                // failure itself.
+                // failure itself. Sent so, it is not remembered, and keeps its quotes if its content is deleted.
                 console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
                 await createDirectSender(outbox.token)(message);
                 return;
@@ -246,13 +247,27 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     };
 }
 
+/** Queues a redaction of each alert in Slack that quotes the content, and has a drain make them. */
+async function redactSent(queue: QueueDependencies, contentId: string): Promise<void> {
+    const sent = await takeSent(queue.redis, contentId);
+    if (sent.length === 0) {
+        return;
+    }
+    if ((await queueRedactions(queue.redis, sent)) > 0) {
+        await queue.health.raise("redactions-failing", "too many waiting");
+    }
+    await scheduleDrain(queue, CONTINUE_SOON_MS);
+}
+
 /**
  * Notes that Reddit deleted this post or comment, by its ID: from now on, each message quoting it is sent and stored
- * without the quotes. Those queued lose them now, unless a drain holds the queue: it takes them out before it lets
- * go. Needs no bot token, as messages wait in the queue while none is set. Rejects when Redis fails.
+ * without the quotes, and the alerts in Slack that quote it are edited to go without them. Those queued lose them
+ * now, unless a drain holds the queue: it takes them out before it lets go. Needs no bot token, as messages and
+ * edits wait in the queue while none is set. Rejects when Redis fails.
  */
 export async function forgetContent(queue: QueueDependencies, contentId: string): Promise<void> {
     await noteDeleted(queue.redis, contentId);
+    await redactSent(queue, contentId);
     if (!(await queueQuotes(queue.redis, contentId)) || !(await lease(queue))) {
         return;
     }

@@ -38,7 +38,7 @@ async function burst(fire: App["fire"], count: number): Promise<void> {
 function deliveredUsers(requests: readonly SlackRequest[]): (string | undefined)[] {
     return requests.map(
         (request: SlackRequest): string | undefined =>
-            /u\/(?<user>User\d+)>/u.exec(request.message.attachments?.[0]?.text ?? "")?.groups?.["user"],
+            /u\/(?<user>User\d+)>/u.exec(request.message?.attachments?.[0]?.text ?? "")?.groups?.["user"],
     );
 }
 
@@ -80,8 +80,14 @@ describe("the Slack outbox", (): void => {
             expect(
                 times.slice(1).map((time: number, index: number): number => time - (times[index] ?? 0)),
             ).toStrictEqual([1100, 1100, 1100, 1100]);
+            // Besides the records of where alerts that quote content went, which redactedAlerts.test.ts covers.
             expect(
-                app.context.redis.keys().filter((key: string): boolean => key.startsWith("slack_outbox")),
+                app.context.redis
+                    .keys()
+                    .filter(
+                        (key: string): boolean =>
+                            key.startsWith("slack_outbox") && !key.startsWith("slack_outbox_sent"),
+                    ),
             ).toStrictEqual(["slack_outbox_last_sent", "slack_outbox_recovery_scheduled"]);
         },
     );

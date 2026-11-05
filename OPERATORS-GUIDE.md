@@ -123,7 +123,7 @@ A threshold of 0 turns its alert off. Turning all three modqueue thresholds off 
 With the Daily Summary setting on, the `dailySummary` job posts to the notification channel at 08:00 UTC. It covers the UTC day before:
 
 - mod actions the app heard of;
-- alerts delivered and dropped;
+- alerts delivered, dropped and redacted;
 - modqueue monitor runs and failures;
 - the problems in force as it is sent.
 
@@ -216,6 +216,13 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
     - An alert that arrives after the deletion is stored without the content.
     - This works whether or not Slack is set up, as alerts wait in the queue until it is.
     - The deleted-post alert is the exception: it exists to name the post it reports.
+- **Content deleted after its alert was sent.** When Slack takes an alert that quotes a post or comment, the app remembers where it went (channel and timestamp) under each post and comment it quotes, with its second version, for 90 days.
+    - When Reddit reports one of them deleted, each alert remembered for it gets a **redaction**: an edit (`chat.update`) that puts the second version in its place. Redactions wait in their own queue, and a run makes them once no alert is waiting, at the same pace.
+    - Where the workspace's settings don't allow the edit (`edit_window_closed`, `cant_update_message`), the alert is deleted (`chat.delete`) instead. An alert already deleted in Slack (`message_not_found`) needs nothing.
+    - Content deleted while its alert is on its way to Slack is redacted as soon as Slack has the alert.
+    - Redactions count toward the day's `redacted`. One Slack refuses is dropped and reported as a health condition; one Slack can't take for now waits for a later run, as alerts do.
+    - At most 50,000 posts and comments are remembered; past that, the oldest are forgotten first, so Redis stays well inside the 100 MB an unpublished app has. Set the alert channels' message retention to 90 days so that no alert outlives the record of where it is.
+    - Alerts sent before this version, and alerts **Test Slack Connection** or **Simulate Mod Action** send, aren't remembered.
 
 **Direct sends.** **Test Slack Connection** and **Simulate Mod Action** skip the queue, because a moderator is waiting for the answer. They retry after 1, 2 and 4 seconds before reporting failure.
 
@@ -240,13 +247,16 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `health:noticed`                                                  | the conditions moderators were sent a notice of, so their end is sent                   | 7 days from the last              | 7 conditions     |
 | `health:reminder:{condition}`                                     | that a condition was logged within the day                                              | 1 day                             | 1 per condition  |
 | `slack_outbox_deleted`                                            | the IDs of posts and comments deleted on Reddit, by time                                | 1 day and 1 second                | one per deletion |
+| `slack_outbox_sent:{contentId}`                                   | where each alert quoting the post or comment is in Slack, with its version without it   | 90 days from the last alert       | 50,000 in all    |
+| `slack_outbox_sent`                                               | the posts and comments remembered, by when an alert last quoted each                    | 90 days from the last             | 50,000           |
+| `slack_outbox_redactions`                                         | redactions waiting: where each alert is, and its version without quotes                 | 1 week                            | 5,000            |
 | `slack_outbox_lease`                                              | which run is delivering                                                                 | 46.1 seconds                      | 1 key            |
 | `slack_outbox_last_sent`                                          | when Slack was last sent a message                                                      | 1 minute                          | 1 key            |
 | `slack_outbox_drain_scheduled`, `slack_outbox_recovery_scheduled` | that a follow-up or recovery run is scheduled                                           | until it runs                     | 1 key each       |
 
 **Settings** are stored by Devvit for each installation, apart from the bot token, an encrypted app-wide secret that moderators can't read.
 
-**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Once an alert reaches Slack, it stays there under your workspace's message retention, and content deleted on Reddit after its alert was sent isn't removed from it. Content deleted before then leaves the alert, apart from the deleted-post alert's title.
+**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Content deleted before an alert is sent leaves it; content deleted within 90 days after is taken out of it in Slack, by an edit or, failing that, by deleting the alert. The deleted-post alert keeps the title of the post it reports. Alerts stay in Slack under your workspace's message retention.
 
 **Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They record errors and never quote Reddit content; the one line that names an account is the one reporting an account not on the mod list. The bot token travels only in a request header, so no line names it.
 
@@ -270,7 +280,7 @@ Moderators can't read the app's logs, so this is where they see how it's doing. 
 | Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds are 0; or `Unknown`.     |
 | Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                           |
 | Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.       |
-| Today (UTC)          | Mod actions heard of, alerts delivered and dropped, and monitor runs and failures, since midnight UTC.                                         |
+| Today (UTC)          | Mod actions heard of, alerts delivered, dropped and redacted, and monitor runs and failures, since midnight UTC.                               |
 
 A line reads `Unknown: Redis could not be read` when Redis fails; the rest still show.
 
@@ -319,15 +329,16 @@ Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`
 
 **Health conditions.** A problem that lasts is a condition. It is logged once when it starts, once a day while it lasts (`Since <time>: …`), and once, at INFO, when it ends. This keeps it from filling the 5,000 entries.
 
-| Condition                              | Level | Starts when                                                  | Ends when               | Modmail            |
-| -------------------------------------- | ----- | ------------------------------------------------------------ | ----------------------- | ------------------ |
-| No Slack bot token is set              | WARN  | a mod action finds no bot token                              | a mod action finds one  | never              |
-| No Slack channel is set                | WARN  | a mod action finds no notification channel                   | a mod action finds one  | never              |
-| Slack is refusing alerts               | ERROR | Slack refuses an alert with an error code, and it is dropped | Slack takes an alert    | at once            |
-| Slack is not taking alerts             | WARN  | a run leaves an alert queued after Slack failed or timed out | Slack takes an alert    | after half an hour |
-| The alert queue is full                | ERROR | a new alert pushes the oldest of 500 out                     | a run empties the queue | at once            |
-| Alerts are dropped after waiting a day | ERROR | a run drops an alert queued over a day ago                   | a run empties the queue | at once            |
-| The modqueue monitor is failing        | ERROR | a monitor run fails                                          | a monitor run succeeds  | after half an hour |
+| Condition                                        | Level | Starts when                                                                                                                                            | Ends when               | Modmail            |
+| ------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | ------------------ |
+| No Slack bot token is set                        | WARN  | a mod action finds no bot token                                                                                                                        | a mod action finds one  | never              |
+| No Slack channel is set                          | WARN  | a mod action finds no notification channel                                                                                                             | a mod action finds one  | never              |
+| Slack is refusing alerts                         | ERROR | Slack refuses an alert with an error code, and it is dropped                                                                                           | Slack takes an alert    | at once            |
+| Slack is not taking alerts                       | WARN  | a run leaves an alert queued after Slack failed or timed out                                                                                           | Slack takes an alert    | after half an hour |
+| The alert queue is full                          | ERROR | a new alert pushes the oldest of 500 out                                                                                                               | a run empties the queue | at once            |
+| Alerts are dropped after waiting a day           | ERROR | a run drops an alert queued over a day ago                                                                                                             | a run empties the queue | at once            |
+| Deleted content is not being taken out of alerts | ERROR | Slack refuses a redaction, or one is dropped unmade (unreadable, a week old, more than 5,000 waiting, or Redis could not remember where an alert went) | a redaction is made     | never              |
+| The modqueue monitor is failing                  | ERROR | a monitor run fails                                                                                                                                    | a monitor run succeeds  | after half an hour |
 
 **Modmail notices.** Slack may be the very thing that is broken, so a condition moderators must act on also goes to the subreddit's modmail, as a notification from the app's account (in modmail's Notifications). The Modmail column says when. A notice gives the problem, what the app saw, what to do and when it started. Each condition is sent at most once a day, so a problem that comes and goes doesn't flood modmail, and again each day it lasts. Its end is sent too, when its start was. A notice modmail can't take (for example if the app's account is banned) is logged as `[health] Could not send moderators a modmail notice:`.
 
@@ -345,7 +356,8 @@ Lines that need attention besides those:
 
 ## Known limitations
 
-- **Content in Slack isn't removed when it's deleted on Reddit.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. This app takes deleted content out of alerts it hasn't sent yet, but leaves alerts already in Slack as they were sent, a deliberate choice for a private moderation tool. The deleted-post alert names the post it reports, by the same choice.
+- **Deleted content is taken out of alerts for 90 days.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to 90 days (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it. The deleted-post alert names the post it reports, by the owner's choice.
+- **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack, and in the ban and mute history until it expires.
 - **Ban and mute history is kept for 90 days**, longer than the 30 days Reddit recommends for user data, so that unbans after longer bans keep their context.
 - **The monitor reads each listing in full.** Reddit's listings end at around a thousand items, so a run makes at most a few dozen requests.
 - **Handler time limits.** Devvit doesn't document a time limit for Blocks handlers. The outbox keeps each run to about 10 seconds plus one request, and recovers a run that's cut off.

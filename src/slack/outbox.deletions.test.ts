@@ -48,7 +48,10 @@ describe("content deleted on Reddit", (): void => {
         const { dependencies, redis } = fakeOutbox();
         await redis.zAdd(QUEUE_KEY, queuedQuoting("t1_a"));
 
-        await forgetContent({ redis: dependencies.redis, scheduler: dependencies.scheduler }, "t1_a");
+        await forgetContent(
+            { redis: dependencies.redis, scheduler: dependencies.scheduler, health: dependencies.health },
+            "t1_a",
+        );
 
         expect(stored(redis)).not.toContain("said");
     });

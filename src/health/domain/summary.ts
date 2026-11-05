@@ -35,7 +35,7 @@ export function dailySummary(day: string, counts: Counts, problems: readonly InF
             { label: "Mod actions", value: String(counts["mod-action"] ?? 0) },
             {
                 label: "Alerts",
-                value: `${String(counts["alert-delivered"] ?? 0)} delivered, ${String(counts["alert-dropped"] ?? 0)} dropped`,
+                value: `${String(counts["alert-delivered"] ?? 0)} delivered, ${String(counts["alert-dropped"] ?? 0)} dropped, ${String(counts["alert-redacted"] ?? 0)} redacted`,
             },
             {
                 label: "Modqueue monitor",

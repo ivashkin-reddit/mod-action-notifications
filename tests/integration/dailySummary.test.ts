@@ -107,7 +107,7 @@ describe("the daily summary", (): void => {
                             color: "#0088ff",
                             text: [
                                 "• *Mod actions:* 1",
-                                "• *Alerts:* 1 delivered, 0 dropped",
+                                "• *Alerts:* 1 delivered, 0 dropped, 0 redacted",
                                 "• *Modqueue monitor:* 0 runs, 0 failed",
                                 "• *Problems now:* None",
                             ].join("\n"),

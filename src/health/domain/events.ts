@@ -5,6 +5,7 @@ export type HealthEvent =
     | "comment-delete"
     | "alert-delivered"
     | "alert-dropped"
+    | "alert-redacted"
     | "monitor-success"
     | "monitor-failure";
 

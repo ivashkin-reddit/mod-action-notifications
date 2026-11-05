@@ -2,10 +2,11 @@ import { failureDetail } from "./webApi.js";
 import type { Delivery } from "./webApi.js";
 
 /** A lasting problem delivering alerts, which the outbox reports rather than logging each alert it affects. */
-export type DeliveryCondition = "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired";
+export type DeliveryCondition =
+    "slack-refusing" | "slack-unreachable" | "outbox-full" | "alerts-expired" | "redactions-failing";
 
 /** What the outbox notes doing with alerts, for the health records. */
-export type DeliveryEvent = "alert-delivered" | "alert-dropped";
+export type DeliveryEvent = "alert-delivered" | "alert-dropped" | "alert-redacted";
 
 /**
  * Where the outbox reports delivery conditions: the composition root gives it the health log's. Neither function
@@ -23,7 +24,7 @@ export interface DeliveryHealth {
  * Reports what a drain's delivery of an alert says about Slack: an alert taken ends any problem, one refused means
  * Slack is refusing alerts, and one left for a later drain means Slack is not taking them for now.
  */
-export async function reportDelivery(health: DeliveryHealth, delivery: Delivery): Promise<void> {
+export async function reportDelivery(health: DeliveryHealth, delivery: Delivery<unknown>): Promise<void> {
     if (delivery.outcome === "delivered") {
         await health.note("alert-delivered", 1);
         await health.clear("slack-refusing");

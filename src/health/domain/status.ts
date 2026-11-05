@@ -125,7 +125,7 @@ export function countsText(counts: Counts): string {
     const runs = (counts["monitor-success"] ?? 0) + failures;
     return [
         counted(counts["mod-action"] ?? 0, "mod action"),
-        `${counted(counts["alert-delivered"] ?? 0, "alert")} delivered, ${String(counts["alert-dropped"] ?? 0)} dropped`,
+        `${counted(counts["alert-delivered"] ?? 0, "alert")} delivered, ${String(counts["alert-dropped"] ?? 0)} dropped, ${String(counts["alert-redacted"] ?? 0)} redacted`,
         `${counted(runs, "monitor run")}, ${String(failures)} failed`,
     ].join("; ");
 }

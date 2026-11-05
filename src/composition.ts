@@ -209,12 +209,15 @@ export async function alertOnModAction(event: ModActionEvent, context: AppContex
 export type CommentDeleteEvent = Readonly<{ commentId: string }>;
 
 /**
- * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, and stays out of any queued
- * later, whether or not Slack is set up. Logs rather than rejects, so a trigger goes on to its other work.
+ * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, stays out of any queued later,
+ * and is taken out of the alerts already in Slack that quote it, whether or not Slack is set up. Logs rather than rejects, so a trigger goes on to its other work.
  */
 async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
     try {
-        await forgetContent({ redis: context.redis, scheduler: context.scheduler }, contentId);
+        await forgetContent(
+            { redis: context.redis, scheduler: context.scheduler, health: healthReports(context) },
+            contentId,
+        );
     } catch (error) {
         console.error("[deletions] Could not take a deleted post or comment out of queued alerts:", error);
     }

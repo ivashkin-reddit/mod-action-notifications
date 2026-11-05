@@ -51,7 +51,7 @@ The daily summary, which is off unless the moderators turn it on, holds only cou
 
 Alerts travel over HTTPS. Text from Reddit is escaped, so it cannot notify a whole Slack channel.
 
-Once an alert reaches Slack, it is kept under the workspace's message retention settings and Slack's privacy policy, and the moderators control it. **The app does not change or delete an alert once it is in Slack.** An alert stays in Slack even if the content it quotes is later deleted on Reddit. The moderators can delete it in Slack.
+Once an alert reaches Slack, it is kept under the workspace's message retention settings and Slack's privacy policy, and the moderators control it. If a post or comment an alert quotes is deleted on Reddit within 90 days of the alert, the app takes it out of the alert in Slack (see [Deletions](#deletions)). Otherwise the app does not change or delete an alert once it is in Slack, and the moderators can delete it there.
 
 ### The subreddit's modmail
 
@@ -72,6 +72,8 @@ Everything the app keeps expires by itself.
 | Moderator activity                                                   | Each moderator's username, with the IDs of their recent actions                                             | 1 hour                                                 |
 | Alerts already sent                                                  | The IDs of the mod actions and posts alerted                                                                | 1 day                                                  |
 | Posts and comments deleted on Reddit                                 | Their IDs                                                                                                   | 1 day                                                  |
+| Where alerts that quote a post or comment are in Slack               | The post's or comment's ID, and what each alert says without the quote, which can include usernames         | 90 days from the last alert quoting it                 |
+| Edits waiting to take deleted content out of alerts                  | What each alert says without the quote, which can include usernames                                         | Until made, at most a week                             |
 | The app's own workings: alert pacing, its problems, counts and times | None                                                                                                        | Up to 8 days                                           |
 | Settings: channels, alert choices, excluded moderators               | Usernames of excluded moderators                                                                            | Until changed, or the app is uninstalled               |
 | The app's logs, kept by Reddit                                       | The username of an account not on the mod list, when one takes an action. No lines quote posts or comments. | 7 days, up to 5,000 lines                              |
@@ -89,7 +91,7 @@ Uninstalling the app removes its records and settings. Alerts already in Slack a
 
 ## Deletions
 
-- **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. It does not remove content from alerts already in Slack. The alert about a deleted post names the post, as reporting that deletion is its purpose.
+- **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. In alerts already in Slack, it replaces each alert that quotes the content, sent within the last 90 days, with the same alert without the title and text, by editing it; where the workspace does not allow the edit, it deletes the alert. Alerts older than that, or sent before the app could do this, keep the content until Slack's retention removes them, or the moderators delete them. The alert about a deleted post names the post, as reporting that deletion is its purpose.
 - **A deleted Reddit account.** Reddit does not tell apps when an account is deleted. A deleted account's username stays in the ban and mute history until that expires, and in alerts already in Slack.
 
 ## Choices

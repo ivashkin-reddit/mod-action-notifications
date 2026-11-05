@@ -48,7 +48,9 @@ describe("a day's counts", (): void => {
     it("read as none of each on a quiet day", TEST_OPTIONS, (): void => {
         expect.hasAssertions();
 
-        expect(countsText({})).toBe("0 mod actions; 0 alerts delivered, 0 dropped; 0 monitor runs, 0 failed");
+        expect(countsText({})).toBe(
+            "0 mod actions; 0 alerts delivered, 0 dropped, 0 redacted; 0 monitor runs, 0 failed",
+        );
     });
 
     it("count the monitor's runs as its successes and failures together", TEST_OPTIONS, (): void => {
@@ -59,10 +61,11 @@ describe("a day's counts", (): void => {
                 "mod-action": 1,
                 "alert-delivered": 1,
                 "alert-dropped": 2,
+                "alert-redacted": 3,
                 "monitor-success": 3,
                 "monitor-failure": 1,
             }),
-        ).toBe("1 mod action; 1 alert delivered, 2 dropped; 4 monitor runs, 1 failed");
+        ).toBe("1 mod action; 1 alert delivered, 2 dropped, 3 redacted; 4 monitor runs, 1 failed");
     });
 });
 

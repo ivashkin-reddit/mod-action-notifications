@@ -48,9 +48,12 @@ export type Failure =
     | Readonly<{ kind: "response"; status: number; error: string }>
     | Readonly<{ kind: "error"; error: unknown; ranOutOfTime: boolean }>;
 
-/** How one call to Slack went. */
-export type Delivery =
-    | Readonly<{ outcome: "delivered" }>
+/** Slack's answer to a call it took: the fields of its JSON object. */
+export type Answer = ReadonlyMap<string, unknown>;
+
+/** How one call to Slack went; `T` is what the app reads from Slack's answer when Slack took it. */
+export type Delivery<T = Answer> =
+    | Readonly<{ outcome: "delivered"; answer: T }>
     /** Slack may take it later: it is failing or rate limiting (with its Retry-After, if given), or did not answer. */
     | Readonly<{ outcome: "retry"; failure: Failure; retryAfterMs: number | undefined }>
     /** Slack refused it, and would again: a revoked token, or a channel the app is not in. */
@@ -66,7 +69,7 @@ function retryAfterMs(header: string | null): number | undefined {
 type SlackResponse = Readonly<Pick<Response, "ok" | "status" | "text">>;
 
 /** Slack's answer: the fields of the JSON object it always answers with, or none for any other body. */
-async function answerOf(response: SlackResponse): Promise<ReadonlyMap<string, unknown> | undefined> {
+async function answerOf(response: SlackResponse): Promise<Answer | undefined> {
     try {
         const parsed: unknown = JSON.parse(await response.text());
         return typeof parsed === "object" && parsed !== null ? new Map(Object.entries(parsed)) : undefined;
@@ -93,7 +96,7 @@ function mayTakeLater(status: number, error: string, answered: boolean): boolean
 async function deliveryOf(response: SlackResponse, retryAfter: number | undefined): Promise<Delivery> {
     const answer = await answerOf(response);
     if (response.ok && answer?.get("ok") === true) {
-        return { outcome: "delivered" };
+        return { outcome: "delivered", answer };
     }
     const error = answer?.get("error");
     const failure: Failure = {
@@ -106,17 +109,20 @@ async function deliveryOf(response: SlackResponse, retryAfter: number | undefine
         : { outcome: "rejected", failure };
 }
 
+/** The Web API methods the app calls: all three need only the chat:write scope. */
+type SlackMethod = "chat.postMessage" | "chat.update" | "chat.delete";
+
 /**
- * Posts the message to its channel once, with the Slack app's bot token. The token goes in the authorization header,
- * never in a URL, so no error names it. Never rejects.
+ * Calls a Web API method once, with the Slack app's bot token. The token goes in the authorization header, never in
+ * a URL, so no error names it. Never rejects.
  */
-export async function postMessage(token: string, message: SlackMessage): Promise<Delivery> {
+async function callSlack(token: string, method: SlackMethod, body: unknown): Promise<Delivery> {
     try {
-        const response = await fetch(`${API_URL}chat.postMessage`, {
+        const response = await fetch(`${API_URL}${method}`, {
             method: "POST",
             // Header names are not case-sensitive.
             headers: { "content-type": "application/json; charset=utf-8", "authorization": `Bearer ${token}` },
-            body: JSON.stringify(message),
+            body: JSON.stringify(body),
         });
         return await deliveryOf(response, retryAfterMs(response.headers.get("retry-after")));
     } catch (error) {
@@ -127,6 +133,43 @@ export async function postMessage(token: string, message: SlackMessage): Promise
             retryAfterMs: undefined,
         };
     }
+}
+
+/** Where Slack put a message: its channel's ID and its timestamp, which together name it. */
+export type Posted = Readonly<{ channel: string; ts: string }>;
+
+function textIn(answer: Readonly<Pick<Answer, "get">>, field: string): string {
+    const value = answer.get(field);
+    return typeof value === "string" ? value : "";
+}
+
+/** Posts the message to its channel once; where Slack put it, when it took it ('' for what its answer left out). */
+export async function postMessage(token: string, message: SlackMessage): Promise<Delivery<Posted>> {
+    const delivery = await callSlack(token, "chat.postMessage", message);
+    return delivery.outcome === "delivered"
+        ? {
+              outcome: "delivered",
+              answer: { channel: textIn(delivery.answer, "channel"), ts: textIn(delivery.answer, "ts") },
+          }
+        : delivery;
+}
+
+/**
+ * Puts `message` in place of the app's message at `posted`, once: its text and attachments, which replace all the
+ * old ones, as an empty list removes them (docs.slack.dev, chat.update). The name and icon it was posted with stay.
+ */
+export async function updateMessage(token: string, posted: Posted, message: SlackMessage): Promise<Delivery> {
+    return await callSlack(token, "chat.update", {
+        channel: posted.channel,
+        ts: posted.ts,
+        text: message.text,
+        attachments: message.attachments ?? [],
+    });
+}
+
+/** Deletes the app's message at `posted`, once. */
+export async function deleteMessage(token: string, posted: Posted): Promise<Delivery> {
+    return await callSlack(token, "chat.delete", { channel: posted.channel, ts: posted.ts });
 }
 
 /** At most this much of an error code goes into a log line: one from something other than Slack could be anything. */
@@ -148,7 +191,7 @@ function logFailure(failure: Failure): void {
 }
 
 /** Whether a direct send retries after this attempt: Slack may take it later, and the request did not time out. */
-function retriesDirectly(delivery: Delivery, retryCount: number): boolean {
+function retriesDirectly(delivery: Delivery<unknown>, retryCount: number): boolean {
     return (
         delivery.outcome === "retry" &&
         !(delivery.failure.kind === "error" && delivery.failure.ranOutOfTime) &&

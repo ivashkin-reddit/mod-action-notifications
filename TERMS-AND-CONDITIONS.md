@@ -20,7 +20,7 @@ The moderators choose the Slack workspace and channel the alerts go to. They are
 
 The app posts through a Slack app that the developer installs in the workspace. It may only post, and only to the channels it has been added to. The developer keeps its token secret, and replaces it if it leaks.
 
-Alerts quote Reddit content and name redditors. The app does not delete an alert once Slack has it, so content later deleted on Reddit stays in Slack until the moderators delete it there.
+Alerts quote Reddit content and name redditors. When content an alert quotes is deleted on Reddit within 90 days of the alert, the app edits the alert in Slack to leave it out, or deletes the alert where it cannot be edited. Keep the alert channels' messages for no more than 90 days, so that no alert outlives the app's ability to do this.
 
 ## 4. No guarantees
 

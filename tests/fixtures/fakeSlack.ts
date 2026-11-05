@@ -20,6 +20,12 @@ export interface SlackMessage {
     }>[];
 }
 
+/** What a chat.update call asks for: the message at `channel` and `ts` to say this instead. */
+export type SlackUpdate = SlackMessage & Readonly<{ channel: string; ts: string }>;
+
+/** What a chat.delete call asks for: the message at `channel` and `ts` deleted. */
+export type SlackDelete = Readonly<{ channel: string; ts: string }>;
+
 /** A call the app made to Slack's Web API. */
 export interface SlackRequest {
     readonly url: string;
@@ -28,8 +34,10 @@ export interface SlackRequest {
     /** The HTTP method. */
     readonly method: string | undefined;
     readonly headers: unknown;
-    /** The message the call carries as its JSON body. */
-    readonly message: SlackMessage;
+    /** The call's JSON body. */
+    readonly body: Readonly<Record<string, unknown>>;
+    /** The message a chat.postMessage or chat.update call carries; undefined for chat.delete, which carries none. */
+    readonly message: SlackMessage | undefined;
     /** Date.now() when the request was made. */
     readonly sentAt: number;
 }
@@ -59,7 +67,12 @@ interface FakeResponse {
 
 export interface FakeSlack {
     readonly requests: readonly SlackRequest[];
+    /** The messages posted with chat.postMessage. */
     readonly messages: readonly SlackMessage[];
+    /** The edits asked for with chat.update. */
+    readonly updates: readonly SlackUpdate[];
+    /** The deletions asked for with chat.delete. */
+    readonly deletes: readonly SlackDelete[];
     readonly fetch: Mock<(url: string, init?: FetchInit) => Promise<FakeResponse>>;
     /** Queues outcomes for the next requests, in order; requests after these are taken. */
     readonly respond: (...outcomes: readonly Outcome[]) => void;
@@ -75,12 +88,27 @@ function isSlackMessage(value: unknown): value is SlackMessage {
     return typeof value === "object" && value !== null && "text" in value && typeof value.text === "string";
 }
 
-function slackMessageIn(body: unknown): SlackMessage {
+function bodyOf(body: unknown): Readonly<Record<string, unknown>> {
     const parsed: unknown = typeof body === "string" ? JSON.parse(body) : undefined;
-    if (!isSlackMessage(parsed)) {
-        throw new TypeError(`not a Slack message: ${String(body)}`);
+    if (typeof parsed !== "object" || parsed === null) {
+        throw new TypeError(`not a JSON object: ${String(body)}`);
     }
-    return parsed;
+    return Object.fromEntries(Object.entries(parsed));
+}
+
+/** The message a call carries, which every call but chat.delete must. */
+function messageIn(api: string, body: Readonly<Record<string, unknown>>): SlackMessage | undefined {
+    if (api === "chat.delete") {
+        return undefined;
+    }
+    if (!isSlackMessage(body)) {
+        throw new TypeError(`not a Slack message: ${JSON.stringify(body)}`);
+    }
+    return body;
+}
+
+function textOf(value: unknown): string {
+    return typeof value === "string" ? value : "";
 }
 
 function response(status: number, body: string, retryAfter: string | null = null): FakeResponse {
@@ -93,11 +121,17 @@ function response(status: number, body: string, retryAfter: string | null = null
     };
 }
 
-/** Slack's answer to a call it took: where the message went, and its timestamp, unique to it. */
+/**
+ * Slack's answer to a call it took: where the message is, and its timestamp, new and unique to a message posted, as
+ * the call gave it for an edit or a deletion.
+ */
 function taken(request: SlackRequest, sequence: number): FakeResponse {
     const seconds = Math.floor(request.sentAt / MS_PER_SECOND);
-    const ts = `${String(seconds)}.${String(sequence).padStart(TS_SEQUENCE_DIGITS, "0")}`;
-    return response(OK, JSON.stringify({ ok: true, channel: request.message.channel ?? "", ts }));
+    const ts =
+        request.api === "chat.postMessage"
+            ? `${String(seconds)}.${String(sequence).padStart(TS_SEQUENCE_DIGITS, "0")}`
+            : textOf(request.body["ts"]);
+    return response(OK, JSON.stringify({ ok: true, channel: textOf(request.body["channel"]), ts }));
 }
 
 function responseFor(
@@ -130,15 +164,34 @@ export function createFakeSlack(): FakeSlack {
     return {
         requests,
         get messages(): readonly SlackMessage[] {
-            return requests.map((request: SlackRequest): SlackMessage => request.message);
+            return requests.flatMap((request: SlackRequest): SlackMessage[] =>
+                request.api === "chat.postMessage" && request.message !== undefined ? [request.message] : [],
+            );
+        },
+        get updates(): readonly SlackUpdate[] {
+            return requests.flatMap((request: SlackRequest): SlackUpdate[] =>
+                request.api === "chat.update" && request.message !== undefined
+                    ? [{ ...request.message, channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
+                    : [],
+            );
+        },
+        get deletes(): readonly SlackDelete[] {
+            return requests.flatMap((request: SlackRequest): SlackDelete[] =>
+                request.api === "chat.delete"
+                    ? [{ channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
+                    : [],
+            );
         },
         fetch: vi.fn(async (url: string, init?: FetchInit): Promise<FakeResponse> => {
+            const api = url.slice(url.lastIndexOf("/") + 1);
+            const body = bodyOf(init?.body);
             const request: SlackRequest = {
                 url,
-                api: url.slice(url.lastIndexOf("/") + 1),
+                api,
                 method: init?.method,
                 headers: init?.headers,
-                message: slackMessageIn(init?.body),
+                body,
+                message: messageIn(api, body),
                 sentAt: Date.now(),
             };
             requests.push(request);

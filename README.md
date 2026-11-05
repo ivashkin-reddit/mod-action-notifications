@@ -75,11 +75,12 @@ The app reads only what it needs to write an alert, and keeps very little:
 - **Ban and mute history**, to explain unbans: 90 days.
 - **Queued alerts**, for up to a day.
 - **IDs of deleted posts and comments**, so alerts still waiting to be sent leave their text out: a day.
+- **Where each alert quoting a post or comment went in Slack**, with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: 90 days.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.
 
-Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. The alert about a deleted post is the exception, as it exists to name the post. Once an alert reaches Slack, it stays there under your workspace's message retention, even if the content is later deleted on Reddit.
+Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, within 90 days, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. The alert about a deleted post is the exception, as it exists to name the post. Alerts stay in Slack under your workspace's message retention: setting the alert channels to keep messages for 90 days means no alert outlives the app's ability to edit it.
 
 The [Privacy Policy](./PRIVACY-POLICY.md) and [Terms & Conditions](./TERMS-AND-CONDITIONS.md) have the details.
 

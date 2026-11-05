@@ -8,10 +8,10 @@ The person who deploys the Devvit app does this; it takes about ten minutes. You
 
 The manifest asks Slack for two permissions (scopes), and nothing else:
 
-| Scope                  | Why                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| `chat:write`           | To post alerts in the channels the app has been added to.                                  |
-| `chat:write.customize` | To post under the name Mod Action Notifications, with each kind of alert's own emoji icon. |
+| Scope                  | Why                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat:write`           | To post alerts in the channels the app has been added to, and to edit or delete its own alerts when content they quote is deleted on Reddit. |
+| `chat:write.customize` | To post under the name Mod Action Notifications, with each kind of alert's own emoji icon.                                                   |
 
 The app can't read any channel or message, see who is in the workspace, or post to a channel it hasn't been added to.
 
@@ -33,7 +33,8 @@ The manifest turns token rotation off. A rotating token expires and has to be re
 5. **Add the app to each channel.** In each channel alerts should go to, type `/invite @mod-action-notifications` and send it. Private channels need this. Public channels need it too, as the app doesn't ask for the permission to post where it hasn't been added.
 6. **Copy each channel's ID.** Click the channel's name at the top of the channel. The channel ID is at the bottom of the window that opens, and starts with `C`. A public channel's name works as well, but an ID still works after the channel is renamed, and a private channel needs one.
 7. **Set the channels in the Devvit app.** In the subreddit's mod tools, open the app's settings. Enter the channel ID in **Notification Channel**, and in **Alert Channel** if security, modqueue and deleted-post alerts should go to a different channel.
-8. **Check it works.** From the subreddit's mod tools menu, choose **Test Slack Connection**. A test message should arrive in the notification channel.
+8. **Set the channels' retention.** In each alert channel's settings, keep messages for 90 days, if your plan allows it. The app takes content deleted on Reddit out of alerts for 90 days after sending them, so nothing it can no longer edit stays in Slack.
+9. **Check it works.** From the subreddit's mod tools menu, choose **Test Slack Connection**. A test message should arrive in the notification channel.
 
 ## Changing it
 

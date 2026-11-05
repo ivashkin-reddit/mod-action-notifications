@@ -17,13 +17,20 @@ describe("the daily summary", (): void => {
 
         const summary = dailySummary(
             "2026-11-04",
-            { "mod-action": 3, "alert-delivered": 2, "alert-dropped": 1, "monitor-success": 1, "monitor-failure": 1 },
+            {
+                "mod-action": 3,
+                "alert-delivered": 2,
+                "alert-dropped": 1,
+                "alert-redacted": 4,
+                "monitor-success": 1,
+                "monitor-failure": 1,
+            },
             [],
         );
 
         expect(summary.lines).toStrictEqual([
             { label: "Mod actions", value: "3" },
-            { label: "Alerts", value: "2 delivered, 1 dropped" },
+            { label: "Alerts", value: "2 delivered, 1 dropped, 4 redacted" },
             { label: "Modqueue monitor", value: "2 runs, 1 failed" },
             { label: "Problems now", value: "None" },
         ]);

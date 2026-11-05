@@ -9,6 +9,7 @@ export type Condition =
     | "slack-unreachable"
     | "outbox-full"
     | "alerts-expired"
+    | "redactions-failing"
     | "monitor-failing";
 
 const CONDITION_NAMES: readonly string[] = [
@@ -18,6 +19,7 @@ const CONDITION_NAMES: readonly string[] = [
     "slack-unreachable",
     "outbox-full",
     "alerts-expired",
+    "redactions-failing",
     "monitor-failing",
 ];
 
@@ -92,6 +94,13 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         level: "error",
         started: (): string => "Alerts are being dropped after waiting a day without reaching Slack.",
         resolved: "The alert queue has emptied: no more alerts are dropped for their age.",
+    },
+    "redactions-failing": {
+        title: "Deleted content is not being taken out of alerts",
+        level: "error",
+        started: (detail: string): string =>
+            `The app could not take a post or comment deleted on Reddit out of an alert in Slack (${detail}), so the alert still quotes it. Check that the Slack app is still in the alert channels; an alert it cannot edit can be deleted in Slack.`,
+        resolved: "Deleted content is being taken out of alerts in Slack again.",
     },
     "monitor-failing": {
         title: "The modqueue monitor is failing",

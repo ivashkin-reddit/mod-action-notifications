@@ -208,7 +208,7 @@ describe("what Show Bot Status says the app has done", (): void => {
             "Last monitor run": "None in the last week",
             "Last events":
                 "Mod action: none in the last week\nPost deleted: none in the last week\nComment deleted: none in the last week",
-            "Today (UTC)": "0 mod actions; 0 alerts delivered, 0 dropped; 0 monitor runs, 0 failed",
+            "Today (UTC)": "0 mod actions; 0 alerts delivered, 0 dropped, 0 redacted; 0 monitor runs, 0 failed",
         });
     });
 
@@ -260,7 +260,7 @@ describe("what Show Bot Status says the app has done", (): void => {
         await app.runJob("modqueueMonitor");
 
         await expect(status(app)).resolves.toMatchObject({
-            "Today (UTC)": "2 mod actions; 1 alert delivered, 1 dropped; 1 monitor run, 0 failed",
+            "Today (UTC)": "2 mod actions; 1 alert delivered, 1 dropped, 0 redacted; 1 monitor run, 0 failed",
         });
     });
 

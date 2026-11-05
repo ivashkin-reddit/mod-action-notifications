@@ -16,7 +16,7 @@ const LASTING_MS = 1_800_000;
 /**
  * How long each condition lasts before moderators are told: at once when alerts are lost or not sent, after 30
  * minutes for a problem that often passes by itself, and never for a missing bot token or channel, which are set up
- * with the app.
+ * with the app, or for an alert left quoting deleted content, which Show Bot Status and the log report.
  */
 const NOTICE_AFTER_MS: Readonly<Record<Condition, number | undefined>> = {
     "token-missing": undefined,
@@ -25,6 +25,7 @@ const NOTICE_AFTER_MS: Readonly<Record<Condition, number | undefined>> = {
     "slack-unreachable": LASTING_MS,
     "outbox-full": 0,
     "alerts-expired": 0,
+    "redactions-failing": undefined,
     "monitor-failing": LASTING_MS,
 };
 

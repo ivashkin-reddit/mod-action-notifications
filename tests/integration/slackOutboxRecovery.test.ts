@@ -26,7 +26,7 @@ function removal(index: number): ReturnType<typeof removedPost> {
 function deliveredUsers(requests: readonly SlackRequest[]): (string | undefined)[] {
     return requests.map(
         (request: SlackRequest): string | undefined =>
-            /u\/(?<user>User\d+)>/u.exec(request.message.attachments?.[0]?.text ?? "")?.groups?.["user"],
+            /u\/(?<user>User\d+)>/u.exec(request.message?.attachments?.[0]?.text ?? "")?.groups?.["user"],
     );
 }
 
@@ -68,10 +68,15 @@ describe("recovering the Slack outbox", (): void => {
         await app.runJob("slackOutbox");
 
         expect(outboxJobs(app.context.scheduler.jobs)).toHaveLength(1);
-        // Only when Slack was last sent a message, which expires a minute after.
-        expect(app.context.redis.keys().filter((key: string): boolean => key.startsWith("slack_outbox"))).toStrictEqual(
-            ["slack_outbox_last_sent"],
-        );
+        // Only when Slack was last sent a message, which expires a minute after, besides the record of where the alert
+        // went, which redactedAlerts.test.ts covers.
+        expect(
+            app.context.redis
+                .keys()
+                .filter(
+                    (key: string): boolean => key.startsWith("slack_outbox") && !key.startsWith("slack_outbox_sent"),
+                ),
+        ).toStrictEqual(["slack_outbox_last_sent"]);
     });
 
     it("lets its lease outlast the longest a drain can run", TEST_OPTIONS, async (): Promise<void> => {

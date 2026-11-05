@@ -38,7 +38,7 @@ function fieldsOf(member: string): ReadonlyMap<string, unknown> {
 }
 
 /** Whether a stored value is a message. The app writes these members itself, so their text is the check. */
-function isSlackMessage(value: unknown): value is SlackMessage {
+export function isSlackMessage(value: unknown): value is SlackMessage {
     return typeof value === "object" && value !== null && "text" in value && typeof value.text === "string";
 }
 
