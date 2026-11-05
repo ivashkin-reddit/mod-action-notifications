@@ -38,6 +38,29 @@ describe("the daily summary job", (): void => {
         },
     );
 
+    // Setups that run at once list the same jobs, so each keeps the same one.
+    it(
+        "keeps the summary job with the lowest ID of two left by overlapping setups",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            app.context.scheduler.jobs = [
+                { id: "job-b", ...SUMMARY_JOB },
+                { id: "job-a", ...SUMMARY_JOB },
+            ];
+
+            await app.fire("AppUpgrade", { type: "AppUpgrade" });
+
+            expect(
+                app.context.scheduler.jobs
+                    .filter((job: ScheduledJob): boolean => job.name === "dailySummary")
+                    .map((job: ScheduledJob): string => job.id),
+            ).toStrictEqual(["job-a"]);
+        },
+    );
+
     it("replaces a summary job on another schedule", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
