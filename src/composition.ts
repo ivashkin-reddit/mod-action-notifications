@@ -1,4 +1,6 @@
 import type { TriggerContext } from "@devvit/public-api";
+import { clearCondition, createRedisConditionStore, raiseCondition } from "./health/index.js";
+import type { Condition } from "./health/index.js";
 import {
     createModListCache,
     createRedditModerationLookups,
@@ -28,7 +30,7 @@ import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.j
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { createSlackOutbox, forgetContent } from "./slack/delivery.js";
-import type { SlackOutbox } from "./slack/delivery.js";
+import type { DeliveryConditions, SlackOutbox } from "./slack/delivery.js";
 
 /**
  * The composition root's wiring: for each trigger and scheduler job, read the settings and build the capability's
@@ -53,6 +55,9 @@ export type AppContext = Readonly<{
             | "zRemRangeByRank"
             | "zRange"
             | "zScore"
+            | "hSetNX"
+            | "hGet"
+            | "hDel"
         >
     >;
     reddit: Readonly<
@@ -80,6 +85,17 @@ export function alertsConfigured(config: AppConfig): boolean {
     return config.slackWebhookUrl !== "";
 }
 
+/** Whether alerts can be sent, noting for the health log whether the webhook URL is missing or not a Slack one. */
+async function webhookReady(context: AppContext, config: AppConfig): Promise<boolean> {
+    const conditions = createRedisConditionStore(context.redis);
+    const missing = !alertsConfigured(config) && !config.slackWebhookUrlInvalid;
+    await (missing ? raiseCondition(conditions, "webhook-missing", "") : clearCondition(conditions, "webhook-missing"));
+    await (config.slackWebhookUrlInvalid
+        ? raiseCondition(conditions, "webhook-invalid", "")
+        : clearCondition(conditions, "webhook-invalid"));
+    return alertsConfigured(config);
+}
+
 function moderationConfig(config: AppConfig): ModerationConfig {
     return {
         enabledActions: config.enabledActions,
@@ -101,12 +117,26 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
     return { upvoteThreshold: config.postDeletionUpvoteThreshold };
 }
 
+/** The installation's health log, where the outbox reports lasting delivery problems. */
+function deliveryConditions(context: AppContext): DeliveryConditions {
+    const conditions = createRedisConditionStore(context.redis);
+    return {
+        raise: async (condition: Condition, detail: string): Promise<void> => {
+            await raiseCondition(conditions, condition, detail);
+        },
+        clear: async (condition: Condition): Promise<void> => {
+            await clearCondition(conditions, condition);
+        },
+    };
+}
+
 /** The installation's Slack outbox, through which every alert goes. */
 function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
     return createSlackOutbox({
         webhookUrl: config.slackWebhookUrl,
         redis: context.redis,
         scheduler: context.scheduler,
+        conditions: deliveryConditions(context),
     });
 }
 
@@ -138,8 +168,7 @@ function monitorJobPorts(context: AppContext): MonitorJobPorts {
 
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
     const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        console.error("Slack webhook URL not configured - skipping notification");
+    if (!(await webhookReady(context, config))) {
         return;
     }
     await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));

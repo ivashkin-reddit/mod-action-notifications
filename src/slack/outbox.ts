@@ -1,10 +1,12 @@
 import type { TriggerContext } from "@devvit/public-api";
+import { reportDelivery } from "./conditions.js";
+import type { DeliveryConditions } from "./conditions.js";
 import { anyDeleted, enqueueQuoting, noteDeleted, queueQuotes, removeDeletedQuotes } from "./deletions.js";
 import type { DeletionRedis } from "./deletions.js";
 import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
-import { attemptDelivery, backoffMs, createWebhookSender, logFailure, wait } from "./webhook.js";
+import { attemptDelivery, backoffMs, createWebhookSender, wait } from "./webhook.js";
 import type { Delivery } from "./webhook.js";
 
 /** The scheduler job that delivers what an earlier drain left queued; the composition root registers it. */
@@ -56,6 +58,8 @@ export type OutboxDependencies = QueueDependencies &
     Readonly<{
         /** An https URL. */
         webhookUrl: string;
+        /** Where lasting delivery problems are reported. */
+        conditions: DeliveryConditions;
     }>;
 
 export interface SlackOutbox {
@@ -127,12 +131,10 @@ async function messageToSend({ redis }: OutboxDependencies, queued: Queued): Pro
         : queued.message;
 }
 
-/** One message's delivery within a drain, logging what Slack would not take. */
+/** One message's delivery within a drain, reporting what it says about Slack. */
 async function deliver(drain: Drain, message: SlackMessage): Promise<Delivery> {
     const delivery = await deliverWithRetries(drain, message, 0);
-    if (delivery.outcome !== "delivered") {
-        logFailure(delivery.failure, message);
-    }
+    await reportDelivery(drain.outbox.conditions, delivery);
     return delivery;
 }
 

@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import type { Mock } from "vitest";
 import { NOW } from "./app.js";
 import { createFakeContext, defaultSettings, WEBHOOK_URL } from "./fakeContext.js";
 import type { FakeContext, ScheduledJob } from "./fakeContext.js";
@@ -6,11 +7,20 @@ import type { ZMember } from "./fakeRedis.js";
 import { createFakeSlack } from "./fakeSlack.js";
 import type { FakeSlack, SlackRequest } from "./fakeSlack.js";
 
+/** The conditions the outbox reports, recorded: each call names the condition, and for a raise, its detail. */
+export type FakeConditions = Readonly<{
+    raise: Mock<(condition: string, detail: string) => Promise<void>>;
+    clear: Mock<(condition: string) => Promise<void>>;
+}>;
+
 /** What the Slack outbox's unit tests build it from, and the fakes behind it. */
 export type OutboxFakes = Readonly<
     {
-        dependencies: Readonly<{ webhookUrl: string } & Pick<FakeContext, "redis" | "scheduler">>;
+        dependencies: Readonly<
+            { webhookUrl: string; conditions: FakeConditions } & Pick<FakeContext, "redis" | "scheduler">
+        >;
         slack: FakeSlack;
+        conditions: FakeConditions;
     } & Pick<FakeContext, "redis" | "scheduler">
 >;
 
@@ -20,11 +30,20 @@ export function outboxFakes(): OutboxFakes {
     const { context } = createFakeContext(defaultSettings());
     const slack = createFakeSlack();
     vi.stubGlobal("fetch", slack.fetch);
+    const conditions: FakeConditions = {
+        raise: vi.fn(async (): Promise<void> => {
+            await Promise.resolve();
+        }),
+        clear: vi.fn(async (): Promise<void> => {
+            await Promise.resolve();
+        }),
+    };
     return {
-        dependencies: { webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler },
+        dependencies: { webhookUrl: WEBHOOK_URL, redis: context.redis, scheduler: context.scheduler, conditions },
         redis: context.redis,
         scheduler: context.scheduler,
         slack,
+        conditions,
     };
 }
 

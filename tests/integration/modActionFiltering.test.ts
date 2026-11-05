@@ -22,7 +22,9 @@ describe("which mod actions are sent", (): void => {
         await app.fire("ModAction", removedPost());
 
         expect(app.slack.requests).toStrictEqual([]);
-        expect(console.error).toHaveBeenCalledWith("Slack webhook URL not configured - skipping notification");
+        expect(console.warn).toHaveBeenCalledWith(
+            "[health] No Slack webhook URL is set, so no alerts are sent. Set one in the app's settings.",
+        );
     });
 
     it("refuses a webhook URL that is not https", TEST_OPTIONS, async (): Promise<void> => {
@@ -34,7 +36,7 @@ describe("which mod actions are sent", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(console.error).toHaveBeenCalledWith(
-            "Invalid Slack webhook URL: must be an https://hooks.slack.com/ URL",
+            "[health] The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
         );
     });
 

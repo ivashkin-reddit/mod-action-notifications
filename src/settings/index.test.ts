@@ -17,6 +17,7 @@ describe("reading the settings", (): void => {
 
         await expect(configFrom({})).resolves.toStrictEqual({
             slackWebhookUrl: "",
+            slackWebhookUrlInvalid: false,
             enabledActions: [],
             excludedModerators: [],
             flagUnknownModerators: true,

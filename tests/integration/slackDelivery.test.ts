@@ -29,6 +29,16 @@ function outboxJobs(
         .map((job: ScheduledJob): Date | undefined => job.runAt);
 }
 
+/** The health log's line for Slack refusing alerts, with what Slack answered. */
+function refusing(detail: string): string {
+    return `[health] Slack is refusing alerts (${detail}), so they are dropped. Check the webhook URL in the app's settings, then use Test Slack Connection.`;
+}
+
+/** The health log's line for Slack not taking alerts, with why. */
+function unreachable(detail: string): string {
+    return `[health] Slack is not taking alerts (${detail}), so they wait in the queue. Alerts are dropped after a day, or beyond 500 waiting.`;
+}
+
 /** Milliseconds after NOW at which each request reached Slack. */
 function sendTimes(requests: readonly SlackRequest[]): number[] {
     return requests.map((request): number => request.sentAt - NOW.getTime());
@@ -64,7 +74,7 @@ describe("delivering an alert to Slack", (): void => {
     );
 
     it(
-        "backs off 1, 2 and 4 seconds, then logs the last response and leaves the alert queued for 30 seconds",
+        "backs off 1, 2 and 4 seconds, then logs Slack as not taking alerts and leaves the alert queued for 30 seconds",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -75,22 +85,14 @@ describe("delivering an alert to Slack", (): void => {
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0, 1000, 3000, 7000]);
-            expect(console.error).toHaveBeenCalledExactlyOnceWith(
-                "Slack webhook request failed - verify webhook URL is correct:",
-                {
-                    status: 503,
-                    statusText: "status 503",
-                    responseText: "error",
-                    troubleshooting:
-                        "Check: 1) Webhook URL is valid, 2) Slack workspace permissions, 3) Network connectivity",
-                },
-            );
+            expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("HTTP 503: error"));
+            expect(console.error).not.toHaveBeenCalled();
             expect(outboxJobs(app)).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 7000 + 30_000)]);
         },
     );
 
     it.each([[400], [403], [404]])(
-        "drops the alert, logged, when Slack answers %i",
+        "drops the alert, logging Slack as refusing alerts, when Slack answers %i",
         TEST_OPTIONS,
         async (status): Promise<void> => {
             expect.hasAssertions();
@@ -101,10 +103,7 @@ describe("delivering an alert to Slack", (): void => {
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0]);
-            expect(console.error).toHaveBeenCalledWith(
-                "Slack webhook request failed - verify webhook URL is correct:",
-                expect.objectContaining({ status }),
-            );
+            expect(console.error).toHaveBeenCalledExactlyOnceWith(refusing(`HTTP ${String(status)}: error`));
             expect(outboxJobs(app)).toStrictEqual([RECOVERY]);
         },
     );
@@ -121,7 +120,7 @@ describe("delivering an alert to Slack", (): void => {
     });
 
     it(
-        "logs network errors after three retries, and leaves the alert queued",
+        "logs Slack as not taking alerts after three retries of a network error, and leaves the alert queued",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -133,15 +132,12 @@ describe("delivering an alert to Slack", (): void => {
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0, 1000, 3000, 7000]);
-            expect(console.error).toHaveBeenCalledExactlyOnceWith(
-                "Error sending Slack message - check webhook URL and network connectivity:",
-                error,
-            );
+            expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("ECONNRESET"));
         },
     );
 
     it(
-        "leaves the alert queued at once, logging a timeout, when the request runs out of time",
+        "leaves the alert queued at once, logging Slack as not taking alerts, when the request runs out of time",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -152,35 +148,12 @@ describe("delivering an alert to Slack", (): void => {
             await app.fire("ModAction", removal);
 
             expect(sendTimes(app.slack.requests)).toStrictEqual([0]);
-            expect(console.error).toHaveBeenCalledExactlyOnceWith(
-                "Slack webhook request timed out - Slack may be experiencing delays or webhook URL may be incorrect",
-                {
-                    channel: "default",
-                    error: "context deadline exceeded",
-                    troubleshooting: "Verify webhook URL in settings and check Slack status at status.slack.com",
-                },
-            );
+            expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("context deadline exceeded"));
             expect(outboxJobs(app)).toStrictEqual([RECOVERY, new Date(NOW.getTime() + 30_000)]);
         },
     );
 
-    it("logs repeated timeouts as a timeout, naming the channel", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { notificationChannel: "mod-log" });
-        const error = new Error("socket timeout");
-        app.slack.respond(error, error, error, error);
-
-        await app.fire("ModAction", removal);
-
-        expect(sendTimes(app.slack.requests)).toHaveLength(4);
-        expect(console.error).toHaveBeenCalledExactlyOnceWith(
-            "Slack webhook request timed out - Slack may be experiencing delays or webhook URL may be incorrect",
-            expect.objectContaining({ channel: "#mod-log", error: "socket timeout" }),
-        );
-    });
-
-    it("retries and logs a failure that is not an Error", TEST_OPTIONS, async (): Promise<void> => {
+    it("retries a failure that is not an Error, and logs it as said", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -189,9 +162,6 @@ describe("delivering an alert to Slack", (): void => {
         await app.fire("ModAction", removal);
 
         expect(app.slack.fetch).toHaveBeenCalledTimes(4);
-        expect(console.error).toHaveBeenCalledExactlyOnceWith(
-            "Error sending Slack message - check webhook URL and network connectivity:",
-            "offline",
-        );
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith(unreachable("offline"));
     });
 });

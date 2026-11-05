@@ -66,7 +66,7 @@ describe("saving the Slack webhook URL", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(console.error).toHaveBeenCalledWith(
-            "Invalid Slack webhook URL: must be an https://hooks.slack.com/ URL",
+            "[health] The Slack webhook URL is not an https://hooks.slack.com/ URL, so no alerts are sent. Correct it in the app's settings.",
         );
     });
 });

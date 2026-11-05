@@ -159,6 +159,8 @@ export function settingsDefinitions(modActions: ModActionChoices): SettingsFormF
 export interface AppConfig {
     /** An https://hooks.slack.com/ URL, or '' when none is set or the one set is not one. */
     readonly slackWebhookUrl: string;
+    /** True when the URL set is not an https://hooks.slack.com/ URL: one saved before the app checked on saving. */
+    readonly slackWebhookUrlInvalid: boolean;
     readonly enabledActions: readonly string[];
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
@@ -187,6 +189,7 @@ type SettingValue = unknown;
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
     slackWebhookUrl: "",
+    slackWebhookUrlInvalid: false,
     enabledActions: [],
     excludedModerators: [],
     flagUnknownModerators: true,
@@ -200,14 +203,11 @@ const DEFAULT_CONFIG: AppConfig = {
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
 };
 
-/** An https Slack webhook URL, or '' (logging an error for a setting saved before it was checked on saving). */
-function webhookUrl(value: SettingValue): string {
+/** The webhook setting: an https Slack webhook URL, or '' and whether what was set is not one. */
+function webhookSetting(value: SettingValue): Pick<AppConfig, "slackWebhookUrl" | "slackWebhookUrlInvalid"> {
     const url = typeof value === "string" ? value.trim() : "";
-    if (webhookUrlProblem(url) === undefined) {
-        return url;
-    }
-    console.error("Invalid Slack webhook URL: must be an https://hooks.slack.com/ URL");
-    return "";
+    const invalid = webhookUrlProblem(url) !== undefined;
+    return { slackWebhookUrl: invalid ? "" : url, slackWebhookUrlInvalid: invalid };
 }
 
 /** A trimmed channel name without leading #s, or ''. */
@@ -251,7 +251,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     const notificationChannel = channelName(await settings.get("notificationChannel"));
     const alertChannel = channelName(await settings.get("alertChannel"));
     return {
-        slackWebhookUrl: webhookUrl(await settings.get("slackWebhookUrl")),
+        ...webhookSetting(await settings.get("slackWebhookUrl")),
         enabledActions: selected(await settings.get("enabledActions")),
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),

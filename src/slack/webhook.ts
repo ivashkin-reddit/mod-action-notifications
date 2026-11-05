@@ -80,6 +80,17 @@ export async function attemptDelivery(webhookUrl: string, message: SlackMessage)
     }
 }
 
+/** At most this much of Slack's answer goes into a log line. */
+const RESPONSE_TEXT_LOGGED = 100;
+
+/** What Slack answered, or why there was no answer, in a few words: `HTTP 404: no_service` or the error. */
+export function failureDetail(failure: Failure): string {
+    if (failure.kind === "response") {
+        return `HTTP ${String(failure.status)}: ${failure.responseText.slice(0, RESPONSE_TEXT_LOGGED)}`;
+    }
+    return failure.error instanceof Error ? failure.error.message : String(failure.error);
+}
+
 /** Logs why the message did not reach Slack, with what to check. */
 export function logFailure(failure: Failure, message: SlackMessage): void {
     if (failure.kind === "response") {
