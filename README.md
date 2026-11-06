@@ -14,7 +14,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Security alerts.** An action by an account that isn't on your mod list is sent as a security alert, to a separate channel if you like. Actions by Reddit's own accounts (u/reddit for Crowd Control and Reddit's filters, and Anti-Evil Operations for admin removals) are labelled as Reddit actions, not as security alerts.
 
-**Ban and mute context.** A ban alert shows how long the ban lasts, read from the mod log. When a user is unbanned or unmuted, the alert names the ban or mute being lifted: who issued it, when, and for how long. That context is remembered for 90 days.
+**Ban and mute context.** A ban alert shows how long the ban lasts, read from the mod log. When a user is unbanned or unmuted, the alert names the ban or mute being lifted: who issued it, when, and for how long. The app keeps that as metadata, never the mod note, for 90 days, and only while unban or unmute alerts are on.
 
 **Activity spikes.** When one moderator takes five or more actions within a minute, the alert says so.
 
@@ -40,20 +40,21 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 
 ## Settings
 
-| Setting                               | What it does                                                                                                                                                                                    | Default                         |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Enabled Mod Actions                   | Which moderator actions send an alert.                                                                                                                                                          | removals, spam, bans and unbans |
-| Excluded Moderators                   | Moderators whose actions never send an alert, separated by commas (useful for bots).                                                                                                            | none                            |
-| Flag Unknown Moderators               | Send actions by accounts not on the mod list as security alerts.                                                                                                                                | on                              |
-| Include Mod Note                      | Show moderator notes in alerts. Reddit includes notes for bans only.                                                                                                                            | on                              |
-| Notification Channel                  | The Slack channel for alerts and the daily summary: its channel ID, or a public channel's name. The Slack app must be in it. Alerts aren't sent until it's set.                                 | none                            |
-| Alert Channel                         | Slack channel for security, modqueue and deleted-post alerts.                                                                                                                                   | the notification channel        |
-| Modqueue Size Alert Threshold         | Alert when the modqueue holds at least this many items.                                                                                                                                         | 50                              |
-| Unmoderated Content Age Alert (Hours) | Alert when content has waited this long without a moderator reviewing it.                                                                                                                       | 24                              |
-| Old Reported Content Alert (Hours)    | Alert when reported content is this old and still waiting.                                                                                                                                      | 24                              |
-| Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                   | off                             |
-| Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                              | 100                             |
-| Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working. | off                             |
+| Setting                               | What it does                                                                                                                                                                                                                   | Default                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| Enabled Mod Actions                   | Which moderator actions send an alert.                                                                                                                                                                                         | removals, spam, bans and unbans |
+| Excluded Moderators                   | Moderators whose actions never send an alert, separated by commas (useful for bots).                                                                                                                                           | none                            |
+| Flag Unknown Moderators               | Send actions by accounts not on the mod list as security alerts.                                                                                                                                                               | on                              |
+| Include Mod Note                      | Show moderator notes in alerts. Reddit includes notes for bans only.                                                                                                                                                           | on                              |
+| Notification Channel                  | The Slack channel for alerts and the daily summary: its channel ID, or a public channel's name. The Slack app must be in it. Alerts aren't sent until it's set.                                                                | none                            |
+| Alert Channel                         | Slack channel for security, modqueue and deleted-post alerts.                                                                                                                                                                  | the notification channel        |
+| Slack Message Retention (Days)        | How many days your alert channels keep messages in Slack, from 1 to 90. For that long the app remembers where each alert quoting a post or comment is, to take the content out if it's deleted. Set it to match your channels. | 90                              |
+| Modqueue Size Alert Threshold         | Alert when the modqueue holds at least this many items.                                                                                                                                                                        | 50                              |
+| Unmoderated Content Age Alert (Hours) | Alert when content has waited this long without a moderator reviewing it.                                                                                                                                                      | 24                              |
+| Old Reported Content Alert (Hours)    | Alert when reported content is this old and still waiting.                                                                                                                                                                     | 24                              |
+| Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                                                  | off                             |
+| Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                                                             | 100                             |
+| Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working.                                | off                             |
 
 Setting a threshold to 0 turns that alert off.
 
@@ -70,17 +71,22 @@ These appear in the subreddit's mod tools menu, and only moderators of the subre
 
 ## Your data
 
-The app reads only what it needs to write an alert, and keeps very little:
+The app tells apart two kinds of data, as Reddit's rules for apps do:
 
-- **Ban and mute history**, to explain unbans: 90 days.
-- **Queued alerts**, for up to a day.
-- **IDs of deleted posts and comments**, so alerts still waiting to be sent leave their text out: a day.
-- **Where each alert quoting a post or comment went in Slack**, with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: 90 days.
+- **Content** is what redditors write: the titles and text of posts and comments. Alerts quote a little of it, and the app takes it out of them when it's deleted on Reddit.
+- **Metadata** is the record of moderation: which action, by which moderator, on which user, post or comment, when, and for how long. It's what your mod log already shows you, and it includes the IDs and times Reddit's rules let apps keep.
+
+The app reads only what it needs to write an alert. Apart from alerts waiting to be sent, it keeps metadata only, and never mod notes or Reddit user IDs:
+
+- **Ban and mute history** (metadata), to explain unbans: who banned or muted whom, when, and for how long. Kept for 90 days, and only while unban alerts (for bans) or unmute alerts (for mutes) are on.
+- **Queued alerts** (content and metadata), for up to a day.
+- **IDs of deleted posts and comments** (metadata), so alerts still waiting to be sent leave their text out: a day.
+- **Where each alert quoting a post or comment went in Slack** (metadata), with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: as long as your channels keep messages, set in **Slack Message Retention**, at most 90 days.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.
 
-Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, within 90 days, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. Alerts stay in Slack under your workspace's message retention. Reddit doesn't tell apps when an account is deleted, so retention is also what takes a deleted account's username out of alerts. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends, and keep them no longer than the 90 days the app can still edit them. [slack-app/README.md](./slack-app/README.md#deploying-it) shows how, and what the free plan allows.
+Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, while your channels still keep the alert, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. Alerts stay in Slack under your workspace's message retention. Reddit doesn't tell apps when an account is deleted, so retention is also what takes a deleted account's username out of alerts. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends, and keep them no longer than the 90 days the app can still edit them. Then set **Slack Message Retention** to the same number of days, so the app forgets where its alerts are when Slack deletes them. [slack-app/README.md](./slack-app/README.md#deploying-it) shows how, and what the free plan allows.
 
 The [Privacy Policy](./PRIVACY-POLICY.md) and [Terms & Conditions](./TERMS-AND-CONDITIONS.md) have the details.
 

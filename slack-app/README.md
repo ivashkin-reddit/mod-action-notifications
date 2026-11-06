@@ -38,7 +38,7 @@ The manifest turns token rotation off. A rotating token expires and has to be re
     - If a channel has no such option, a Workspace Owner first has to let conversations override the workspace's retention, under **Data retention** in the workspace settings ([Slack's guide](https://slack.com/help/articles/203457187-Customize-data-retention-in-Slack)). Where your organization sets retention for all its workspaces, ask its Org Owner.
     - **On the free plan**, a channel can't have a setting of its own. A Workspace Owner sets the whole workspace to **Delete messages after 90 days**, under **Data retention** in the workspace settings; the other choice keeps messages for a year, longer than the app can edit them. As this applies to every channel, a workspace for the mod team alone suits it best.
 
-    Slack deletes old messages once a day, and what it deletes can't be recovered.
+    Then set **Slack Message Retention (Days)** in the Devvit app's settings to the same number of days, so the app forgets where its alerts are when Slack deletes them. Slack deletes old messages once a day, and what it deletes can't be recovered.
 
 9. **Check it works.** From the subreddit's mod tools menu, choose **Test Slack Connection**. A test message should arrive in the notification channel.
 
