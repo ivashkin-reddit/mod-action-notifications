@@ -223,13 +223,17 @@ function quotedContent(target: ModActionTarget | undefined): readonly string[] {
     return [target?.commentId, target?.postId].filter((id: string | undefined): id is string => id !== undefined);
 }
 
-/** The action as its alert shows it once the content is deleted: without the content's text, or a title in its link. */
+/**
+ * The action as its alert shows it once the content is deleted: without the content's text, or a title in its link.
+ * Records keep this version, to replace the alert in Slack, and records hold no mod note, so it has none either.
+ */
 function withoutContent(modAction: ModAction): ModAction {
     const { target } = modAction;
     return target === undefined
         ? modAction
         : {
               ...modAction,
+              description: undefined,
               target: {
                   ...target,
                   body: undefined,

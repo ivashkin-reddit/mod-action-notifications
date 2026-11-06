@@ -28,11 +28,17 @@ function alertsOn(config: SecurityConfig): boolean {
     return config.securityAlerts && config.alertsReady;
 }
 
-/** Forgets a moderator removed from the team: their silence no longer counts. */
-async function forgetRemoved(action: WatchedAction, store: SecurityStore): Promise<void> {
-    if (action.type === "removemoderator" && action.targetName !== undefined && action.targetName !== "") {
-        await store.forgetModerator(action.targetName.toLowerCase());
+/**
+ * Forgets a moderator removed from the team: their silence no longer counts. True when they removed themselves, as
+ * a moderator leaving does, so their own action is not noted for them again.
+ */
+async function forgetRemoved(action: WatchedAction, store: SecurityStore): Promise<boolean> {
+    const removed = action.targetName?.toLowerCase() ?? "";
+    if (action.type !== "removemoderator" || removed === "") {
+        return false;
     }
+    await store.forgetModerator(removed);
+    return removed === action.moderatorName?.toLowerCase();
 }
 
 /**
@@ -54,7 +60,9 @@ async function watchModerator(action: WatchedAction, config: SecurityConfig, por
     if (action.actor !== "moderator" || name === "") {
         return;
     }
-    await forgetRemoved(action, ports.store);
+    if (await forgetRemoved(action, ports.store)) {
+        return;
+    }
     const moderator = name.toLowerCase();
     const lastAt = await swapLastAction(moderator, action.occurredAt.getTime(), ports.store);
     const days = alertsOn(config)

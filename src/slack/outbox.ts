@@ -17,7 +17,7 @@ import {
     scheduleRecovery,
     SEND_INTERVAL_MS,
 } from "./schedule.js";
-import { rememberSent, takeSent } from "./sent.js";
+import { forgetSent, rememberSent, sentAlerts } from "./sent.js";
 import { createDirectSender, postMessage, wait } from "./webApi.js";
 import type { Delivery, Posted } from "./webApi.js";
 
@@ -253,11 +253,14 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
 
 /** Queues a redaction of each alert in Slack that quotes the content, and has a drain make them. */
 async function redactSent(queue: QueueDependencies, contentId: string): Promise<void> {
-    const sent = await takeSent(queue.redis, contentId);
-    if (sent.length === 0) {
+    const { fields, alerts } = await sentAlerts(queue.redis, contentId);
+    if (fields.length === 0) {
         return;
     }
-    if ((await queueRedactions(queue.redis, sent)) > 0) {
+    // Queued before they are forgotten: a deletion that fails between the two is handled again, not lost.
+    const dropped = await queueRedactions(queue.redis, alerts);
+    await forgetSent(queue.redis, contentId, fields);
+    if (dropped > 0) {
         await queue.health.raise("redactions-failing", "too many waiting");
     }
     await scheduleDrain(queue, CONTINUE_SOON_MS);

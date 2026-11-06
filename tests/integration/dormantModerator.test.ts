@@ -121,4 +121,45 @@ describe("when each moderator last acted", (): void => {
         });
         expect(app.context.redis.ttlSeconds("security:last_action")).toBe(400 * 86_400);
     });
+
+    // The key lives on while anyone acts: each moderator's time is forgotten 400 days after it, all the same.
+    it(
+        "forgets a moderator 400 days after they last acted, while the team acts on",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, QUIET);
+            await app.context.redis.hSet("security:last_action", {
+                modb: String(daysAgo(401).getTime()),
+                modc: String(daysAgo(399).getTime()),
+            });
+
+            await app.fire("ModAction", removalBy("ModA", "ModAction_1", 0));
+
+            await expect(app.context.redis.hGetAll("security:last_action")).resolves.toStrictEqual({
+                modc: String(daysAgo(399).getTime()),
+                moda: String(NOW.getTime()),
+            });
+        },
+    );
+
+    it("forgets a moderator who leaves the team", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, QUIET);
+        await app.fire("ModAction", removalBy("ModB", "ModAction_1", 0));
+
+        await app.fire(
+            "ModAction",
+            modActionEvent({
+                id: "ModAction_2",
+                action: "removemoderator",
+                moderator: { name: "ModB" },
+                targetUser: { name: "ModB" },
+            }),
+        );
+
+        await expect(app.context.redis.hGetAll("security:last_action")).resolves.toStrictEqual({});
+    });
 });

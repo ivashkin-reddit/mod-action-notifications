@@ -22,7 +22,7 @@ const MAX_REMEMBERED = 50_000;
 const MS_PER_SECOND = 1000;
 
 export type SentRedis = Readonly<
-    Pick<TriggerContext["redis"], "del" | "expire" | "hGetAll" | "hSet" | "zAdd" | "zRange" | "zRem">
+    Pick<TriggerContext["redis"], "del" | "expire" | "hDel" | "hGetAll" | "hSet" | "zAdd" | "zRange" | "zRem">
 >;
 
 /** Where the records are, and how many days the alert channels keep messages: how long each is kept. */
@@ -98,15 +98,28 @@ function sentAlertOf(field: string, value: string): SentAlert[] {
     }
 }
 
-/** Takes the alerts that quote this post or comment out of what is remembered, and returns them. */
-export async function takeSent(redis: SentRedis, contentId: string): Promise<readonly SentAlert[]> {
-    const fields = await redis.hGetAll(sentKey(contentId));
-    if (Object.keys(fields).length === 0) {
-        return [];
+/** The alerts remembered as quoting this post or comment, each with the field it is remembered under. */
+export type RememberedAlerts = Readonly<{ fields: readonly string[]; alerts: readonly SentAlert[] }>;
+
+/** The alerts that quote this post or comment, as remembered; left remembered until forgetSent. */
+export async function sentAlerts(redis: SentRedis, contentId: string): Promise<RememberedAlerts> {
+    const stored = await redis.hGetAll(sentKey(contentId));
+    return {
+        fields: Object.keys(stored),
+        alerts: Object.entries(stored).flatMap(([field, value]: readonly [string, string]): SentAlert[] =>
+            sentAlertOf(field, value),
+        ),
+    };
+}
+
+/**
+ * Forgets the alerts read for this post or comment, once their redactions are queued: only those, so an alert
+ * remembered since is kept, and redacted when it is found deleted.
+ */
+export async function forgetSent(redis: SentRedis, contentId: string, fields: readonly string[]): Promise<void> {
+    if (fields.length === 0) {
+        return;
     }
-    await redis.del(sentKey(contentId));
+    await redis.hDel(sentKey(contentId), [...fields]);
     await redis.zRem(REMEMBERED_KEY, [contentId]);
-    return Object.entries(fields).flatMap(([field, value]: readonly [string, string]): SentAlert[] =>
-        sentAlertOf(field, value),
-    );
 }

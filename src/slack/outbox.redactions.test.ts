@@ -109,6 +109,25 @@ describe("content deleted on Reddit, quoted by alerts in Slack", (): void => {
     });
 
     it(
+        "keeps where the alerts are when their redactions cannot be queued, so the deletion can be handled again",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { dependencies, redis } = fakeOutbox();
+            await redis.hSet("slack_outbox_sent:t1_a", {
+                "C0123MODS 1.000001": JSON.stringify({ text: "removed t1_a" }),
+            });
+            redis.zAdd.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error("redis down"));
+
+            await expect(forgetContent(dependencies, "t1_a")).rejects.toThrow("redis down");
+            await expect(redis.hGetAll("slack_outbox_sent:t1_a")).resolves.toStrictEqual({
+                "C0123MODS 1.000001": JSON.stringify({ text: "removed t1_a" }),
+            });
+        },
+    );
+
+    it(
         "keeps at most 5,000 redactions waiting, and reports dropping the oldest",
         TEST_OPTIONS,
         async (): Promise<void> => {

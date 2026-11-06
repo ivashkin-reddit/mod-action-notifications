@@ -5,7 +5,8 @@ import type { ConfigEdit } from "../domain/watch.js";
 
 /**
  * The security watch in Redis. Installations already hold these keys:
- * - `security:last_action`, a hash of lower-cased moderator to when they last acted, for 400 days from the last;
+ * - `security:last_action`, a hash of lower-cased moderator to when they last acted, each kept 400 days from it;
+ * - `security:last_action_pruned`, a day's claim that moderators silent longer were forgotten;
  * - `security:woke:{moderator}`, a day's claim that their waking was alerted;
  * - `security:automod_removals:{hour}`, AutoModerator's removals by minute of an hour since the epoch, for 2 days;
  * - `security:automod_edit`, the last edit to AutoModerator's config, for a day;
@@ -13,6 +14,7 @@ import type { ConfigEdit } from "../domain/watch.js";
  * - `security:misfire:{editAt}`, a day's claim that a misfire after that edit was alerted.
  */
 const LAST_ACTION_KEY = "security:last_action";
+const PRUNED_KEY = "security:last_action_pruned";
 const LAST_ACTION_SECONDS = 34_560_000;
 const REMOVALS_SECONDS = 172_800;
 const EDIT_KEY = "security:automod_edit";
@@ -29,6 +31,24 @@ async function claim(redis: SecurityRedis, key: string): Promise<boolean> {
     return (
         (await redis.set(key, "1", { nx: true, expiration: new Date(Date.now() + DAY_SECONDS * MS_PER_SECOND) })) !== ""
     );
+}
+
+/**
+ * Forgets each moderator who last acted over 400 days ago, at most once a day. The hash's own expiry is renewed
+ * whenever anyone acts, so it alone would keep a departed moderator for as long as the team is active. A read, then a
+ * delete: one handled at the same moment can lose a moderator's newest time, and their next action notes it again.
+ */
+async function forgetLongSilent(redis: SecurityRedis, now: number): Promise<void> {
+    if (!(await claim(redis, PRUNED_KEY))) {
+        return;
+    }
+    const oldest = now - LAST_ACTION_SECONDS * MS_PER_SECOND;
+    const silent = Object.entries(await redis.hGetAll(LAST_ACTION_KEY))
+        .filter(([, at]: readonly [string, string]): boolean => !(Number(at) >= oldest))
+        .map(([moderator]: readonly [string, string]): string => moderator);
+    if (silent.length > 0) {
+        await redis.hDel(LAST_ACTION_KEY, silent);
+    }
 }
 
 function removalsKey(hour: number): string {
@@ -84,6 +104,7 @@ export function createRedisSecurityStore(redis: SecurityRedis): SecurityStore {
         noteAction: async (moderator: string, at: number): Promise<void> => {
             await redis.hSet(LAST_ACTION_KEY, { [moderator]: String(at) });
             await redis.expire(LAST_ACTION_KEY, LAST_ACTION_SECONDS);
+            await forgetLongSilent(redis, Date.now());
         },
         forgetModerator: async (moderator: string): Promise<void> => {
             await redis.hDel(LAST_ACTION_KEY, [moderator]);

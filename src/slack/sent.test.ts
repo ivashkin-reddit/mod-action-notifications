@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { NOW } from "../../tests/fixtures/app.js";
 import { outboxFakes } from "../../tests/fixtures/outbox.js";
-import { rememberSent, takeSent } from "./sent.js";
+import { forgetSent, rememberSent, sentAlerts } from "./sent.js";
+import type { SentAlert, SentRedis } from "./sent.js";
 
 const TEST_OPTIONS = { timeout: 5000 };
 const REMEMBERED_KEY = "slack_outbox_sent";
@@ -11,6 +12,13 @@ const QUOTING = { contentIds: ["t1_a"], withoutQuotes: { text: "removed t1_a" } 
 /** How many days the alert channels keep messages, unless a test says otherwise. */
 const RETENTION_DAYS = 90;
 
+/** Reads the alerts remembered for the content, then forgets them, as a deletion does. */
+async function take(redis: SentRedis, contentId: string): Promise<readonly SentAlert[]> {
+    const { fields, alerts } = await sentAlerts(redis, contentId);
+    await forgetSent(redis, contentId, fields);
+    return alerts;
+}
+
 describe("the alerts remembered in Slack", (): void => {
     it("are taken once, then forgotten", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
@@ -18,10 +26,10 @@ describe("the alerts remembered in Slack", (): void => {
         const { redis } = outboxFakes();
         await rememberSent({ redis, retentionDays: RETENTION_DAYS }, POSTED, QUOTING);
 
-        await expect(takeSent(redis, "t1_a")).resolves.toStrictEqual([
+        await expect(take(redis, "t1_a")).resolves.toStrictEqual([
             { posted: POSTED, withoutQuotes: { text: "removed t1_a" } },
         ]);
-        await expect(takeSent(redis, "t1_a")).resolves.toStrictEqual([]);
+        await expect(take(redis, "t1_a")).resolves.toStrictEqual([]);
         expect(redis.keys()).toStrictEqual([]);
     });
 
@@ -34,8 +42,8 @@ describe("the alerts remembered in Slack", (): void => {
             contentIds: ["t1_a", "t3_b"],
         });
 
-        await expect(takeSent(redis, "t3_b")).resolves.toHaveLength(1);
-        await expect(takeSent(redis, "t1_a")).resolves.toHaveLength(1);
+        await expect(take(redis, "t3_b")).resolves.toHaveLength(1);
+        await expect(take(redis, "t1_a")).resolves.toHaveLength(1);
     });
 
     it("forget a post or comment last quoted over 90 days ago", TEST_OPTIONS, async (): Promise<void> => {
@@ -69,7 +77,7 @@ describe("the alerts remembered in Slack", (): void => {
             await expect(redis.zRange(REMEMBERED_KEY, 0, -1, { by: "rank" })).resolves.toStrictEqual([
                 { member: "t1_a", score: NOW.getTime() },
             ]);
-            await expect(takeSent(redis, "t1_old")).resolves.toStrictEqual([]);
+            await expect(take(redis, "t1_old")).resolves.toStrictEqual([]);
         },
     );
 
@@ -119,8 +127,8 @@ describe("the alerts remembered in Slack", (): void => {
 
         await expect(redis.zCard(REMEMBERED_KEY)).resolves.toBe(50_000);
         await expect(redis.zScore(REMEMBERED_KEY, "t1_0")).resolves.toBeUndefined();
-        await expect(takeSent(redis, "t1_0")).resolves.toStrictEqual([]);
-        await expect(takeSent(redis, "t1_a")).resolves.toHaveLength(1);
+        await expect(take(redis, "t1_0")).resolves.toStrictEqual([]);
+        await expect(take(redis, "t1_a")).resolves.toHaveLength(1);
     });
 
     it("leave out a record this app cannot read", TEST_OPTIONS, async (): Promise<void> => {
@@ -134,7 +142,7 @@ describe("the alerts remembered in Slack", (): void => {
             "C0123MODS 1.000003": JSON.stringify({ text: "readable" }),
         });
 
-        await expect(takeSent(redis, "t1_a")).resolves.toStrictEqual([
+        await expect(take(redis, "t1_a")).resolves.toStrictEqual([
             { posted: { channel: "C0123MODS", ts: "1.000003" }, withoutQuotes: { text: "readable" } },
         ]);
     });
