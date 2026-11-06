@@ -42,6 +42,8 @@ export interface Settings {
     reportedContentAgeHours?: unknown;
     spamQueueThreshold?: unknown;
     editedQueueThreshold?: unknown;
+    urgentReportReasons?: unknown;
+    reportPileUpThreshold?: unknown;
     enableAutoModAlerts?: unknown;
     postDeletionUpvoteThreshold?: unknown;
     dailySummary?: unknown;

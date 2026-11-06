@@ -10,6 +10,7 @@ export const DEFAULT_SPAM_QUEUE_THRESHOLD = 0;
 export const DEFAULT_BAN_HISTORY_DAYS = 30;
 export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
+export const DEFAULT_REPORT_PILE_UP_THRESHOLD = 0;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
 /** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
@@ -182,6 +183,22 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         helpText:
             "Alert when Reddit's edited queue, of recently edited posts and comments, holds at least this many items (0 to disable)",
         defaultValue: DEFAULT_EDITED_QUEUE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "string",
+        name: "urgentReportReasons",
+        label: "Urgent Report Reasons",
+        helpText:
+            "Report reasons that alert the alert channel at once, separated by commas, e.g. personal information, threatening violence. A report alerts when its reason contains one, ignoring case; the alert names the reason as written here, never the report's own words (none by default)",
+    },
+    {
+        type: "number",
+        name: "reportPileUpThreshold",
+        label: "Report Pile-Up Alert Threshold",
+        helpText: "Alert once when a post or comment reaches this many reports (0 to disable)",
+        defaultValue: DEFAULT_REPORT_PILE_UP_THRESHOLD,
         onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
             wholeNumberProblem(value),
     },

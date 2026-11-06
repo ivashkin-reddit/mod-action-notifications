@@ -8,6 +8,7 @@ import {
     DEFAULT_BAN_HISTORY_DAYS,
     DEFAULT_DORMANT_MODERATOR_DAYS,
     DEFAULT_EDITED_QUEUE_THRESHOLD,
+    DEFAULT_REPORT_PILE_UP_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
     MAX_SLACK_RETENTION_DAYS,
 } from "./definitions.js";
@@ -45,6 +46,10 @@ export interface AppConfig {
     readonly spamQueueThreshold: number;
     /** 0 turns the edited queue alert off. */
     readonly editedQueueThreshold: number;
+    /** Report reasons that alert at once, as moderators wrote them, from the comma-separated setting. */
+    readonly urgentReportReasons: readonly string[];
+    /** 0 turns the report pile-up alert off. */
+    readonly reportPileUpThreshold: number;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
@@ -77,6 +82,8 @@ const DEFAULT_CONFIG: AppConfig = {
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     spamQueueThreshold: DEFAULT_SPAM_QUEUE_THRESHOLD,
     editedQueueThreshold: DEFAULT_EDITED_QUEUE_THRESHOLD,
+    urgentReportReasons: [],
+    reportPileUpThreshold: DEFAULT_REPORT_PILE_UP_THRESHOLD,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
@@ -116,6 +123,16 @@ function booleanOr(value: SettingValue, fallback: boolean): boolean {
 /** The values a multi-select setting holds (Devvit stores them as strings), or none. */
 function selected(value: SettingValue): readonly string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+/** The entries of comma-separated text, trimmed, leaving out blanks. */
+function commaList(value: SettingValue): readonly string[] {
+    return typeof value === "string"
+        ? value
+              .split(",")
+              .map((entry: string): string => entry.trim())
+              .filter((entry: string): boolean => entry !== "")
+        : [];
 }
 
 /** The names in comma-separated text, trimmed and lower-cased, leaving out blanks. */
@@ -161,6 +178,11 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         editedQueueThreshold: nonNegativeInteger(
             await settings.get("editedQueueThreshold"),
             DEFAULT_EDITED_QUEUE_THRESHOLD,
+        ),
+        urgentReportReasons: commaList(await settings.get("urgentReportReasons")),
+        reportPileUpThreshold: nonNegativeInteger(
+            await settings.get("reportPileUpThreshold"),
+            DEFAULT_REPORT_PILE_UP_THRESHOLD,
         ),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         dailySummary: booleanOr(await settings.get("dailySummary"), false),

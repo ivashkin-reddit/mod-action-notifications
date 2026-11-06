@@ -4,6 +4,7 @@
  * composition.ts builds what they share, and the capability modules do the work.
  */
 import { Devvit } from "@devvit/public-api";
+import { onCommentReport, onPostReport } from "./communityTriggers.js";
 import type { AppContext } from "./composition.js";
 import { SUMMARY_JOB_NAME } from "./health/index.js";
 import {
@@ -21,6 +22,7 @@ import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import type { PostDeleteEvent } from "./postDeletion/index.js";
+import type { CommentReportEvent, PostReportEvent } from "./reports/index.js";
 import {
     deliverQueuedAlerts,
     runModqueueMonitor,
@@ -90,6 +92,21 @@ Devvit.addTrigger({
     event: "CommentDelete",
     onEvent: async (event: CommentDeleteEvent, context: AppContext): Promise<void> => {
         await onCommentDelete(event, context);
+    },
+});
+
+// A report: urgent reasons alert at once, and reports piling up on a post or comment alert once.
+Devvit.addTrigger({
+    event: "PostReport",
+    onEvent: async (event: PostReportEvent, context: AppContext): Promise<void> => {
+        await onPostReport(event, context);
+    },
+});
+
+Devvit.addTrigger({
+    event: "CommentReport",
+    onEvent: async (event: CommentReportEvent, context: AppContext): Promise<void> => {
+        await onCommentReport(event, context);
     },
 });
 

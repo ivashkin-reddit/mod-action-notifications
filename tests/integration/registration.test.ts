@@ -53,6 +53,8 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
                 { name: "spamQueueThreshold", type: "number", defaultValue: 0 },
                 { name: "editedQueueThreshold", type: "number", defaultValue: 0 },
+                { name: "urgentReportReasons", type: "string", defaultValue: undefined },
+                { name: "reportPileUpThreshold", type: "number", defaultValue: 0 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
@@ -147,8 +149,10 @@ describe("what the app registers with Devvit", (): void => {
             "onAppInstall",
             "onAppUpgrade",
             "onCommentDelete",
+            "onCommentReport",
             "onModAction",
             "onPostDelete",
+            "onPostReport",
         ]);
     });
 

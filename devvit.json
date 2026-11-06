@@ -3,7 +3,15 @@
   "name": "ukpolitics-man",
   "blocks": {
     "entry": "src/main.ts",
-    "triggers": ["onAppInstall", "onAppUpgrade", "onCommentDelete", "onModAction", "onPostDelete"]
+    "triggers": [
+      "onAppInstall",
+      "onAppUpgrade",
+      "onCommentDelete",
+      "onCommentReport",
+      "onModAction",
+      "onPostDelete",
+      "onPostReport"
+    ]
   },
   "permissions": {
     "http": {
