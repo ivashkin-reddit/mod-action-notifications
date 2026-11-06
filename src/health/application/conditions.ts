@@ -1,4 +1,10 @@
-import { conditionContinuing, conditionResolved, conditionStarted, REMINDER_SECONDS } from "../domain/conditions.js";
+import {
+    conditionContinuing,
+    conditionResolved,
+    conditionStarted,
+    keptDetail,
+    REMINDER_SECONDS,
+} from "../domain/conditions.js";
 import type { Condition, InForce, LogLine } from "../domain/conditions.js";
 import { NOTICE_PERIOD_SECONDS, noticeDue, problemNotice, resolvedNotice } from "../domain/notices.js";
 import type { Notice } from "../domain/notices.js";
@@ -103,6 +109,6 @@ async function start(ports: ConditionPorts, condition: Condition, detail: string
  */
 export async function raiseCondition(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {
     await recording(condition, async (): Promise<void> => {
-        await start(ports, condition, detail);
+        await start(ports, condition, keptDetail(detail));
     });
 }

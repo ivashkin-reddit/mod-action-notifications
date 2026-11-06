@@ -159,12 +159,11 @@ describe("an action by someone not on the mod list", (): void => {
             "🚨 *Security Alert*",
             "• *Status:* Unknown moderator (alert)",
         ]);
+        // The alert names the account for the moderators; the developer's log does not.
+        expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("Intruder");
         expect(console.warn).toHaveBeenCalledWith(
             "[modaction] An account not on the mod list took an action, alerted as a security alert",
-            {
-                moderator: "Intruder",
-                action: "removelink",
-            },
+            { action: "removelink" },
         );
     });
 

@@ -143,6 +143,19 @@ describe("a failing modqueue monitor", (): void => {
         );
         expect(console.info).toHaveBeenCalledExactlyOnceWith("[health] The modqueue monitor is working again.");
     });
+    // What a failure says comes from Reddit or Slack, and goes into the log, modmail and Show Bot Status.
+    it("is logged with at most 200 characters of what the failure said", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 5 });
+        app.context.reddit.modQueueAll.mockRejectedValueOnce(new Error("x".repeat(1000)));
+
+        await app.runJob("modqueueMonitor");
+
+        expect(console.error).toHaveBeenCalledExactlyOnceWith(
+            `[health] The modqueue monitor is failing (${"x".repeat(200)}), so no modqueue alerts are sent until it recovers.`,
+        );
+    });
 });
 
 /** Everything the app logged as a warning or an error, as text. */

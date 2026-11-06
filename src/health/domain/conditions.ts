@@ -128,6 +128,17 @@ export function conditionResolved(condition: Condition): LogLine {
 /** How often a condition in force is logged again: a day. */
 export const REMINDER_SECONDS = 86_400;
 
+/**
+ * At most this many characters of what the app saw of a condition are kept. It comes from Reddit, Slack or the
+ * network, and goes into the log, modmail notices and Show Bot Status.
+ */
+const MAX_DETAIL = 200;
+
+/** What the app saw of a condition, as it is kept: at most MAX_DETAIL characters. */
+export function keptDetail(detail: string): string {
+    return detail.slice(0, MAX_DETAIL);
+}
+
 /** The line that says the condition is still in force, `since` ms since the epoch. */
 export function conditionContinuing(condition: Condition, detail: string, since: number): LogLine {
     const { level, started } = CONDITIONS[condition];

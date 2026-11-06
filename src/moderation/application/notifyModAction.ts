@@ -124,8 +124,8 @@ async function isUnknownModerator(
         console.warn("[modaction] Could not fetch the mod list, so treating the action as a moderator's:", error);
         return false;
     }
+    // The alert names the account, for the moderators; the log, for the developer, does not.
     console.warn("[modaction] An account not on the mod list took an action, alerted as a security alert", {
-        moderator: moderatorName,
         action: actionType,
     });
     return true;
