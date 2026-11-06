@@ -53,8 +53,8 @@ describe("a ban", (): void => {
         ["1 day", "1 day"],
         ["30d", "30 days"],
         ["until appeal", "until appeal"],
-        // A plural "days" is not parsed as a number (see the legacy-field cases below), so it is shown verbatim.
-        ["ban for 7 days", "ban for 7 days"],
+        // A number of days anywhere in the text is the length.
+        ["ban for 7 days", "7 days"],
     ])("reads the mod log details %j as a duration of %j", TEST_OPTIONS, async (details, duration): Promise<void> => {
         expect.hasAssertions();
 

@@ -166,23 +166,25 @@ async function isFirstDelivery(modAction: ModAction, records: ModerationRecords)
  * Tells moderators about a mod action. Every action, sent or not, is first completed from the mod log (a ban
  * without a length), remembered or matched against what it lifts (bans and mutes, while alerts for their lifting
  * are on), and counted toward its moderator's activity (except AutoModerator's and Reddit's). Only an action that is
- * reported has its moderator checked against the mod list, and an action delivered again is reported once.
+ * reported has its moderator checked against the mod list, and an action delivered again is reported once. Returns
+ * the action as completed, for what else counts it.
  */
 export async function notifyModAction(
     action: ModAction,
     config: ModerationConfig,
     ports: ModerationPorts,
-): Promise<void> {
+): Promise<ModAction> {
     const modAction = await withActivity(
         await withDiscipline(await withBanFromModLog(action, ports.lookups), config.enabledActions, ports.records),
         ports.records,
     );
     if (!isReported(modAction, config)) {
-        return;
+        return modAction;
     }
     const actor = await actorOf(modAction, config, ports.lookups);
     // Claimed just before the alert is queued, so a delivery that fails earlier leaves the report to the next one.
     if (await isFirstDelivery(modAction, ports.records)) {
         await ports.alerts.report(await withRecentHistory(modAction, config.banHistoryDays, ports.lookups), actor);
     }
+    return modAction;
 }

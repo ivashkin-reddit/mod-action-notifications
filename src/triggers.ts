@@ -13,10 +13,11 @@ import {
     createRedditModerationLookups,
     createRedisModerationRecords,
     createSlackModActionAlerts,
+    isRedditAccount,
     modActionFromTriggerEvent,
     notifyModAction,
 } from "./moderation/index.js";
-import type { ModActionEvent, ModerationConfig, ModerationPorts } from "./moderation/index.js";
+import type { ModAction, ModActionEvent, ModerationConfig, ModerationPorts } from "./moderation/index.js";
 import {
     alertOnUserDeletion,
     createRedditPostLookup,
@@ -27,6 +28,8 @@ import {
 import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { forgetContent } from "./slack/delivery.js";
+import { countModAction, createRedisStatisticsStore } from "./statistics/index.js";
+import type { ActorKind, CountedAction } from "./statistics/index.js";
 
 /**
  * The composition root's triggers: what each does when Devvit delivers its event. main.ts registers them;
@@ -62,13 +65,47 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
     return { upvoteThreshold: config.postDeletionUpvoteThreshold };
 }
 
+function actorKindOf(action: ModAction): ActorKind {
+    if (isRedditAccount(action.moderatorName)) {
+        return "reddit";
+    }
+    return action.isAutoModerator ? "automoderator" : "moderators";
+}
+
+/** The action as team statistics count it: who took it, as a kind; its moderator's name is only hashed. */
+function countedActionOf(action: ModAction): CountedAction {
+    return {
+        id: action.id,
+        type: action.type,
+        actor: actorKindOf(action),
+        moderatorName: action.moderatorName,
+        occurredAt: action.occurredAt,
+        postId: action.target?.postId,
+        banDays: action.banDuration,
+    };
+}
+
+/** Counts the action toward the team's statistics; logs rather than rejects, as the alert matters more. */
+async function countForStatistics(action: ModAction, context: AppContext): Promise<void> {
+    try {
+        await countModAction(countedActionOf(action), createRedisStatisticsStore(context.redis));
+    } catch (error) {
+        console.warn("[statistics] Could not count a mod action:", error);
+    }
+}
+
+/**
+ * A mod action: alerted while Slack is set up, then counted toward the team's statistics whether or not it is, with
+ * what the alert completed it with (a ban's length).
+ */
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
     const config = await configOf(context);
-    if (!(await slackReady(context, config))) {
-        return;
-    }
-    await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));
+    const action = modActionFromTriggerEvent(event);
+    const completed = (await slackReady(context, config))
+        ? await notifyModAction(action, moderationConfig(config), moderationPorts(context, config))
+        : action;
+    await countForStatistics(completed, context);
 }
 
 /** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */

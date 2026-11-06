@@ -37,6 +37,7 @@ export type AppContext = Readonly<{
             | "zRem"
             | "zRemRangeByScore"
             | "zRemRangeByRank"
+            | "zIncrBy"
             | "zRange"
             | "zScore"
             | "hSetNX"

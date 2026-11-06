@@ -34,6 +34,8 @@ export interface FakeRedis extends StringCommands, SortedSetCommands, HashComman
     readonly ttlSeconds: (key: string) => number | undefined;
     /** Writes a value directly, as an earlier app version might have left it. */
     readonly seed: (key: string, value: string) => void;
+    /** What `key` holds, whatever its type; undefined when it does not exist. */
+    readonly dump: (key: string) => unknown;
 }
 
 function stringCommands(keyspace: Keyspace): StringCommands {
@@ -86,5 +88,6 @@ export function createFakeRedis(): FakeRedis {
         seed: (key: string, value: string): void => {
             keyspace.put(key, { value: { kind: "string", text: value }, expiresAt: undefined });
         },
+        dump: (key: string): unknown => keyspace.live(key)?.value,
     };
 }

@@ -71,7 +71,7 @@ A modular monolith on Devvit Blocks: one module per business capability, two sha
     - A new unit test should be able to fail: check it against a deliberate break in the code it covers, as these were.
     - There are no end-to-end tests: the app has no client, and `npm run playtest` is the check against Reddit itself.
 - Setting names, Redis keys and scheduler job names are stored data: renaming one loses what installations already saved. The tests pin them. A stored value that changes shape takes a new key, and the app reads the old key until it has expired everywhere, as `legacyDisciplineKey` in [redisModerationRecords.ts](src/moderation/infrastructure/redisModerationRecords.ts) does.
-- Some tests pin behaviour that looks wrong, and say so in their names or comments: a plural "days" is not parsed as a ban length (harmless, as the text is then shown as written). Change one only as a deliberate behaviour fix, together with its test.
+- Some tests pin behaviour that looks wrong, and say so in their names or comments. Change one only as a deliberate behaviour fix, together with its test.
 - `eslint --fix` on tests rewrites `toHaveBeenCalled()` and `toHaveBeenCalledTimes(1)` into `toHaveBeenCalledWith()` and `toHaveBeenCalledExactlyOnceWith()`, which assert the mock received no arguments. Write the expected arguments by hand instead.
 
 ## Strictness

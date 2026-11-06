@@ -14,6 +14,8 @@ export interface SortedSetCommands {
     readonly zScore: Mock<(key: string, member: string) => Promise<number | undefined>>;
     /** How many members the sorted set has; 0 when there is none. */
     readonly zCard: Mock<(key: string) => Promise<number>>;
+    /** Adds `value` to the member's score, adding the member at 0 first if absent; returns its new score. */
+    readonly zIncrBy: Mock<(key: string, member: string, value: number) => Promise<number>>;
     /**
      * ZRANGE by score (members scored from `start` to `stop`, at most `limit.count` from `limit.offset`) or by rank
      * (negative ranks count from the end), lowest first: the forms the app uses. Any other form rejects rather than
@@ -73,6 +75,15 @@ function rangeOf(
     return members.slice(rankIn(start, members.length), rankIn(stop, members.length) + 1);
 }
 
+function zIncrByCommand(keyspace: Keyspace): SortedSetCommands["zIncrBy"] {
+    return vi.fn(async (key: string, member: string, value: number): Promise<number> => {
+        const scores = scoresAt(keyspace, key);
+        const score = (new Map(Object.entries(scores)).get(member) ?? 0) + value;
+        keep(keyspace, key, { kind: "zset", scores: { ...scores, [member]: score } });
+        return await Promise.resolve(score);
+    });
+}
+
 function zRangeCommand(keyspace: Keyspace): SortedSetCommands["zRange"] {
     return vi.fn(
         async (key: string, start: number, stop: number, options?: RangeOptions): Promise<ZMember[]> =>
@@ -121,6 +132,7 @@ export function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
         zCard: vi.fn(
             async (key: string): Promise<number> => await Promise.resolve(Object.keys(scoresAt(keyspace, key)).length),
         ),
+        zIncrBy: zIncrByCommand(keyspace),
         zRange: zRangeCommand(keyspace),
     };
 }
