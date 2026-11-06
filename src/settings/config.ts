@@ -47,6 +47,8 @@ export interface AppConfig {
     readonly postDeletionUpvoteThreshold: number;
     /** Whether a summary of the day before goes to Slack each morning. */
     readonly dailySummary: boolean;
+    /** Whether the team's statistics for the week before go to Slack each Monday. */
+    readonly weeklyStatistics: boolean;
 }
 
 // Devvit's client lets a caller name the type a setting comes back as, but checks nothing: a saved value can be
@@ -74,6 +76,7 @@ const DEFAULT_CONFIG: AppConfig = {
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
+    weeklyStatistics: false,
 };
 
 function trimmed(value: SettingValue): string {
@@ -153,6 +156,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         ),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         dailySummary: booleanOr(await settings.get("dailySummary"), false),
+        weeklyStatistics: booleanOr(await settings.get("weeklyStatistics"), false),
         postDeletionUpvoteThreshold: nonNegativeInteger(
             await settings.get("postDeletionUpvoteThreshold"),
             DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,

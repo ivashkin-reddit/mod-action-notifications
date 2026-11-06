@@ -1,4 +1,5 @@
 import {
+    actionNameOf,
     alertsConfigured,
     configOf,
     healthReports,
@@ -24,6 +25,13 @@ import {
     setupMonitoring,
 } from "./modqueue/index.js";
 import type { ModerationQueues, MonitoringSetup } from "./modqueue/index.js";
+import {
+    createDevvitDigestScheduler,
+    createRedisStatisticsStore,
+    createSlackDigest,
+    sendWeeklyDigest,
+    setUpDigest,
+} from "./statistics/index.js";
 
 /**
  * The composition root's scheduled jobs: setting them up, and what each does when the scheduler runs it. main.ts
@@ -45,6 +53,9 @@ export async function setUpScheduledJobs(context: AppContext): Promise<Monitorin
     );
     await setUpSummary(createDevvitSummaryScheduler(context.scheduler)).catch((error: unknown): void => {
         console.warn("[setup] Could not schedule the daily summary:", error);
+    });
+    await setUpDigest(createDevvitDigestScheduler(context.scheduler)).catch((error: unknown): void => {
+        console.warn("[setup] Could not schedule the weekly statistics:", error);
     });
     return setup;
 }
@@ -82,6 +93,28 @@ export async function sendSummary(context: AppContext): Promise<void> {
         );
     } catch (error) {
         console.error("[health] Could not send the daily summary:", error);
+    }
+}
+
+/**
+ * Sends the team's statistics for the week before, the scheduled job, when the setting is on and Slack is set up.
+ * Logs, and resolves, when Redis fails.
+ */
+export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
+    const config = await configOf(context);
+    if (!config.weeklyStatistics || !alertsConfigured(config)) {
+        return;
+    }
+    try {
+        await sendWeeklyDigest(
+            {
+                store: createRedisStatisticsStore(context.redis),
+                send: createSlackDigest(outboxOf(context, config).send, config.notificationChannel, actionNameOf),
+            },
+            Date.now(),
+        );
+    } catch (error) {
+        console.error("[statistics] Could not send the weekly statistics:", error);
     }
 }
 

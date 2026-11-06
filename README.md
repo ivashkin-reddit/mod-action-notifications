@@ -24,6 +24,8 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Daily summary.** Turn on the Daily Summary setting for a morning post of the day before's numbers, and any problems.
 
+**Team statistics.** **Show Team Stats** shows your team's moderation over the last 7 days: how many actions, and who took them (moderators, AutoModerator, Reddit), the most common, the hours no moderator acted, bans and their lengths, how many moderators acted, and the most-moderated threads. Turn on Weekly Statistics for the same each Monday in Slack. The figures are for the team as a whole: none is any one moderator's.
+
 **Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
 **Built for busy days.** Slack accepts about one message a second to a channel. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
@@ -59,6 +61,7 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 | Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                                                  | off                             |
 | Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                                                             | 100                             |
 | Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working.                                | off                             |
+| Weekly Statistics                     | Each Monday at 08:00 UTC, post the team's statistics for the week before to the notification channel. No figure names a moderator.                                                                                             | off                             |
 
 Setting a threshold to 0 turns that alert off.
 
@@ -70,6 +73,7 @@ These appear in the subreddit's mod tools menu, and only moderators of the subre
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                                                                         |
 | Show Bot Status           | Shows how the app is doing: any problems, alerts waiting for Slack, when it last delivered an alert and ran the modqueue monitor, and today's counts. |
+| Show Team Stats           | Shows the team's moderation over the last 7 days, as a whole, and today's actions.                                                                    |
 | Simulate Mod Action       | Sends a sample alert so you can see how alerts look, without touching any real data.                                                                  |
 | Setup Modqueue Monitoring | Schedules or cancels the modqueue monitor to match your settings.                                                                                     |
 
@@ -86,6 +90,7 @@ The app reads only what it needs to write an alert. Apart from alerts waiting to
 - **Queued alerts** (content and metadata), for up to a day.
 - **IDs of deleted posts and comments** (metadata), so alerts still waiting to be sent leave their text out: a day.
 - **Where each alert quoting a post or comment went in Slack** (metadata), with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: as long as your channels keep messages, set in **Slack Message Retention**, at most 90 days.
+- **Team statistics** (metadata): counts of the team's actions by day, kind and hour, bans by length, removals per thread, and how many moderators acted, by a short hash of each name rather than the name: 15 days.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.

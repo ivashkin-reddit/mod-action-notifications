@@ -110,6 +110,7 @@ The developer sets the Slack bot token, for every installation at once. Moderato
 | Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                                  | Also alert for AutoModerator's actions.                                                                                                                                                                                                               |
 | Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more                | Alert when a user deletes their own post with at least this score.                                                                                                                                                                                    |
 | Daily Summary (`dailySummary`)                                                                    | on or off                                  | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.                                                                                                                                                       |
+| Weekly Statistics (`weeklyStatistics`)                                                            | on or off                                  | Posts the team's statistics for the week before each Monday at 08:00 UTC. Off by default.                                                                                                                                                             |
 
 A threshold of 0 turns its alert off. Turning all three modqueue thresholds off turns the monitor off once **Setup Modqueue Monitoring** runs.
 
@@ -136,6 +137,20 @@ With the Daily Summary setting on, the `dailySummary` job posts to the notificat
 It goes through the outbox like any alert. It is also a heartbeat: if it stops arriving, Reddit has stopped calling the app, or the app can no longer reach Slack.
 
 Setup (install, upgrade, or **Setup Modqueue Monitoring**) keeps one summary job scheduled whether the setting is on or off, as Devvit has no event for a change of settings; the job reads the setting each morning. Each day's summary is claimed in Redis, so a job that runs twice sends it once.
+
+## Team statistics
+
+The app counts every mod action it hears of, whether or not Slack is set up and whether or not the action alerts, once by its ID. It keeps counts by UTC day for 15 days, never by moderator:
+
+- actions, by who took them (moderators, AutoModerator, or Reddit's own accounts) and their type;
+- moderators' actions by UTC hour;
+- bans, as temporary (with their days) or permanent when the mod log gives their length, and unbans;
+- removals on each thread, the 100 threads with the most each day;
+- how many moderators acted, as a set of 8-hex-digit hashes of their names: enough to count them, not to show who.
+
+**Show Team Stats** reports the last 7 days, today included, and today's actions. The **Weekly Statistics** setting has the `weeklyStatistics` job post the week Monday to Sunday each Monday at 08:00 UTC, beside the week before's total. Setup keeps one such job scheduled whether the setting is on or off, as for the daily summary, and each week's digest is claimed in Redis, so a job that runs twice sends it once.
+
+"Hours without a moderator action" counts each UTC hour of the period, today's up to and including the current one, in which no moderator acted. "Most-moderated threads" links to posts by ID, without their titles.
 
 ## Alerts in detail
 
@@ -252,6 +267,11 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `health:last`                                                               | none                 | when each event (a trigger, an alert delivered or dropped, a monitor run) last happened                                             | 7 days from the last                                      | 7 events         |
 | `health:count:{day}`                                                        | none                 | how many of each event a UTC day saw                                                                                                | 8 days                                                    | 7 counts a day   |
 | `health:summary:{day}`                                                      | none                 | that the summary of a UTC day was sent                                                                                              | 2 days                                                    | 1 per day        |
+| `stats:actions:{day}`, `stats:hours:{day}`, `stats:bans:{day}`              | metadata             | the day's actions by who took them and type, moderators' actions by hour, and bans                                                  | 15 days                                                   | 1 each a day     |
+| `stats:active:{day}`                                                        | metadata             | hashes of the moderators who acted that day                                                                                         | 15 days                                                   | 1 a day          |
+| `stats:threads:{day}`                                                       | metadata             | removals on each post, by ID                                                                                                        | 15 days                                                   | 100 posts a day  |
+| `stats:counted:{actionId}`                                                  | metadata             | that an action was counted                                                                                                          | 1 day                                                     | one per action   |
+| `stats:digest:{from}`                                                       | none                 | that a week's statistics were sent                                                                                                  | 8 days                                                    | 1 a week         |
 | `health:notice:{condition}`                                                 | none                 | that moderators were sent a notice of the condition within the day                                                                  | 1 day                                                     | 1 per condition  |
 | `health:noticed`                                                            | none                 | the conditions moderators were sent a notice of, so their end is sent                                                               | 7 days from the last                                      | 7 conditions     |
 | `health:reminder:{condition}`                                               | none                 | that a condition was logged within the day                                                                                          | 1 day                                                     | 1 per condition  |

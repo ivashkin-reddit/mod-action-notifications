@@ -8,6 +8,7 @@ import {
     raiseCondition,
 } from "./health/index.js";
 import type { Condition, ConditionPorts, HealthEvent, NoticeReddit } from "./health/index.js";
+import { actionName } from "./moderation/index.js";
 import type { ModActionPresentation } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, createRedisMonitorStore } from "./modqueue/index.js";
 import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
@@ -141,6 +142,11 @@ export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
         scheduler: context.scheduler,
         health: healthReports(context),
     });
+}
+
+/** How statistics name an action type, e.g. "Post Removed", as alerts do. */
+export function actionNameOf(type: string): string {
+    return actionName(type, false);
 }
 
 export function modActionPresentation(config: AppConfig): ModActionPresentation {

@@ -1,5 +1,5 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import { configOf, modActionPresentation, monitorThresholds, slackSetup } from "./composition.js";
+import { actionNameOf, configOf, modActionPresentation, monitorThresholds, slackSetup } from "./composition.js";
 import type { AppContext, SlackSetup } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
 import type { MonitorState, StatusLine } from "./health/index.js";
@@ -14,6 +14,8 @@ import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } f
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
 import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
+import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
+import type { ReportLine } from "./statistics/index.js";
 
 /**
  * The composition root's menu actions: what each menu item and form does for the moderator who invoked it, and the
@@ -126,20 +128,44 @@ function isStatusLine(value: unknown): value is StatusLine {
     );
 }
 
-/** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
-export function statusForm(data: Readonly<Record<string, unknown>>): Form {
-    const lines = Array.isArray(data["lines"]) ? data["lines"].filter(isStatusLine) : [];
-    return {
-        title: "Bot Status",
-        fields: lines.map(({ label, value }: StatusLine, index: number): ParagraphField => ({
-            name: `status${String(index)}`,
-            label,
-            type: "paragraph",
-            defaultValue: value,
-            disabled: true,
-        })),
-        acceptLabel: "Close",
+/** Show Team Stats covers the last 7 days, today included. */
+const WEEK_DAYS = 7;
+
+/** A form titled `title` of read-only lines, from the data a menu item gave ui.showForm: `{ lines }`. */
+export function readOnlyForm(title: string): (data: Readonly<Record<string, unknown>>) => Form {
+    return (data: Readonly<Record<string, unknown>>): Form => {
+        const lines = Array.isArray(data["lines"]) ? data["lines"].filter(isStatusLine) : [];
+        return {
+            title,
+            fields: lines.map(({ label, value }: StatusLine, index: number): ParagraphField => ({
+                name: `status${String(index)}`,
+                label,
+                type: "paragraph",
+                defaultValue: value,
+                disabled: true,
+            })),
+            acceptLabel: "Close",
+        };
     };
+}
+
+/** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
+export const statusForm = readOnlyForm("Bot Status");
+
+/**
+ * The team's statistics for the last 7 days, today included, as lines for a read-only form, with today's actions
+ * last. They name no moderator.
+ */
+export async function teamStats(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
+    const store = createRedisStatisticsStore(context.redis);
+    const now = Date.now();
+    const week = await reportFor(store, dayRange(now, WEEK_DAYS, 0), now);
+    const today = await reportFor(store, dayRange(now, 1, 0), now);
+    const lines: readonly ReportLine[] = [
+        ...reportLines(week, actionNameOf),
+        { label: "Today", value: countOf(today.actions.total, "action") },
+    ];
+    return { lines: lines.map(({ label, value }: ReportLine): { label: string; value: string } => ({ label, value })) };
 }
 
 /** How sending a test message went, or what kept it from being sent. */

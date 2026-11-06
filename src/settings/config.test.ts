@@ -34,6 +34,7 @@ describe("reading the settings", (): void => {
             enableAutoModAlerts: false,
             postDeletionUpvoteThreshold: 100,
             dailySummary: false,
+            weeklyStatistics: false,
         });
     });
 

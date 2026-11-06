@@ -98,7 +98,7 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 - **Counted from every mod action** (each once, by its ID): actions by type and by who took them (moderators, AutoModerator, Reddit); moderators' actions by hour of day; bans (temporary, permanent, total length) and unbans; removals per thread; how many distinct moderators acted.
 - **Weekly digest** to the notification channel, Monday 08:00 UTC, when **Weekly Statistics** is on: totals and change from the week before, the split by who acted, the top action types, hours with no moderator action and the busiest hour, ban figures, moderators active (a count), and the five most-moderated threads (links without titles).
 - **Show Team Stats** menu item: the same figures for the last 7 days and today, as a form.
-- **Keeps:** `stats:actions:{day}`, `stats:hours:{day}`, `stats:bans:{day}` (hashes of counts, 15 days), `stats:threads:{week}` (post ID to removal count, top 100, 15 days), `stats:active:{day}` (hashes of moderator usernames, 15 days), claims `stats:counted:{actionId}` (1 day) and `stats:digest:{week}` (8 days).
+- **Keeps:** `stats:actions:{day}`, `stats:hours:{day}`, `stats:bans:{day}` (hashes of counts, 15 days), `stats:threads:{day}` (post ID to removal count, top 100, 15 days), `stats:active:{day}` (hashes of moderator usernames, 15 days), claims `stats:counted:{actionId}` (1 day) and `stats:digest:{week}` (8 days).
 - **Setting:** `weeklyStatistics`, boolean, default off.
 
 ### F12. Team statistics: response times and outcomes

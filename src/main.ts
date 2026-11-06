@@ -6,15 +6,31 @@
 import { Devvit } from "@devvit/public-api";
 import type { AppContext } from "./composition.js";
 import { SUMMARY_JOB_NAME } from "./health/index.js";
-import { botStatus, forModerators, sendSimulation, sendTestAlert, setUpFromMenu, statusForm } from "./menuActions.js";
+import {
+    botStatus,
+    forModerators,
+    readOnlyForm,
+    sendSimulation,
+    sendTestAlert,
+    setUpFromMenu,
+    statusForm,
+    teamStats,
+} from "./menuActions.js";
 import type { MenuContext } from "./menuActions.js";
 import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { ModActionEvent, SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import type { PostDeleteEvent } from "./postDeletion/index.js";
-import { deliverQueuedAlerts, runModqueueMonitor, sendSummary, setUpScheduledJobs } from "./scheduledJobs.js";
+import {
+    deliverQueuedAlerts,
+    runModqueueMonitor,
+    sendSummary,
+    sendWeeklyStatistics,
+    setUpScheduledJobs,
+} from "./scheduledJobs.js";
 import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
+import { DIGEST_JOB_NAME } from "./statistics/index.js";
 import { alertOnModAction, onCommentDelete, onPostDelete } from "./triggers.js";
 import type { CommentDeleteEvent } from "./triggers.js";
 
@@ -101,6 +117,14 @@ Devvit.addSchedulerJob({
     },
 });
 
+// Sends the team's statistics for the week before each Monday at 08:00 UTC, when the setting is on.
+Devvit.addSchedulerJob({
+    name: DIGEST_JOB_NAME,
+    onRun: async (_event: unknown, context: AppContext): Promise<void> => {
+        await sendWeeklyStatistics(context);
+    },
+});
+
 // Forms and menu items, for moderators only: each checks the user who invokes it.
 
 const testForm = Devvit.createForm(
@@ -130,6 +154,9 @@ const testForm = Devvit.createForm(
 // What Show Bot Status shows: read-only lines, closed with its one button.
 const botStatusForm = Devvit.createForm(statusForm, (): void => undefined);
 
+// What Show Team Stats shows: the team's figures for the last 7 days, as read-only lines.
+const teamStatsForm = Devvit.createForm(readOnlyForm("Team Statistics, last 7 days"), (): void => undefined);
+
 const simulateActionForm = Devvit.createForm(
     simulateForm,
     async ({ values }: Readonly<{ values: SimulateFormValues }>, context: MenuContext): Promise<void> => {
@@ -157,6 +184,17 @@ Devvit.addMenuItem({
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
         await forModerators(context, async (): Promise<void> => {
             context.ui.showForm(botStatusForm, await botStatus(context));
+        });
+    },
+});
+
+Devvit.addMenuItem({
+    label: "Show Team Stats",
+    location: "subreddit",
+    forUserType: "moderator",
+    onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
+        await forModerators(context, async (): Promise<void> => {
+            context.ui.showForm(teamStatsForm, await teamStats(context));
         });
     },
 });

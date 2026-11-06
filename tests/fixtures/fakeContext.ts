@@ -44,6 +44,7 @@ export interface Settings {
     enableAutoModAlerts?: unknown;
     postDeletionUpvoteThreshold?: unknown;
     dailySummary?: unknown;
+    weeklyStatistics?: unknown;
 }
 
 /** The app's own setting defaults, with Slack set up: a bot token and a notification channel. */

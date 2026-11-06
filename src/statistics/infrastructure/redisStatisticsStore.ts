@@ -1,13 +1,14 @@
 import type { TriggerContext } from "@devvit/public-api";
 import type { StatisticsStore } from "../application/ports.js";
 import type { ActionTally } from "../domain/counting.js";
+import { DIGEST_CLAIM_SECONDS } from "../domain/digest.js";
 import type { DayCounts } from "../domain/report.js";
 
 /**
  * The team's statistics in Redis: per UTC day, hashes of counts (`stats:actions:{day}`, `stats:hours:{day}`,
  * `stats:bans:{day}`) and sorted sets (`stats:active:{day}` of moderator hashes, `stats:threads:{day}` of removals by
- * post), each kept 15 days; and `stats:counted:{actionId}`, a day's claim that an action was counted. Installations
- * already hold these keys.
+ * post), each kept 15 days; `stats:counted:{actionId}`, a day's claim that an action was counted; and
+ * `stats:digest:{from}`, eight days' claim that a week's digest was sent. Installations already hold these keys.
  */
 const KEPT_SECONDS = 1_296_000;
 const CLAIM_SECONDS = 86_400;
@@ -106,5 +107,10 @@ export function createRedisStatisticsStore(redis: StatisticsRedis): StatisticsSt
             await addRemoval(redis, tally);
         },
         dayCounts: async (day: string): Promise<DayCounts> => await readDay(redis, day),
+        claimDigest: async (from: string): Promise<boolean> =>
+            (await redis.set(`stats:digest:${from}`, "1", {
+                nx: true,
+                expiration: new Date(Date.now() + DIGEST_CLAIM_SECONDS * MS_PER_SECOND),
+            })) !== "",
     };
 }

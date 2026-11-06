@@ -13,6 +13,7 @@ const REFUSAL = { text: "🔒 Only this subreddit's moderators can use this.", a
 const MENU_ITEMS = [
     ["Test Slack Connection"],
     ["Show Bot Status"],
+    ["Show Team Stats"],
     ["Simulate Mod Action"],
     ["Setup Modqueue Monitoring"],
 ];

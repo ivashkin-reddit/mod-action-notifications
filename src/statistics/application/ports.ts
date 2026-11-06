@@ -12,4 +12,19 @@ export interface StatisticsStore {
     readonly addTally: (tally: ActionTally) => Promise<void>;
     /** The counts kept for a UTC day (YYYY-MM-DD); empty for a day with none. */
     readonly dayCounts: (day: string) => Promise<DayCounts>;
+    /** Claims the digest of the week starting `from`: true the first time, false once it was sent. */
+    readonly claimDigest: (from: string) => Promise<boolean>;
+}
+
+export interface ScheduledDigestJob {
+    readonly id: string;
+    /** Absent for a one-off job. */
+    readonly cron: string | undefined;
+}
+
+export interface DigestScheduler {
+    readonly schedule: (cron: string) => Promise<string>;
+    readonly cancel: (jobId: string) => Promise<void>;
+    /** The digest jobs scheduled for this installation. */
+    readonly jobs: () => Promise<readonly ScheduledDigestJob[]>;
 }

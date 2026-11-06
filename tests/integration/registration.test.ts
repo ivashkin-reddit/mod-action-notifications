@@ -55,6 +55,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
+                { name: "weeklyStatistics", type: "boolean", defaultValue: false },
             ]);
         },
     );
@@ -170,7 +171,7 @@ describe("what the app registers with Devvit", (): void => {
 
     // Scheduler job names are stored with every scheduled job: renaming one orphans the jobs already scheduled.
     it(
-        "registers the modqueue monitor, the Slack outbox and the daily summary as its scheduler jobs",
+        "registers the modqueue monitor, the Slack outbox, the daily summary and the weekly statistics as its scheduler jobs",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -181,11 +182,12 @@ describe("what the app registers with Devvit", (): void => {
                 "modqueueMonitor",
                 "slackOutbox",
                 "dailySummary",
+                "weeklyStatistics",
             ]);
         },
     );
 
-    it("adds four subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
+    it("adds five subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -205,6 +207,7 @@ describe("what the app registers with Devvit", (): void => {
         ).toStrictEqual([
             { label: "Test Slack Connection", location: "subreddit", forUserType: "moderator" },
             { label: "Show Bot Status", location: "subreddit", forUserType: "moderator" },
+            { label: "Show Team Stats", location: "subreddit", forUserType: "moderator" },
             { label: "Simulate Mod Action", location: "subreddit", forUserType: "moderator" },
             { label: "Setup Modqueue Monitoring", location: "subreddit", forUserType: "moderator" },
         ]);

@@ -188,6 +188,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
             "Post a summary of the day before to Slack each morning at 08:00 UTC: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working (off by default)",
         defaultValue: false,
     },
+    {
+        type: "boolean",
+        name: "weeklyStatistics",
+        label: "Weekly Statistics",
+        helpText:
+            "Post the team's statistics for the week before to the notification channel each Monday at 08:00 UTC: actions, who took them, quiet hours, bans, how many moderators acted and the most-moderated threads. No figure names a moderator (off by default)",
+        defaultValue: false,
+    },
 ];
 
 /**
