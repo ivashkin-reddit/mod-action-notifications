@@ -107,6 +107,10 @@ describe("the load scenarios", (): void => {
 
             const harness = await fresh(1);
             const generator = createEventStream(STEADY_MIX, REALISTIC_SHAPE, 7);
+            // An invocation that reads the settings first, as any running installation has had: those that read none follow
+            // Debug Logging as the installation last read it. An empty outbox run reads them and leaves the events as they were.
+            await harness.runJob("slackOutbox");
+            harness.clearLines();
             for (const kind of KINDS) {
                 for (let index = 0; index < 20; index += 1) {
                     const event = generator.next(kind);
