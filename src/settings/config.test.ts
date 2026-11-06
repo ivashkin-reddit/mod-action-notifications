@@ -159,7 +159,7 @@ describe("settings that cannot be read", (): void => {
         const { context } = createFakeContext({ ...defaultSettings(), modqueueThreshold: 7 });
         await load(context.settings, "t5_one");
         const failure = new Error("settings unavailable");
-        context.settings.get.mockRejectedValue(failure);
+        context.settings.getAll.mockRejectedValue(failure);
 
         await expect(load(context.settings, "t5_one")).resolves.toMatchObject({ modqueueThreshold: 7 });
         expect(console.warn).toHaveBeenCalledExactlyOnceWith(
@@ -179,7 +179,7 @@ describe("settings that cannot be read", (): void => {
             const { context } = createFakeContext(defaultSettings());
             await load(context.settings, "t5_one");
             const failure = new Error("settings unavailable");
-            context.settings.get.mockRejectedValue(failure);
+            context.settings.getAll.mockRejectedValue(failure);
 
             await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ notificationChannel: "" });
             expect(console.error).toHaveBeenCalledExactlyOnceWith(

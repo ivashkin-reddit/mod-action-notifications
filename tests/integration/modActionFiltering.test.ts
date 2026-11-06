@@ -85,7 +85,7 @@ describe("which mod actions are sent", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        vi.mocked(app.context.settings.get).mockRejectedValue(new Error("settings unavailable"));
+        vi.mocked(app.context.settings.getAll).mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost());
 
@@ -101,7 +101,7 @@ describe("which mod actions are sent", (): void => {
 
         const app = await loadApp(devvit);
         await app.fire("ModAction", removedPost());
-        vi.mocked(app.context.settings.get).mockRejectedValue(new Error("settings unavailable"));
+        vi.mocked(app.context.settings.getAll).mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost());
 
@@ -121,7 +121,7 @@ describe("which mod actions are sent", (): void => {
             { ...defaultSettings(), notificationChannel: "C0999OTHER" },
             "t5_other",
         );
-        otherInstallation.settings.get.mockRejectedValue(new Error("settings unavailable"));
+        otherInstallation.settings.getAll.mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost(), otherInstallation);
 

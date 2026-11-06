@@ -2,11 +2,6 @@ import { approvalOf, isEditAfter, isWatching, rememberedDays } from "../domain/a
 import type { ApprovalAction, ContentUpdate } from "../domain/approvedEdits.js";
 import type { ApprovalStore, EditAlerts } from "./ports.js";
 
-export interface EditWatchPorts {
-    readonly store: ApprovalStore;
-    readonly alerts: EditAlerts;
-}
-
 /**
  * Remembers a moderator's approval of a post or comment for `days` days, while `days` is above 0. Other actions, and
  * approvals by AutoModerator or Reddit, are not kept. Rejects when storage fails.
@@ -27,24 +22,34 @@ async function claimed(claim: () => Promise<boolean>): Promise<boolean> {
     });
 }
 
+/** How edits are watched, once the settings are read: the days an approval is watched for, when the edit was, and where alerts go. */
+export type EditWatch = Readonly<{ days: number; editAt: number; alerts: EditAlerts }>;
+
 /**
- * Alerts when the author edits a post or comment a moderator approved within `days`, once a day for an item. An
- * update that leaves the text alone is no edit. Rejects when the approval cannot be read.
+ * Alerts when the author edits a post or comment a moderator approved within the watched days, once a day for an item.
+ * An update that leaves the text alone is no edit. Most edits are to items no moderator approved: the approval is read
+ * first, and `watch`, which reads the settings, only for an approved item. `watch` gives undefined when alerts cannot
+ * be sent. Rejects when the approval cannot be read.
  */
 export async function alertOnEdit(
     update: ContentUpdate,
-    { days, editAt }: Readonly<{ days: number; editAt: number }>,
-    ports: EditWatchPorts,
+    store: ApprovalStore,
+    watch: () => Promise<EditWatch | undefined>,
 ): Promise<void> {
-    if (!isWatching(days) || !update.textChanged || update.itemId === "") {
+    if (!update.textChanged || update.itemId === "") {
         return;
     }
-    const approval = await ports.store.approvalOf(update.itemId);
+    const approval = await store.approvalOf(update.itemId);
+    if (approval === undefined) {
+        return;
+    }
+    const watched = await watch();
     if (
-        approval !== undefined &&
-        isEditAfter(approval, editAt, days) &&
-        (await claimed(async (): Promise<boolean> => await ports.store.claimAlert(update.itemId)))
+        watched !== undefined &&
+        isWatching(watched.days) &&
+        isEditAfter(approval, watched.editAt, watched.days) &&
+        (await claimed(async (): Promise<boolean> => await store.claimAlert(update.itemId)))
     ) {
-        await ports.alerts.edited({ update, approval, editAt });
+        await watched.alerts.edited({ update, approval, editAt: watched.editAt });
     }
 }

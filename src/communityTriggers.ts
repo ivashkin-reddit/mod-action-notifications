@@ -5,7 +5,7 @@ import {
     updateFromCommentEvent,
     updateFromPostEvent,
 } from "./approvedEdits/index.js";
-import type { CommentUpdateEvent, ContentUpdate, PostUpdateEvent } from "./approvedEdits/index.js";
+import type { CommentUpdateEvent, ContentUpdate, EditWatch, PostUpdateEvent } from "./approvedEdits/index.js";
 import { alertsConfigured, configOf, modmailPorts, outboxOf } from "./composition.js";
 import type { AppContext } from "./composition.js";
 import { alertOnAdminModmail, messageFromEvent } from "./modmail/index.js";
@@ -129,19 +129,17 @@ export async function onModMail(event: ModmailEvent, context: AppContext): Promi
  * rejects when the approval cannot be read.
  */
 async function alertOnUpdate(update: ContentUpdate, context: AppContext): Promise<void> {
-    const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        return;
-    }
     try {
-        await alertOnEdit(
-            update,
-            { days: config.editsAfterApprovalDays, editAt: Date.now() },
-            {
-                store: createRedisApprovalStore(context.redis),
-                alerts: createSlackEditAlerts(outboxOf(context, config).send, config.alertChannel),
-            },
-        );
+        await alertOnEdit(update, createRedisApprovalStore(context.redis), async (): Promise<EditWatch | undefined> => {
+            const config = await configOf(context);
+            return alertsConfigured(config)
+                ? {
+                      days: config.editsAfterApprovalDays,
+                      editAt: Date.now(),
+                      alerts: createSlackEditAlerts(outboxOf(context, config).send, config.alertChannel),
+                  }
+                : undefined;
+        });
     } catch (error) {
         console.warn("[approvededits] Could not check an edit for an earlier approval:", error);
     }

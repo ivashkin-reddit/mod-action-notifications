@@ -67,10 +67,12 @@ export interface AppConfig {
     readonly weeklyStatistics: boolean;
 }
 
-// Devvit's client lets a caller name the type a setting comes back as, but checks nothing: a saved value can be
-// anything, so each is read as unknown and parsed. Devvit's client satisfies this.
-type SettingsReader = Readonly<{ get: (name: string) => Promise<unknown> }>;
+// Every setting at once: Devvit's client (0.15) answers get(name) by fetching every setting, so the app asks once.
+// A saved value can be anything, so each is read as unknown and parsed. Devvit's client satisfies this.
+type SettingsReader = Readonly<{ getAll: () => Promise<object> }>;
 type SettingValue = unknown;
+/** The saved values, by setting name. */
+type Values = Readonly<Pick<ReadonlyMap<string, SettingValue>, "get">>;
 
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
@@ -166,62 +168,53 @@ type CommunityAlerts = Pick<
     | "editsAfterApprovalDays"
 >;
 
-async function readCommunityAlerts(settings: SettingsReader): Promise<CommunityAlerts> {
+function readCommunityAlerts(values: Values): CommunityAlerts {
     return {
-        modmailWaitHours: nonNegativeInteger(await settings.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
-        urgentReportReasons: commaList(await settings.get("urgentReportReasons")),
+        modmailWaitHours: nonNegativeInteger(values.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
+        urgentReportReasons: commaList(values.get("urgentReportReasons")),
         reportPileUpThreshold: nonNegativeInteger(
-            await settings.get("reportPileUpThreshold"),
+            values.get("reportPileUpThreshold"),
             DEFAULT_REPORT_PILE_UP_THRESHOLD,
         ),
-        adminModmailAlerts: booleanOr(await settings.get("adminModmailAlerts"), true),
+        adminModmailAlerts: booleanOr(values.get("adminModmailAlerts"), true),
         editsAfterApprovalDays: nonNegativeInteger(
-            await settings.get("editsAfterApprovalDays"),
+            values.get("editsAfterApprovalDays"),
             DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
         ),
     };
 }
 
 async function readConfig(settings: SettingsReader): Promise<AppConfig> {
-    // Read one after another: a setting that cannot be read stops the rest.
-    const notificationChannel = channelName(await settings.get("notificationChannel"));
-    const alertChannel = channelName(await settings.get("alertChannel"));
+    const values: Values = new Map<string, SettingValue>(Object.entries(await settings.getAll()));
+    const notificationChannel = channelName(values.get("notificationChannel"));
+    const alertChannel = channelName(values.get("alertChannel"));
     return {
-        enabledActions: selected(await settings.get("enabledActions")),
-        debugLogging: booleanOr(await settings.get("debugLogging"), false),
-        excludedModerators: usernames(await settings.get("excludedModerators")),
-        flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
-        securityAlerts: booleanOr(await settings.get("securityAlerts"), true),
-        dormantModeratorDays: nonNegativeInteger(
-            await settings.get("dormantModeratorDays"),
-            DEFAULT_DORMANT_MODERATOR_DAYS,
-        ),
-        includeModNote: booleanOr(await settings.get("includeModNote"), true),
-        banHistoryDays: nonNegativeInteger(await settings.get("banHistoryDays"), DEFAULT_BAN_HISTORY_DAYS),
+        enabledActions: selected(values.get("enabledActions")),
+        debugLogging: booleanOr(values.get("debugLogging"), false),
+        excludedModerators: usernames(values.get("excludedModerators")),
+        flagUnknownModerators: booleanOr(values.get("flagUnknownModerators"), true),
+        securityAlerts: booleanOr(values.get("securityAlerts"), true),
+        dormantModeratorDays: nonNegativeInteger(values.get("dormantModeratorDays"), DEFAULT_DORMANT_MODERATOR_DAYS),
+        includeModNote: booleanOr(values.get("includeModNote"), true),
+        banHistoryDays: nonNegativeInteger(values.get("banHistoryDays"), DEFAULT_BAN_HISTORY_DAYS),
         notificationChannel,
         // The setting's help text: "uses main channel if empty".
         alertChannel: alertChannel === "" ? notificationChannel : alertChannel,
-        slackRetentionDays: retentionDays(await settings.get("slackRetentionDays")),
-        modqueueThreshold: nonNegativeInteger(await settings.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
-        unmoderatedAgeHours: nonNegativeInteger(
-            await settings.get("unmoderagedAgeHours"),
-            DEFAULT_UNMODERATED_AGE_HOURS,
-        ),
+        slackRetentionDays: retentionDays(values.get("slackRetentionDays")),
+        modqueueThreshold: nonNegativeInteger(values.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
+        unmoderatedAgeHours: nonNegativeInteger(values.get("unmoderagedAgeHours"), DEFAULT_UNMODERATED_AGE_HOURS),
         reportedContentAgeHours: nonNegativeInteger(
-            await settings.get("reportedContentAgeHours"),
+            values.get("reportedContentAgeHours"),
             DEFAULT_REPORTED_CONTENT_AGE_HOURS,
         ),
-        spamQueueThreshold: nonNegativeInteger(await settings.get("spamQueueThreshold"), DEFAULT_SPAM_QUEUE_THRESHOLD),
-        editedQueueThreshold: nonNegativeInteger(
-            await settings.get("editedQueueThreshold"),
-            DEFAULT_EDITED_QUEUE_THRESHOLD,
-        ),
-        ...(await readCommunityAlerts(settings)),
-        enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
-        dailySummary: booleanOr(await settings.get("dailySummary"), false),
-        weeklyStatistics: booleanOr(await settings.get("weeklyStatistics"), false),
+        spamQueueThreshold: nonNegativeInteger(values.get("spamQueueThreshold"), DEFAULT_SPAM_QUEUE_THRESHOLD),
+        editedQueueThreshold: nonNegativeInteger(values.get("editedQueueThreshold"), DEFAULT_EDITED_QUEUE_THRESHOLD),
+        ...readCommunityAlerts(values),
+        enableAutoModAlerts: booleanOr(values.get("enableAutoModAlerts"), false),
+        dailySummary: booleanOr(values.get("dailySummary"), false),
+        weeklyStatistics: booleanOr(values.get("weeklyStatistics"), false),
         postDeletionUpvoteThreshold: nonNegativeInteger(
-            await settings.get("postDeletionUpvoteThreshold"),
+            values.get("postDeletionUpvoteThreshold"),
             DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
         ),
     };

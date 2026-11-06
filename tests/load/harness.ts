@@ -222,8 +222,6 @@ export async function createHarness(
     const registrations = devvit.registrations();
     const contextFor = (): unknown => ({
         settings: {
-            get: async (name: string): Promise<unknown> =>
-                await Promise.resolve(new Map(Object.entries(settings)).get(name)),
             getAll: async (): Promise<Settings> => await Promise.resolve(settings),
         },
         redis: viewFor(client, traffic),

@@ -33,7 +33,7 @@ import type { DeliveryHealth, SlackApi, SlackConnection, SlackFetch, SlackOutbox
 
 /** The Devvit APIs the app calls. Trigger, scheduler, menu and form contexts all satisfy this. */
 export type PlatformContext = Readonly<{
-    settings: Readonly<Pick<TriggerContext["settings"], "get">>;
+    settings: Readonly<Pick<TriggerContext["settings"], "getAll">>;
     redis: Readonly<
         Pick<
             TriggerContext["redis"],

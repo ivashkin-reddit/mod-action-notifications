@@ -5,7 +5,7 @@
  * Owns the Redis keys `approved_edits:approved:{itemId}` (the configured days, at most 30) and
  * `approved_edits:alerted:{itemId}` (1-day TTL).
  */
-export { alertOnEdit, rememberApproval, type EditWatchPorts } from "./application/watchEdits.js";
+export { alertOnEdit, rememberApproval, type EditWatch } from "./application/watchEdits.js";
 export type { ApprovalAction, Approver, ContentUpdate } from "./domain/approvedEdits.js";
 export { createRedisApprovalStore } from "./infrastructure/redisApprovalStore.js";
 export { createSlackEditAlerts } from "./infrastructure/slackEditAlerts.js";

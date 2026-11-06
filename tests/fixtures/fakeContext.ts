@@ -77,7 +77,8 @@ export interface FakeContext {
     readonly subredditId: string;
     readonly subredditName: string;
     readonly appVersion: string;
-    readonly settings: Readonly<{ get: Mock<(name: string) => Promise<unknown>> }>;
+    /** Every setting at once, as the app reads them; the test may change the values later. */
+    readonly settings: Readonly<{ getAll: Mock<() => Promise<Readonly<Record<string, unknown>>>> }>;
     readonly redis: FakeRedis;
     readonly reddit: FakeReddit;
     readonly scheduler: FakeScheduler;
@@ -110,7 +111,9 @@ export function createFakeContext(settings: Readonly<Settings>, subredditId = "t
             subredditName: SUBREDDIT,
             appVersion: "1.2.3",
             settings: {
-                get: vi.fn(async (name: string): Promise<unknown> => await Promise.resolve(settingValues[name])),
+                getAll: vi.fn(
+                    async (): Promise<Readonly<Record<string, unknown>>> => await Promise.resolve({ ...settingValues }),
+                ),
             },
             redis: createFakeRedis(),
             reddit: createFakeReddit(SUBREDDIT),
