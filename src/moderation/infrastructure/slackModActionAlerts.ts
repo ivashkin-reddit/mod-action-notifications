@@ -1,6 +1,7 @@
 import { escapeText, inChannel, quote, withoutTitle } from "../../slack/index.js";
 import type { DirectSlackSender, SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
+import { isSecurityAction } from "../domain/alerting.js";
 import { banDurationText } from "../domain/banDuration.js";
 import { disciplineStep } from "../domain/discipline.js";
 import { isBlank } from "../domain/modAction.js";
@@ -13,6 +14,8 @@ export interface ModActionPresentation {
     readonly notificationChannel: string;
     /** A channel ID, or a channel name without #, for security alerts. */
     readonly alertChannel: string;
+    /** Send security actions as security alerts, to the alert channel. */
+    readonly securityAlerts: boolean;
 }
 
 const PREVIEW_LENGTH = 200;
@@ -125,6 +128,23 @@ const ACTOR_STYLES: Readonly<Record<Actor, ActorStyle>> = {
     },
 };
 
+/** A security action's alert, unless an unknown moderator took it: theirs is a security alert already. */
+const SECURITY_STYLE: ActorStyle = {
+    header: "🛡️ *Security Alert*",
+    text: (title: string): string => `🛡️ Security alert: ${title}`,
+    icon: ":shield:",
+    status: "",
+};
+
+/** A security action while Security Alerts is on, unless an unknown moderator took it: that alert is one already. */
+function isSecurityAlert(modAction: ModAction, actor: Actor, presentation: ModActionPresentation): boolean {
+    return presentation.securityAlerts && actor !== "unknown-moderator" && isSecurityAction(modAction);
+}
+
+function styleOf(modAction: ModAction, actor: Actor, presentation: ModActionPresentation): ActorStyle {
+    return isSecurityAlert(modAction, actor, presentation) ? SECURITY_STYLE : ACTOR_STYLES[actor];
+}
+
 function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
     const spike = modAction.activitySpike;
     const { status: actorStatus } = ACTOR_STYLES[actor];
@@ -143,7 +163,7 @@ function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
 function messageLines(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): readonly string[] {
     const isComment = modAction.target?.commentId !== undefined;
     return [
-        ACTOR_STYLES[actor].header,
+        styleOf(modAction, actor, presentation).header,
         `• *Action:* ${actionName(modAction.type, isComment)}`,
         `• *Moderator:* ${userLink(modAction.moderatorName)}`,
         ...targetLines(modAction.target),
@@ -156,7 +176,7 @@ function messageLines(modAction: ModAction, presentation: ModActionPresentation,
 
 function modActionMessage(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): SlackMessage {
     const unknownModerator = actor === "unknown-moderator";
-    const style = ACTOR_STYLES[actor];
+    const style = styleOf(modAction, actor, presentation);
     const message: SlackMessage = {
         text: style.text(actionTitle(modAction.type, modAction.target?.commentId !== undefined)),
         username: "Mod Action Notifications",
@@ -171,7 +191,8 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
             },
         ],
     };
-    return inChannel(message, unknownModerator ? presentation.alertChannel : presentation.notificationChannel);
+    const toAlertChannel = unknownModerator || isSecurityAlert(modAction, actor, presentation);
+    return inChannel(message, toAlertChannel ? presentation.alertChannel : presentation.notificationChannel);
 }
 
 /** The Reddit content an action's alert quotes: the comment's or post's text, and the post's title in its link. */

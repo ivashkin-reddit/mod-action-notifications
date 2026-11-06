@@ -128,6 +128,7 @@ function moderationConfig(config: AppConfig): ModerationConfig {
         enabledActions: config.enabledActions,
         excludedModerators: config.excludedModerators,
         flagUnknownModerators: config.flagUnknownModerators,
+        securityAlerts: config.securityAlerts,
         enableAutoModAlerts: config.enableAutoModAlerts,
     };
 }
@@ -176,6 +177,7 @@ export function modActionPresentation(config: AppConfig): ModActionPresentation 
         includeModNote: config.includeModNote,
         notificationChannel: config.notificationChannel,
         alertChannel: config.alertChannel,
+        securityAlerts: config.securityAlerts,
     };
 }
 

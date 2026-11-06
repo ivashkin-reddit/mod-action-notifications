@@ -139,14 +139,42 @@ describe("naming a mod action", (): void => {
             plain: "Crowd Control Disabled",
             color: "#00cc00",
         },
-        { action: "wikirevise", title: "wikirevise", plain: "wikirevise", color: "#666666" },
+        {
+            action: "setpermissions",
+            title: "🔑 Moderator Permissions Changed",
+            plain: "Moderator Permissions Changed",
+            color: "#ff8800",
+        },
+        { action: "wikirevise", title: "📝 Wiki Page Edited", plain: "Wiki Page Edited", color: "#8800ff" },
+        { action: "createrule", title: "📜 Rule Created", plain: "Rule Created", color: "#0088ff" },
+        { action: "editrule", title: "📜 Rule Edited", plain: "Rule Edited", color: "#8800ff" },
+        { action: "deleterule", title: "📜 Rule Deleted", plain: "Rule Deleted", color: "#ff4444" },
+        { action: "reorderrules", title: "📜 Rules Reordered", plain: "Rules Reordered", color: "#888888" },
+        {
+            action: "edit_post_requirements",
+            title: "📋 Post Requirements Edited",
+            plain: "Post Requirements Edited",
+            color: "#8800ff",
+        },
+        { action: "dev_platform_app_installed", title: "🧩 App Installed", plain: "App Installed", color: "#0088ff" },
+        {
+            action: "dev_platform_app_uninstalled",
+            title: "🧩 App Uninstalled",
+            plain: "App Uninstalled",
+            color: "#ff4444",
+        },
+        { action: "dev_platform_app_enabled", title: "🧩 App Enabled", plain: "App Enabled", color: "#00cc00" },
+        { action: "dev_platform_app_disabled", title: "🧩 App Disabled", plain: "App Disabled", color: "#ff8800" },
+        { action: "dev_platform_app_changed", title: "🧩 App Changed", plain: "App Changed", color: "#8800ff" },
+        { action: "marknsfw", title: "marknsfw", plain: "marknsfw", color: "#666666" },
     ])(
         'names $action "$title" and colours it $color',
         TEST_OPTIONS,
         async ({ action, title, plain, color }: ActionName): Promise<void> => {
             expect.hasAssertions();
 
-            const app = await loadApp(devvit, { enabledActions: [action] });
+            // Security actions keep their plain alert here; securityAlerts.test.ts covers their security style.
+            const app = await loadApp(devvit, { enabledActions: [action], securityAlerts: false });
 
             await app.fire("ModAction", removedPost({ action }));
 

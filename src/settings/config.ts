@@ -18,6 +18,8 @@ export interface AppConfig {
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
     readonly flagUnknownModerators: boolean;
+    /** Send every security action as a security alert. */
+    readonly securityAlerts: boolean;
     readonly includeModNote: boolean;
     /** A channel ID, or a channel name without its leading #; '' when none is set, so no alerts can be sent. */
     readonly notificationChannel: string;
@@ -49,6 +51,7 @@ const DEFAULT_CONFIG: AppConfig = {
     enabledActions: [],
     excludedModerators: [],
     flagUnknownModerators: true,
+    securityAlerts: true,
     includeModNote: true,
     notificationChannel: "",
     alertChannel: "",
@@ -115,6 +118,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         enabledActions: selected(await settings.get("enabledActions")),
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
+        securityAlerts: booleanOr(await settings.get("securityAlerts"), true),
         includeModNote: booleanOr(await settings.get("includeModNote"), true),
         notificationChannel,
         // The setting's help text: "uses main channel if empty".

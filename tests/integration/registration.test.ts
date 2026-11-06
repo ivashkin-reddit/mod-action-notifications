@@ -41,6 +41,7 @@ describe("what the app registers with Devvit", (): void => {
                 },
                 { name: "excludedModerators", type: "string", defaultValue: undefined },
                 { name: "flagUnknownModerators", type: "boolean", defaultValue: true },
+                { name: "securityAlerts", type: "boolean", defaultValue: true },
                 { name: "includeModNote", type: "boolean", defaultValue: true },
                 { name: "notificationChannel", type: "string", defaultValue: undefined },
                 { name: "alertChannel", type: "string", defaultValue: undefined },
@@ -111,6 +112,18 @@ describe("what the app registers with Devvit", (): void => {
             "adjust_post_crowd_control_level",
             "enable_post_crowd_control_filter",
             "disable_post_crowd_control_filter",
+            "setpermissions",
+            "wikirevise",
+            "createrule",
+            "editrule",
+            "deleterule",
+            "reorderrules",
+            "edit_post_requirements",
+            "dev_platform_app_installed",
+            "dev_platform_app_uninstalled",
+            "dev_platform_app_enabled",
+            "dev_platform_app_disabled",
+            "dev_platform_app_changed",
         ]);
     });
 

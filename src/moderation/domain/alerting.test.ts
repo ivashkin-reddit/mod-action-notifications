@@ -9,6 +9,7 @@ const RULES: AlertRules = {
     enabledActions: ["removelink", "banuser"],
     excludedModerators: [],
     enableAutoModAlerts: false,
+    securityAlerts: false,
 };
 
 describe("an action moderators are told about", (): void => {
@@ -58,5 +59,21 @@ describe("an action moderators are told about", (): void => {
             isReported(action, RULES),
             isReported(action, { ...RULES, enabledActions: ["unknown"] }),
         ]).toStrictEqual([false, true]);
+    });
+});
+
+describe("a security action", (): void => {
+    it("is reported while security alerts are on, whatever else the rules say", TEST_OPTIONS, (): void => {
+        expect.hasAssertions();
+
+        const rules = { ...RULES, enabledActions: [], excludedModerators: ["moda"], securityAlerts: true };
+
+        expect(isReported(modAction({ type: "setpermissions" }), rules)).toBe(true);
+    });
+
+    it("follows the other rules while security alerts are off", TEST_OPTIONS, (): void => {
+        expect.hasAssertions();
+
+        expect(isReported(modAction({ type: "setpermissions" }), { ...RULES, securityAlerts: false })).toBe(false);
     });
 });

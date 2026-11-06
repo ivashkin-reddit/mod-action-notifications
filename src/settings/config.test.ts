@@ -20,6 +20,7 @@ describe("reading the settings", (): void => {
             enabledActions: [],
             excludedModerators: [],
             flagUnknownModerators: true,
+            securityAlerts: true,
             includeModNote: true,
             notificationChannel: "",
             alertChannel: "",

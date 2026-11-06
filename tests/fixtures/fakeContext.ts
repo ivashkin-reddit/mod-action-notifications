@@ -30,6 +30,7 @@ export interface Settings {
     enabledActions?: unknown;
     excludedModerators?: unknown;
     flagUnknownModerators?: unknown;
+    securityAlerts?: unknown;
     includeModNote?: unknown;
     notificationChannel?: unknown;
     alertChannel?: unknown;

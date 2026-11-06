@@ -59,6 +59,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
     },
     {
         type: "boolean",
+        name: "securityAlerts",
+        label: "Security Alerts",
+        helpText:
+            "Always send changes to the mod team (moderators added, removed or invited, permissions changed) and to Devvit apps (installed, removed, enabled, disabled or changed) as security alerts to the alert channel, whatever Enabled Mod Actions and Excluded Moderators say",
+        defaultValue: true,
+    },
+    {
+        type: "boolean",
         name: "includeModNote",
         label: "Include Mod Note",
         helpText: "Include moderator notes in Slack notifications",
