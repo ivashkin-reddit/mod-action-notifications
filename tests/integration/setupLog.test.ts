@@ -27,7 +27,12 @@ describe("the log of installing or upgrading", (): void => {
     it("says the monitor is off when all its thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
+        });
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 

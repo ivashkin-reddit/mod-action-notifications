@@ -15,6 +15,7 @@ function open(id: string, fields: Partial<OpenConversation>): OpenConversation {
         id,
         isAppeal: false,
         isAuto: false,
+        isArchived: false,
         lastUserUpdate: undefined,
         lastModUpdate: undefined,
         ...fields,
@@ -35,6 +36,7 @@ describe("modmail waiting for a reply", (): void => {
                 open("answered", { lastUserUpdate: hoursAgo(20), lastModUpdate: hoursAgo(20) }),
                 open("lately", { lastUserUpdate: hoursAgo(5.9) }),
                 open("auto", { isAuto: true, lastUserUpdate: hoursAgo(30) }),
+                open("archived", { isArchived: true, lastUserUpdate: hoursAgo(30) }),
                 open("no-user", { lastModUpdate: hoursAgo(30) }),
             ];
 

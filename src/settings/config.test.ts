@@ -32,7 +32,7 @@ describe("reading the settings", (): void => {
             reportedContentAgeHours: 24,
             spamQueueThreshold: 0,
             editedQueueThreshold: 0,
-            modmailWaitHours: 0,
+            modmailWaitHours: 24,
             urgentReportReasons: [],
             reportPileUpThreshold: 0,
             adminModmailAlerts: true,

@@ -60,6 +60,7 @@ describe("installing or upgrading the app", (): void => {
         app.settings.modqueueThreshold = 0;
         app.settings.unmoderagedAgeHours = 0;
         app.settings.reportedContentAgeHours = 0;
+        app.settings.modmailWaitHours = 0;
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
@@ -71,7 +72,12 @@ describe("installing or upgrading the app", (): void => {
     it("forgets the job even when cancelling it fails", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
+        });
         app.context.scheduler.jobs = [{ ...MONITOR_JOB, id: "job-gone" }];
         app.context.redis.seed(JOB_ID_KEY, "job-gone");
         app.context.scheduler.cancelJob.mockRejectedValue(new Error("no such job"));
@@ -140,7 +146,12 @@ describe("installing or upgrading the app", (): void => {
     it("leaves scheduled jobs of other names alone", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
+        });
         app.context.scheduler.jobs = [{ id: "job-other", name: "otherJob", cron: "*/15 * * * *" }];
 
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
@@ -151,7 +162,12 @@ describe("installing or upgrading the app", (): void => {
     it("schedules nothing when all thresholds are 0 and no job exists", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
+        });
 
         await app.fire("AppInstall", { type: "AppInstall" });
 

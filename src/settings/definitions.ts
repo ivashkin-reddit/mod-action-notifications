@@ -19,7 +19,7 @@ export const DEFAULT_BAN_HISTORY_DAYS = 30;
 export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 export const DEFAULT_REPORT_PILE_UP_THRESHOLD = 0;
-export const DEFAULT_MODMAIL_WAIT_HOURS = 0;
+export const DEFAULT_MODMAIL_WAIT_HOURS = 24;
 export const DEFAULT_EDITS_AFTER_APPROVAL_DAYS = 7;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;

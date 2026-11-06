@@ -111,6 +111,7 @@ describe("the Show Bot Status menu item", (): void => {
             modqueueThreshold: 0,
             unmoderagedAgeHours: 0,
             reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
         });
 
         await expect(status(app)).resolves.toMatchObject({

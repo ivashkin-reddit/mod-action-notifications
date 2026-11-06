@@ -19,6 +19,8 @@ type Conversation = Readonly<{
     isAuto?: boolean | undefined;
     lastUserUpdate?: string | undefined;
     lastModUpdate?: string | undefined;
+    /** Devvit's conversation state, e.g. "New" or "Archived". */
+    state?: string | undefined;
     authors: readonly Author[];
     messages: Readonly<Record<string, Readonly<{ id?: string | undefined; author?: Author }>>>;
 }>;
@@ -56,6 +58,7 @@ function openConversation(conversation: Conversation, isAppeal: boolean): OpenCo
         id: conversation.id ?? "",
         isAppeal,
         isAuto: conversation.isAuto ?? false,
+        isArchived: conversation.state === "Archived",
         lastUserUpdate: msOf(conversation.lastUserUpdate),
         lastModUpdate: msOf(conversation.lastModUpdate),
     };

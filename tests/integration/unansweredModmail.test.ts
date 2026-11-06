@@ -23,10 +23,14 @@ function hoursAgo(hours: number): Date {
     return new Date(NOW.getTime() - hours * MS_PER_HOUR);
 }
 
-type Waits = Readonly<{ userHours: number; modHours?: number; isAuto?: boolean }>;
+type Waits = Readonly<{ userHours: number; modHours?: number; isAuto?: boolean; state?: string }>;
 
 /** A conversation whose user last wrote `userHours` before NOW, and its moderators `modHours` before, if ever. */
-function conversation(id: string, folder: ModmailFolder, { userHours, modHours, isAuto }: Waits): FakeConversation {
+function conversation(
+    id: string,
+    folder: ModmailFolder,
+    { userHours, modHours, isAuto, state }: Waits,
+): FakeConversation {
     return {
         id,
         subject: `Subject ${id}`,
@@ -34,6 +38,7 @@ function conversation(id: string, folder: ModmailFolder, { userHours, modHours, 
         lastUserUpdate: hoursAgo(userHours),
         ...(modHours === undefined ? {} : { lastModUpdate: hoursAgo(modHours) }),
         ...(isAuto === undefined ? {} : { isAuto }),
+        ...(state === undefined ? {} : { state }),
         messages: [{ id: `${id}-m`, author: "SomeUser" }],
     };
 }
@@ -54,6 +59,7 @@ describe("modmail waiting for a reply", (): void => {
                 conversation("c5", "inprogress", { userHours: 20, modHours: 1 }),
                 conversation("c6", "new", { userHours: 50, isAuto: true }),
                 conversation("c7", "archived", { userHours: 40 }),
+                conversation("c8", "appeals", { userHours: 40, state: "Archived" }),
             ];
 
             await app.runJob("modqueueMonitor");
@@ -128,6 +134,23 @@ describe("modmail waiting for a reply", (): void => {
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(app.context.redis.dump("modmail:throttle:waiting")).toBeUndefined();
+    });
+
+    it("is on by default, at 24 hours", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        app.context.reddit.conversations = [
+            conversation("c1", "new", { userHours: 23 }),
+            conversation("c2", "new", { userHours: 25 }),
+        ];
+
+        await app.runJob("modqueueMonitor");
+
+        expect(lines(onlyMessage(app.slack.messages)).slice(1, 3)).toStrictEqual([
+            "• *Waiting for a reply:* 1",
+            "• *Longest wait:* 25 hours since the user last wrote",
+        ]);
     });
 
     it("reads no modmail while the setting is 0", TEST_OPTIONS, async (): Promise<void> => {

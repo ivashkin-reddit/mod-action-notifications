@@ -79,13 +79,14 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 
 - On a modmail message, the app reads the conversation; if the message's author is a Reddit admin, an alert goes to the alert channel at once, with the conversation's subject and a link to it.
 - **Reads:** `ModMail` events, `reddit.modMail.getConversation`. **Keeps:** claims `modmail:admin:{messageId}` (1 day).
-- **Setting:** `adminModmailAlerts`, boolean, default on.
+- **Setting:** `adminModmailAlerts`, boolean, default on (confirmed by the owner).
 
 ### F9. Unanswered modmail and ban appeals
 
 - On each monitor run, the app lists conversations in the New, In Progress and Appeals folders. A conversation whose last message is from a user and at least the configured hours old counts as waiting. One alert, at most every six hours, gives how many wait and the oldest's age, with ban appeals counted apart, and a link to the modmail inbox.
 - **Reads:** `reddit.modMail.getConversations`. **Keeps:** the throttle claim `modmail:throttle:waiting` (6 hours).
-- **Setting:** `modmailWaitHours`, whole number, default 0 (off) _to confirm_. The monitor job is scheduled while this or any modqueue threshold is on.
+- **Setting:** `modmailWaitHours`, whole number, default 24 (the owner's choice); 0 turns it off. The monitor job is scheduled while this or any modqueue threshold is on.
+- Archived conversations never count as waiting, whichever folder lists them (the owner's choice).
 
 ### F10. Edits after approval
 
@@ -104,8 +105,8 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 ### F12. Team statistics: response times and outcomes
 
 - **Time to act:** from a post's or comment's first report, or its AutoModerator filter, to a moderator removing or approving it, in buckets (15 minutes, 1, 4, 12 and 24 hours, longer), with the median read from them.
-- **Outcomes:** the share of reported items removed and approved; how many of AutoModerator's filtered items moderators approved (its false positives; as built, not per rule, as a rule's reason can quote the content it matched); how often moderators reverse Reddit's own removals; how often one moderator reverses another (a team count).
-- **Modmail first response:** from a user's first message to a moderator's first reply.
+- **Outcomes:** the share of reported items removed and approved; how many of AutoModerator's filtered items moderators approved (its false positives; counted overall, not per rule, as a rule's reason can quote the content it matched, which the owner accepted); how often moderators reverse Reddit's own removals; how often one moderator reverses another (a team count).
+- **Modmail replies:** from a user's first message since a moderator last replied, to a moderator's reply (the owner accepted this). A message in an archived conversation starts no wait and ends one without counting it (the owner's choice).
 - **Reads:** report events, `AutomoderatorFilterPost` and `AutomoderatorFilterComment` events, mod actions, modmail events. **Keeps:** `stats:awaiting` (item ID to when it started waiting and whether reported or filtered, first entry wins; a week, at most 10,000), `stats:modmail_waiting` (conversation ID to when a user started waiting; a week, at most 10,000), `stats:removed:{day}` (item ID to `reddit` or the remover's hash, 2 days), and `stats:outcomes:{day}` (counts by range and outcome, 15 days).
 - Shown in the weekly digest and Show Team Stats.
 
@@ -115,7 +116,7 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 | -------------------------------------------- | ---------------- |
 | `spamQueueThreshold`, `editedQueueThreshold` | 0 (off)          |
 | `reportPileUpThreshold`                      | 0 (off)          |
-| `modmailWaitHours`                           | 0 (off)          |
+| `modmailWaitHours`                           | 24               |
 | `editsAfterApprovalDays`                     | 7                |
 | `dormantModeratorDays`                       | 90               |
 | `banHistoryDays`                             | 30               |
@@ -126,6 +127,7 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 - A `wikirevise` action fires for an edit to `config/automoderator`, and the page's latest revision is readable when it does.
 - `getConversation` marks admins (`isAdmin`) among a conversation's authors.
 - Whether the `ModMail` event's `conversationId` and `messageId` carry the prefixes `ModmailConversation_` and `ModmailMessage_` (the protobuf says not; the app takes them off either way), and whether an admin's message comes with `messageAuthorType` `participant_user`.
+- The `ModMail` event's `conversationState` for an archived conversation is `archived` (compared ignoring case), including for a moderator's Reply and Archive.
 - Whether `getConversations` lists the most recently updated conversations first, so a full folder leaves out the longest waits.
 - Report events carry the item's report count, and reasons arrive as the rule's or Reddit's wording.
 - `AutomoderatorFilterPost` and `AutomoderatorFilterComment` fire when AutoModerator holds an item for review (`action: filter`), with the item's ID.

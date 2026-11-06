@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
-import type { App } from "../fixtures/app.js";
 import { commentFiltered, modmailReceived, postReported } from "../fixtures/contentEvents.js";
 import { modActionEvent, removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { MINUTE, onlyMessage } from "../fixtures/messages.js";
+import { RESPONSE_LINES, responseLines } from "../fixtures/teamStats.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -14,32 +14,11 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const RESPONSE_LINES = [
-    "Time to act on the queue",
-    "Reported items",
-    "Filtered by AutoModerator",
-    "Removals reversed",
-    "Modmail replies",
-];
-
 /** A hash's fields, as the fake Redis dumps one; none for anything else. */
 function fieldsOf(dumped: unknown): Readonly<Record<string, unknown>> {
     return typeof dumped === "object" && dumped !== null && "fields" in dumped && typeof dumped.fields === "object"
         ? { ...dumped.fields }
         : {};
-}
-
-/** Show Team Stats' lines on response times and outcomes, by label. */
-async function responseLines(
-    app: Readonly<Pick<App, "pressMenuItem" | "shownForm">>,
-): Promise<Readonly<Record<string, unknown>>> {
-    await app.pressMenuItem("Show Team Stats");
-    return Object.fromEntries(
-        app
-            .shownForm()
-            .definition.fields.filter((field): boolean => RESPONSE_LINES.includes(field.label ?? ""))
-            .map((field): readonly [string, unknown] => [field.label ?? "", field.defaultValue]),
-    );
 }
 
 /** `moderator` approves Author's post t3_abc. */
@@ -213,31 +192,6 @@ describe("removals reversed", (): void => {
 
         await expect(responseLines(app)).resolves.toMatchObject({
             "Removals reversed": "0 of Reddit's, 0 of another moderator's",
-        });
-    });
-});
-
-describe("modmail replies", (): void => {
-    it("run from a user's message to a moderator's reply", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-        await app.fire("ModMail", modmailReceived({ author: "SomeUser", messageId: "ModmailMessage_m1" }));
-        await app.advance(MINUTE);
-        await app.fire("ModMail", modmailReceived({ author: "SomeUser", messageId: "ModmailMessage_m2" }));
-        await app.advance(2 * HOUR);
-
-        await app.fire(
-            "ModMail",
-            modmailReceived({ author: "ModA", authorType: "moderator", messageId: "ModmailMessage_m3" }),
-        );
-        await app.fire(
-            "ModMail",
-            modmailReceived({ author: "ModB", authorType: "moderator", messageId: "ModmailMessage_m4" }),
-        );
-
-        await expect(responseLines(app)).resolves.toMatchObject({
-            "Modmail replies": "median within 4 hours, of 1 reply",
         });
     });
 });

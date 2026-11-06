@@ -54,7 +54,12 @@ describe("the Setup Modqueue Monitoring menu item", (): void => {
     it("reports monitoring as disabled when all thresholds are 0", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { modqueueThreshold: 0, unmoderagedAgeHours: 0, reportedContentAgeHours: 0 });
+        const app = await loadApp(devvit, {
+            modqueueThreshold: 0,
+            unmoderagedAgeHours: 0,
+            reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
+        });
 
         await app.pressMenuItem("Setup Modqueue Monitoring");
 

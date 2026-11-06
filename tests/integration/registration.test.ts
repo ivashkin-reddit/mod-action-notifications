@@ -53,7 +53,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
                 { name: "spamQueueThreshold", type: "number", defaultValue: 0 },
                 { name: "editedQueueThreshold", type: "number", defaultValue: 0 },
-                { name: "modmailWaitHours", type: "number", defaultValue: 0 },
+                { name: "modmailWaitHours", type: "number", defaultValue: 24 },
                 { name: "urgentReportReasons", type: "string", defaultValue: undefined },
                 { name: "reportPileUpThreshold", type: "number", defaultValue: 0 },
                 { name: "adminModmailAlerts", type: "boolean", defaultValue: true },
