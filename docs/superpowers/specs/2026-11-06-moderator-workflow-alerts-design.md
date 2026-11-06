@@ -128,4 +128,4 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 - Whether the `ModMail` event's `conversationId` and `messageId` carry the prefixes `ModmailConversation_` and `ModmailMessage_` (the protobuf says not; the app takes them off either way), and whether an admin's message comes with `messageAuthorType` `participant_user`.
 - Whether `getConversations` lists the most recently updated conversations first, so a full folder leaves out the longest waits.
 - Report events carry the item's report count, and reasons arrive as the rule's or Reddit's wording.
-- `PostUpdate` and `CommentUpdate` fire for edits by authors, with the edited item's ID.
+- `PostUpdate` and `CommentUpdate` fire for edits by authors, with the edited item's ID, and `previousBody` holds the text before the edit (a post's `selftext`).

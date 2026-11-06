@@ -8,11 +8,12 @@ import {
     DEFAULT_BAN_HISTORY_DAYS,
     DEFAULT_DORMANT_MODERATOR_DAYS,
     DEFAULT_EDITED_QUEUE_THRESHOLD,
+    DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
     DEFAULT_MODMAIL_WAIT_HOURS,
     DEFAULT_REPORT_PILE_UP_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
-    MAX_SLACK_RETENTION_DAYS,
 } from "./definitions.js";
+import { MAX_SLACK_RETENTION_DAYS } from "./validation.js";
 
 const DECIMAL = 10;
 
@@ -55,6 +56,8 @@ export interface AppConfig {
     readonly reportPileUpThreshold: number;
     /** Whether a Reddit admin's modmail alerts at once. */
     readonly adminModmailAlerts: boolean;
+    /** An author's edit within this many days of a moderator's approval alerts; 0 turns it off. */
+    readonly editsAfterApprovalDays: number;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
@@ -91,6 +94,7 @@ const DEFAULT_CONFIG: AppConfig = {
     urgentReportReasons: [],
     reportPileUpThreshold: DEFAULT_REPORT_PILE_UP_THRESHOLD,
     adminModmailAlerts: true,
+    editsAfterApprovalDays: DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
@@ -152,6 +156,32 @@ function usernames(value: SettingValue): readonly string[] {
         : [];
 }
 
+/** The settings of the alerts on what the community does: modmail, reports and edits after approval. */
+type CommunityAlerts = Pick<
+    AppConfig,
+    | "modmailWaitHours"
+    | "urgentReportReasons"
+    | "reportPileUpThreshold"
+    | "adminModmailAlerts"
+    | "editsAfterApprovalDays"
+>;
+
+async function readCommunityAlerts(settings: SettingsReader): Promise<CommunityAlerts> {
+    return {
+        modmailWaitHours: nonNegativeInteger(await settings.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
+        urgentReportReasons: commaList(await settings.get("urgentReportReasons")),
+        reportPileUpThreshold: nonNegativeInteger(
+            await settings.get("reportPileUpThreshold"),
+            DEFAULT_REPORT_PILE_UP_THRESHOLD,
+        ),
+        adminModmailAlerts: booleanOr(await settings.get("adminModmailAlerts"), true),
+        editsAfterApprovalDays: nonNegativeInteger(
+            await settings.get("editsAfterApprovalDays"),
+            DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
+        ),
+    };
+}
+
 async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     // Read one after another: a setting that cannot be read stops the rest.
     const notificationChannel = channelName(await settings.get("notificationChannel"));
@@ -186,13 +216,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
             await settings.get("editedQueueThreshold"),
             DEFAULT_EDITED_QUEUE_THRESHOLD,
         ),
-        modmailWaitHours: nonNegativeInteger(await settings.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
-        urgentReportReasons: commaList(await settings.get("urgentReportReasons")),
-        reportPileUpThreshold: nonNegativeInteger(
-            await settings.get("reportPileUpThreshold"),
-            DEFAULT_REPORT_PILE_UP_THRESHOLD,
-        ),
-        adminModmailAlerts: booleanOr(await settings.get("adminModmailAlerts"), true),
+        ...(await readCommunityAlerts(settings)),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         dailySummary: booleanOr(await settings.get("dailySummary"), false),
         weeklyStatistics: booleanOr(await settings.get("weeklyStatistics"), false),

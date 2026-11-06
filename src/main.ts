@@ -4,7 +4,8 @@
  * composition.ts builds what they share, and the capability modules do the work.
  */
 import { Devvit } from "@devvit/public-api";
-import { onCommentReport, onModMail, onPostReport } from "./communityTriggers.js";
+import type { CommentUpdateEvent, PostUpdateEvent } from "./approvedEdits/index.js";
+import { onCommentReport, onCommentUpdate, onModMail, onPostReport, onPostUpdate } from "./communityTriggers.js";
 import type { AppContext } from "./composition.js";
 import { SUMMARY_JOB_NAME } from "./health/index.js";
 import {
@@ -108,6 +109,21 @@ Devvit.addTrigger({
     event: "CommentReport",
     onEvent: async (event: CommentReportEvent, context: AppContext): Promise<void> => {
         await onCommentReport(event, context);
+    },
+});
+
+// An edit: one by the author after a moderator approved the post or comment alerts.
+Devvit.addTrigger({
+    event: "PostUpdate",
+    onEvent: async (event: PostUpdateEvent, context: AppContext): Promise<void> => {
+        await onPostUpdate(event, context);
+    },
+});
+
+Devvit.addTrigger({
+    event: "CommentUpdate",
+    onEvent: async (event: CommentUpdateEvent, context: AppContext): Promise<void> => {
+        await onCommentUpdate(event, context);
     },
 });
 

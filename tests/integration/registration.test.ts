@@ -57,6 +57,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "urgentReportReasons", type: "string", defaultValue: undefined },
                 { name: "reportPileUpThreshold", type: "number", defaultValue: 0 },
                 { name: "adminModmailAlerts", type: "boolean", defaultValue: true },
+                { name: "editsAfterApprovalDays", type: "number", defaultValue: 7 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
@@ -152,10 +153,12 @@ describe("what the app registers with Devvit", (): void => {
             "onAppUpgrade",
             "onCommentDelete",
             "onCommentReport",
+            "onCommentUpdate",
             "onModAction",
             "onModMail",
             "onPostDelete",
             "onPostReport",
+            "onPostUpdate",
         ]);
     });
 

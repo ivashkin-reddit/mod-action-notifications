@@ -46,6 +46,7 @@ export interface Settings {
     urgentReportReasons?: unknown;
     reportPileUpThreshold?: unknown;
     adminModmailAlerts?: unknown;
+    editsAfterApprovalDays?: unknown;
     enableAutoModAlerts?: unknown;
     postDeletionUpvoteThreshold?: unknown;
     dailySummary?: unknown;

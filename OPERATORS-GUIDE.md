@@ -7,11 +7,11 @@ This guide is for the people who deploy Mod Action Notifications, configure it f
 The app is a Devvit app. Reddit runs it, and it acts only when Reddit calls it:
 
 ```text
-Mod action, report, modmail, post deleted ─┐
-                                           ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
-Every 15 minutes, daily, weekly ───────────┘                                         ▲
-Post or comment deleted ─► its text leaves queued alerts ────────────────────────────┘
-Mod tools menu ─► Test Slack Connection, Simulate Mod Action ──────────────────────────────────────► Slack app
+Mod action, edit, report, modmail, deletion ─┐
+                                             ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
+Every 15 minutes, daily, weekly ─────────────┘                                         ▲
+Post or comment deleted ─► its text leaves queued alerts ──────────────────────────────┘
+Mod tools menu ─► Test Slack Connection, Simulate Mod Action ────────────────────────────────────────► Slack app
 ```
 
 | Reddit calls it for                                  | It does                                                                                                                        |
@@ -21,6 +21,7 @@ Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────
 | A deleted comment (`CommentDelete` trigger)          | Takes the comment out of queued alerts.                                                                                        |
 | A report (`PostReport`, `CommentReport` triggers)    | Alerts on an urgent reason, or on reports piling up.                                                                           |
 | A modmail message (`ModMail` trigger)                | Alerts when a Reddit admin wrote it.                                                                                           |
+| An edit (`PostUpdate`, `CommentUpdate` triggers)     | Alerts when an author edits a post or comment a moderator approved lately.                                                     |
 | The `modqueueMonitor` job, every 15 minutes          | Checks the modqueue, unmoderated, reports, spam and edited listings, and modmail waiting for a reply, against your thresholds. |
 | The `slackOutbox` job, scheduled as needed           | Delivers alerts still waiting in the queue.                                                                                    |
 | The `dailySummary` job, at 08:00 UTC each day        | Posts the summary of the day before, when the Daily Summary setting is on.                                                     |
@@ -115,6 +116,7 @@ The developer sets the Slack bot token, for every installation at once. Moderato
 | Urgent Report Reasons (`urgentReportReasons`)                                                     | reasons separated by commas                | A report whose reason contains one, ignoring case, alerts the alert channel at once.                                                                                                                                                                  |
 | Report Pile-Up Alert Threshold (`reportPileUpThreshold`)                                          | a whole number of 0 or more                | A post or comment reaching this many reports alerts once.                                                                                                                                                                                             |
 | Admin Modmail Alerts (`adminModmailAlerts`)                                                       | on or off                                  | A Reddit admin's message in modmail alerts the alert channel at once.                                                                                                                                                                                 |
+| Edits After Approval Alert (Days) (`editsAfterApprovalDays`)                                      | a whole number from 0 to 30                | An author's edit within this many days of a moderator's approval alerts the alert channel, once a day for an item. 0 turns it off, and no approvals are kept.                                                                                         |
 | Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                                  | Also alert for AutoModerator's actions.                                                                                                                                                                                                               |
 | Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more                | Alert when a user deletes their own post with at least this score.                                                                                                                                                                                    |
 | Daily Summary (`dailySummary`)                                                                    | on or off                                  | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.                                                                                                                                                       |
@@ -159,6 +161,11 @@ The `PostReport` and `CommentReport` triggers tell the app of each report, with 
 - **From Reddit's admins.** The `ModMail` trigger tells the app of each modmail message. For a message written as a user, rather than by a moderator writing as one, the app reads its conversation (without marking it read). When the message's author is a Reddit admin, `🛡️ Modmail from a Reddit admin` goes to the alert channel at once, with the admin's username, the conversation's subject (escaped) and a link to it. Each message is claimed for a day (`modmail:admin:{messageId}`), so one delivered twice alerts once; a claim that can't be stored still sends. The event's IDs may carry the prefixes `ModmailConversation_` and `ModmailMessage_`; the app takes them off.
 - **Waiting for a reply.** While Modmail Waiting Alert (Hours) is above 0, each monitor run lists the New, In Progress and Appeals folders, up to 100 conversations each. A user waits when they wrote after a moderator last acted in the conversation; conversations AutoModerator or Reddit generated are left out. When any user has waited the configured hours since they last wrote, `📬 Modmail waiting for a reply` goes to the alert channel: how many conversations, how many of them are ban appeals, and the longest wait, with links to the three folders. It is sent at most every six hours (`modmail:throttle:waiting`). When a folder holds 100 or more, the alert says "at least".
 - **Failures.** A modmail read that fails raises the condition _Modmail cannot be read_ until one succeeds (see [Reading the logs](#reading-the-logs)). It leaves the modqueue's checks, and the monitor's own health, alone.
+
+## Edits after approval
+
+- **Approvals.** A moderator's `approvelink` or `approvecomment`, from the `ModAction` trigger, is remembered for the configured days (`approved_edits:approved:{itemId}`: who approved it, and when), whether or not Slack is set up. A later approval replaces an earlier one. AutoModerator's and Reddit's approvals aren't kept, nor any while the setting is 0.
+- **Edits.** The `PostUpdate` and `CommentUpdate` triggers tell the app of each update. Only its author can edit a post or comment, so an update whose text differs from the text before is the author's edit; Reddit also sends updates that leave the text alone, which are skipped. The app compares the two versions and keeps neither. An edit within the configured days of a remembered approval sends `✏️ Edited after approval` to the alert channel: the author, who approved it and how long before, and a link without the post's title. Each item alerts at most once a day (`approved_edits:alerted:{itemId}`).
 
 ## Security watch
 
@@ -312,6 +319,8 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `reports:urgent:{itemId}`, `reports:pileup:{itemId}`                        | metadata             | that an item's urgent report, or pile-up, was alerted                                                                               | 1 day                                                     | one per item            |
 | `modmail:admin:{messageId}`                                                 | metadata             | that an admin's modmail message was alerted                                                                                         | 1 day                                                     | one per message         |
 | `modmail:throttle:waiting`                                                  | none                 | that the waiting-modmail alert was sent                                                                                             | 6 hours                                                   | one                     |
+| `approved_edits:approved:{itemId}`                                          | metadata             | the item's latest approval: the moderator's username, and when                                                                      | the configured days, at most 30                           | one per item            |
+| `approved_edits:alerted:{itemId}`                                           | metadata             | that an edit to the item was alerted                                                                                                | 1 day                                                     | one per item            |
 | `health:notice:{condition}`                                                 | none                 | that moderators were sent a notice of the condition within the day                                                                  | 1 day                                                     | 1 per condition         |
 | `health:noticed`                                                            | none                 | the conditions moderators were sent a notice of, so their end is sent                                                               | 7 days from the last                                      | 7 conditions            |
 | `health:reminder:{condition}`                                               | none                 | that a condition was logged within the day                                                                                          | 1 day                                                     | 1 per condition         |
@@ -424,6 +433,8 @@ Lines that need attention besides those:
 | `[modaction] An account not on the mod list took an action` | Sent as a security alert.                                                                                                       |
 | `[security] Could not read AutoModerator's config …`        | Reddit couldn't return the config page's revisions; the wiki edit was not checked.                                              |
 | `[security] Could not watch a mod action:`                  | Redis failed during the security watch; the alert for the action itself was not affected.                                       |
+| `[approvededits] Could not remember an approval …`          | Redis failed as a moderator approved something; an edit after that approval won't be alerted.                                   |
+| `[approvededits] Could not check an edit …`                 | Redis failed reading an approval; the edit was not alerted.                                                                     |
 | `[modaction] Could not read the user's mod notes …`         | Reddit couldn't return the banned user's mod notes, or gave no name for the subreddit. The ban was alerted without its history. |
 | `[health] Could not record a condition:`                    | Redis failed while noting a problem; the work went on, and the problem may be logged again.                                     |
 

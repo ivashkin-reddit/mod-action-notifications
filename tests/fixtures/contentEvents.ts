@@ -1,4 +1,9 @@
-import { CommentReport, PostReport } from "@devvit/protos/types/devvit/events/v1alpha/events.js";
+import {
+    CommentReport,
+    CommentUpdate,
+    PostReport,
+    PostUpdate,
+} from "@devvit/protos/types/devvit/events/v1alpha/events.js";
 import { ModMail } from "@devvit/protos/types/devvit/reddit/v2alpha/modmail.js";
 import { SUBREDDIT } from "./fakeContext.js";
 
@@ -71,6 +76,45 @@ export function modmailReceived(fields: ModmailFields = {}): ModMail & Readonly<
             conversationSubreddit: { name: SUBREDDIT },
             conversationId: fields.conversationId ?? "ModmailConversation_c1",
             messageId: fields.messageId ?? "ModmailMessage_m1",
+        }),
+    };
+}
+
+export type EditFields = Readonly<{ previousBody?: string; body?: string }>;
+
+/** Author edits their post t3_abc: from "what it said" to "what it says now" unless given. */
+export function postEdited(fields: EditFields = {}): PostUpdate & Readonly<{ type: "PostUpdate" }> {
+    return {
+        type: "PostUpdate",
+        ...PostUpdate.fromPartial({
+            subreddit: { name: SUBREDDIT },
+            author: { id: "t2_author", name: "Author" },
+            previousBody: fields.previousBody ?? "what it said",
+            post: {
+                id: "t3_abc",
+                title: "Hello world",
+                selftext: fields.body ?? "what it says now",
+                permalink: "/r/testsub/comments/abc/hello_world/",
+                authorId: "t2_author",
+            },
+        }),
+    };
+}
+
+/** Commenter edits their comment t1_c on the post t3_abc, as for a post. */
+export function commentEdited(fields: EditFields = {}): CommentUpdate & Readonly<{ type: "CommentUpdate" }> {
+    return {
+        type: "CommentUpdate",
+        ...CommentUpdate.fromPartial({
+            subreddit: { name: SUBREDDIT },
+            author: { id: "t2_commenter", name: "Commenter" },
+            previousBody: fields.previousBody ?? "what it said",
+            comment: {
+                id: "t1_c",
+                postId: "t3_abc",
+                body: fields.body ?? "what it says now",
+                permalink: "/r/testsub/comments/abc/hello_world/c/",
+            },
         }),
     };
 }

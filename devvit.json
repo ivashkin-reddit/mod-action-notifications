@@ -8,10 +8,12 @@
       "onAppUpgrade",
       "onCommentDelete",
       "onCommentReport",
+      "onCommentUpdate",
       "onModAction",
       "onModMail",
       "onPostDelete",
-      "onPostReport"
+      "onPostReport",
+      "onPostUpdate"
     ]
   },
   "permissions": {

@@ -20,6 +20,8 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Modmail from Reddit's admins.** When a Reddit admin writes to your subreddit's modmail, the app alerts you at once, with the conversation's subject and a link to it. Turn on Modmail Waiting Alert to hear when users have waited too long for a reply, with ban appeals counted apart, at most every six hours.
 
+**Edits after approval.** When someone edits a post or comment a moderator approved in the last 7 days, a common way to slip rule-breaking content past review, the app tells you who edited it, who approved it and how long before, with a link. It never shows either version of the text.
+
 **Activity spikes.** When one moderator takes five or more actions within a minute, the alert says so.
 
 **Modqueue monitoring.** Every 15 minutes the app checks your queues. It alerts your team when the modqueue grows past a size you set, when content has waited too long without a moderator reviewing it, and when reported content has gone unhandled for too long. Each kind of alert is sent at most once an hour. It can also watch Reddit's spam queue and edited queue.
@@ -67,6 +69,7 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 | Urgent Report Reasons                 | Report reasons that alert you at once, separated by commas, e.g. personal information, threatening violence.                                                                                                                   | none                            |
 | Report Pile-Up Alert Threshold        | Alert once when a post or comment reaches this many reports.                                                                                                                                                                   | 0 (off)                         |
 | Admin Modmail Alerts                  | Alert at once when a Reddit admin writes to your subreddit's modmail.                                                                                                                                                          | on                              |
+| Edits After Approval Alert (Days)     | Alert when an author edits a post or comment a moderator approved within this many days, from 0 to 30.                                                                                                                         | 7                               |
 | Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                                                  | off                             |
 | Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                                                             | 100                             |
 | Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working.                                | off                             |
@@ -101,6 +104,7 @@ The app reads only what it needs to write an alert. Apart from alerts waiting to
 - **Where each alert quoting a post or comment went in Slack** (metadata), with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: as long as your channels keep messages, set in **Slack Message Retention**, at most 90 days.
 - **When each moderator last acted** (metadata), to spot a moderator acting after a long silence: 400 days, and forgotten when they leave the team.
 - **Team statistics** (metadata): counts of the team's actions by day, kind and hour, bans by length, removals per thread, and how many moderators acted, by a short hash of each name rather than the name: 15 days.
+- **Approvals** (metadata), to spot an edit after one: which moderator approved which post or comment, and when. Kept for as many days as **Edits After Approval Alert** says, 7 by default and at most 30.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.

@@ -1,4 +1,12 @@
 import type { SettingsFormField } from "@devvit/public-api";
+import {
+    approvalDaysProblem,
+    botTokenProblem,
+    dormantDaysProblem,
+    historyDaysProblem,
+    retentionProblem,
+    wholeNumberProblem,
+} from "./validation.js";
 
 /** The settings moderators fill in, with what each is checked for on saving. */
 
@@ -12,48 +20,9 @@ export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 export const DEFAULT_REPORT_PILE_UP_THRESHOLD = 0;
 export const DEFAULT_MODMAIL_WAIT_HOURS = 0;
+export const DEFAULT_EDITS_AFTER_APPROVAL_DAYS = 7;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
-/** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
-export const MAX_SLACK_RETENTION_DAYS = 90;
-/** A Slack bot token starts so; a user token (xoxp-) would post as the person who made it. */
-const BOT_TOKEN_PREFIX = "xoxb-";
-const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
-const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
-const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
-const HISTORY_DAYS_PROBLEM = "Enter a whole number of days, 0 or more (0 leaves the history out)";
-const DORMANT_DAYS_PROBLEM = "Enter a whole number of days, from 0 to 365 (0 turns this alert off)";
-/** A moderator's last action is kept 400 days, so a longer window could never be met. */
-const MAX_DORMANT_DAYS = 365;
-
-/** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
-function botTokenProblem(text: string): string | undefined {
-    return text === "" || text.startsWith(BOT_TOKEN_PREFIX) ? undefined : BOT_TOKEN_PROBLEM;
-}
-
-/** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
-function wholeNumberProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
-}
-
-/** Why the value cannot be the dormant moderator window: undefined when it is unset, or 0 to 365 days. */
-function dormantDaysProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 0 && value <= MAX_DORMANT_DAYS)
-        ? undefined
-        : DORMANT_DAYS_PROBLEM;
-}
-
-/** Why the value cannot be a number of days of history: undefined when it is unset, or a whole number of 0 or more. */
-function historyDaysProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : HISTORY_DAYS_PROBLEM;
-}
-
-/** Why the value cannot be the channels' retention, or undefined when it can: unset (the default) or 1 to 90 days. */
-function retentionProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 1 && value <= MAX_SLACK_RETENTION_DAYS)
-        ? undefined
-        : RETENTION_PROBLEM;
-}
 
 /**
  * What the Enabled Mod Actions setting offers, and those it starts with. The moderation module knows the mod
@@ -220,6 +189,16 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         helpText:
             "Alert the alert channel at once when a Reddit admin writes to the subreddit's modmail (enabled by default)",
         defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "editsAfterApprovalDays",
+        label: "Edits After Approval Alert (Days)",
+        helpText:
+            "Alert when an author edits a post or comment a moderator approved within this many days. The alert shows neither version of the text (0 to disable, at most 30)",
+        defaultValue: DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            approvalDaysProblem(value),
     },
     {
         type: "boolean",

@@ -1,3 +1,11 @@
+import {
+    alertOnEdit,
+    createRedisApprovalStore,
+    createSlackEditAlerts,
+    updateFromCommentEvent,
+    updateFromPostEvent,
+} from "./approvedEdits/index.js";
+import type { CommentUpdateEvent, ContentUpdate, PostUpdateEvent } from "./approvedEdits/index.js";
 import { alertsConfigured, configOf, modmailPorts, outboxOf } from "./composition.js";
 import type { AppContext } from "./composition.js";
 import { alertOnAdminModmail, messageFromEvent } from "./modmail/index.js";
@@ -12,7 +20,8 @@ import {
 import type { CommentReportEvent, ContentReport, PostReportEvent } from "./reports/index.js";
 
 /**
- * The composition root's triggers for what the community does, rather than its moderators: reports and modmail.
+ * The composition root's triggers for what the community does, rather than its moderators: reports, modmail and
+ * edits.
  * main.ts registers them; triggers.ts does the mod action and deletion triggers.
  */
 
@@ -47,4 +56,35 @@ export async function onModMail(event: ModmailEvent, context: AppContext): Promi
         return;
     }
     await alertOnAdminModmail(messageFromEvent(event), modmailPorts(context, config));
+}
+
+/**
+ * Alerts on an author's edit after a moderator approved the post or comment, while Slack is set up. Logs rather than
+ * rejects when the approval cannot be read.
+ */
+async function alertOnUpdate(update: ContentUpdate, context: AppContext): Promise<void> {
+    const config = await configOf(context);
+    if (!alertsConfigured(config)) {
+        return;
+    }
+    try {
+        await alertOnEdit(
+            update,
+            { days: config.editsAfterApprovalDays, editAt: Date.now() },
+            {
+                store: createRedisApprovalStore(context.redis),
+                alerts: createSlackEditAlerts(outboxOf(context, config).send, config.alertChannel),
+            },
+        );
+    } catch (error) {
+        console.warn("[approvededits] Could not check an edit for an earlier approval:", error);
+    }
+}
+
+export async function onPostUpdate(event: PostUpdateEvent, context: AppContext): Promise<void> {
+    await alertOnUpdate(updateFromPostEvent(event), context);
+}
+
+export async function onCommentUpdate(event: CommentUpdateEvent, context: AppContext): Promise<void> {
+    await alertOnUpdate(updateFromCommentEvent(event), context);
 }

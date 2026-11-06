@@ -1,3 +1,5 @@
+import { createRedisApprovalStore, rememberApproval } from "./approvedEdits/index.js";
+import type { ApprovalAction, Approver } from "./approvedEdits/index.js";
 import {
     actionNameOf,
     alertsConfigured,
@@ -145,9 +147,41 @@ async function watchForSecurity(
     }
 }
 
+function approverOf(action: ModAction): Approver {
+    if (isRedditAccount(action.moderatorName)) {
+        return "reddit";
+    }
+    return action.isAutoModerator ? "automoderator" : "moderator";
+}
+
+/** The action as edits after approval read it: the item it was on is the comment, for a comment, else the post. */
+function approvalActionOf(action: ModAction): ApprovalAction {
+    const commentId = action.target?.commentId;
+    return {
+        type: action.type,
+        actor: approverOf(action),
+        moderatorName: action.moderatorName,
+        itemId: commentId === undefined || commentId === "" ? action.target?.postId : commentId,
+        occurredAt: action.occurredAt,
+    };
+}
+
+/** Remembers a moderator's approval, to alert on the author's edit after it; logs rather than rejects. */
+async function rememberForEdits(action: ModAction, context: AppContext, config: AppConfig): Promise<void> {
+    try {
+        await rememberApproval(
+            approvalActionOf(action),
+            config.editsAfterApprovalDays,
+            createRedisApprovalStore(context.redis),
+        );
+    } catch (error) {
+        console.warn("[approvededits] Could not remember an approval, so an edit after it will not be alerted:", error);
+    }
+}
+
 /**
- * A mod action: alerted while Slack is set up, then counted toward the team's statistics and watched for security
- * whether or not it is, with what the alert completed it with (a ban's length).
+ * A mod action: alerted while Slack is set up, then counted toward the team's statistics, watched for security and
+ * remembered if it approves something, whether or not it is, with what the alert completed it with (a ban's length).
  */
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
@@ -159,6 +193,7 @@ export async function alertOnModAction(event: ModActionEvent, context: AppContex
         : action;
     await countForStatistics(completed, context);
     await watchForSecurity(completed, context, { config, ready });
+    await rememberForEdits(completed, context, config);
 }
 
 /** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */

@@ -36,6 +36,7 @@ describe("reading the settings", (): void => {
             urgentReportReasons: [],
             reportPileUpThreshold: 0,
             adminModmailAlerts: true,
+            editsAfterApprovalDays: 7,
             enableAutoModAlerts: false,
             postDeletionUpvoteThreshold: 100,
             dailySummary: false,
