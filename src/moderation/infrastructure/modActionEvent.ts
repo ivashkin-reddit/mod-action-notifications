@@ -75,5 +75,6 @@ export function modActionFromTriggerEvent(event: ModActionEvent): ModAction {
         banDurationLabel: undefined,
         relatedAction: undefined,
         activitySpike: undefined,
+        recentHistory: undefined,
     };
 }

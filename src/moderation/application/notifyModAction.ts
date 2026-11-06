@@ -4,6 +4,7 @@ import type { AlertRules } from "../domain/alerting.js";
 import { hasBanDurationMetadata, matchBanLogEntry, withBanLogEntry } from "../domain/banDuration.js";
 import { disciplineEventOf, disciplineStep, disciplineSubject, isRecorded, liftedBy } from "../domain/discipline.js";
 import type { DisciplineEvent } from "../domain/discipline.js";
+import { recentHistory } from "../domain/history.js";
 import { actionTypeOf, isBlank, isRedditAccount } from "../domain/modAction.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
 import type { ModActionAlerts, ModerationLookups, ModerationRecords } from "./ports.js";
@@ -11,6 +12,8 @@ import type { ModActionAlerts, ModerationLookups, ModerationRecords } from "./po
 export interface ModerationConfig extends AlertRules {
     /** Send actions by users not on the mod list as security alerts. */
     readonly flagUnknownModerators: boolean;
+    /** How many days of the banned user's mod notes a ban alert counts; 0 leaves them out. */
+    readonly banHistoryDays: number;
 }
 
 export interface ModerationPorts {
@@ -89,6 +92,24 @@ async function withActivity(modAction: ModAction, records: ModerationRecords): P
     return actionCount === undefined ? modAction : { ...modAction, activitySpike: activitySpike(actionCount) };
 }
 
+/** A ban, with what the user's mod notes record in the configured days before it; unchanged when off, or on failure. */
+async function withRecentHistory(modAction: ModAction, days: number, lookups: ModerationLookups): Promise<ModAction> {
+    const username = modAction.target?.author;
+    if (actionTypeOf(modAction) !== "banuser" || days === 0 || isBlank(username)) {
+        return modAction;
+    }
+    try {
+        const notes = await lookups.modNotes(modAction.subredditName, username);
+        return { ...modAction, recentHistory: recentHistory(notes, modAction.occurredAt, days) };
+    } catch (error) {
+        console.warn(
+            "[modaction] Could not read the user's mod notes, so alerting the ban without their history:",
+            error,
+        );
+        return modAction;
+    }
+}
+
 /** Whether the action came from someone not on the mod list; when the list cannot be fetched, assume not. */
 async function isUnknownModerator(
     moderatorName: string,
@@ -162,6 +183,6 @@ export async function notifyModAction(
     const actor = await actorOf(modAction, config, ports.lookups);
     // Claimed just before the alert is queued, so a delivery that fails earlier leaves the report to the next one.
     if (await isFirstDelivery(modAction, ports.records)) {
-        await ports.alerts.report(modAction, actor);
+        await ports.alerts.report(await withRecentHistory(modAction, config.banHistoryDays, ports.lookups), actor);
     }
 }

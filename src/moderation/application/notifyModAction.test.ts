@@ -17,6 +17,7 @@ const CONFIG: ModerationConfig = {
     excludedModerators: [],
     enableAutoModAlerts: false,
     securityAlerts: false,
+    banHistoryDays: 0,
     flagUnknownModerators: true,
 };
 

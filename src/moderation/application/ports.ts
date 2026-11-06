@@ -1,6 +1,7 @@
 import type { ModeratorRef } from "../domain/activity.js";
 import type { BanLogEntry } from "../domain/banDuration.js";
 import type { DisciplineEvent, DisciplineSubject } from "../domain/discipline.js";
+import type { NoteEntry } from "../domain/history.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
 
 /** What mod-action alerts keep between actions. Each method rejects when storage fails. */
@@ -35,6 +36,11 @@ export interface ModerationLookups {
     readonly isModerator: (username: string) => Promise<boolean>;
     /** The latest bans in the named subreddit's mod log, or the current subreddit's when none is named. */
     readonly recentBans: (subredditName: string | undefined) => Promise<readonly BanLogEntry[]>;
+    /**
+     * The user's entries in the named subreddit's mod notes (the current subreddit's when none is named), newest
+     * first, at most 100. Rejects when they cannot be read.
+     */
+    readonly modNotes: (subredditName: string | undefined, username: string) => Promise<readonly NoteEntry[]>;
 }
 
 export interface ModActionAlerts {

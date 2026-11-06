@@ -7,6 +7,7 @@ export const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 export const DEFAULT_SPAM_QUEUE_THRESHOLD = 0;
+export const DEFAULT_BAN_HISTORY_DAYS = 30;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
@@ -17,6 +18,7 @@ const BOT_TOKEN_PREFIX = "xoxb-";
 const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
+const HISTORY_DAYS_PROBLEM = "Enter a whole number of days, 0 or more (0 leaves the history out)";
 
 /** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
 function botTokenProblem(text: string): string | undefined {
@@ -26,6 +28,11 @@ function botTokenProblem(text: string): string | undefined {
 /** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
 function wholeNumberProblem(value: number | undefined): string | undefined {
     return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
+}
+
+/** Why the value cannot be a number of days of history: undefined when it is unset, or a whole number of 0 or more. */
+function historyDaysProblem(value: number | undefined): string | undefined {
+    return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : HISTORY_DAYS_PROBLEM;
 }
 
 /** Why the value cannot be the channels' retention, or undefined when it can: unset (the default) or 1 to 90 days. */
@@ -73,6 +80,16 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         label: "Include Mod Note",
         helpText: "Include moderator notes in Slack notifications",
         defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "banHistoryDays",
+        label: "Ban Alert History (Days)",
+        helpText:
+            "Ban alerts count the user's entries in Reddit's mod notes (removals, spam removals, bans, mutes and notes) from this many days before the ban, never their text (0 leaves the history out)",
+        defaultValue: DEFAULT_BAN_HISTORY_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            historyDaysProblem(value),
     },
     {
         type: "string",

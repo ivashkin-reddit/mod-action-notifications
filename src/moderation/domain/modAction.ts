@@ -1,3 +1,4 @@
+import type { RecentHistory } from "./history.js";
 /** What a mod action was done to. */
 export interface ModActionTarget {
     /** The username of the target, or of the content's author. */
@@ -43,6 +44,8 @@ export interface ModAction {
     readonly banDurationLabel: string | undefined;
     readonly relatedAction: RelatedAction | undefined;
     readonly activitySpike: ActivitySpike | undefined;
+    /** For a ban: what the user's mod notes record in the days before it, when read. */
+    readonly recentHistory: RecentHistory | undefined;
 }
 
 /** A user, as the target of an action on them rather than on their content. */

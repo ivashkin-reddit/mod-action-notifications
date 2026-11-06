@@ -5,6 +5,7 @@ import {
     DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     DEFAULT_SPAM_QUEUE_THRESHOLD,
+    DEFAULT_BAN_HISTORY_DAYS,
     DEFAULT_EDITED_QUEUE_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
     MAX_SLACK_RETENTION_DAYS,
@@ -23,6 +24,8 @@ export interface AppConfig {
     /** Send every security action as a security alert. */
     readonly securityAlerts: boolean;
     readonly includeModNote: boolean;
+    /** How many days of the banned user's mod notes a ban alert counts; 0 leaves them out. */
+    readonly banHistoryDays: number;
     /** A channel ID, or a channel name without its leading #; '' when none is set, so no alerts can be sent. */
     readonly notificationChannel: string;
     /** A channel ID or name without its leading #: the alert channel, else the notification channel, else ''. */
@@ -59,6 +62,7 @@ const DEFAULT_CONFIG: AppConfig = {
     flagUnknownModerators: true,
     securityAlerts: true,
     includeModNote: true,
+    banHistoryDays: DEFAULT_BAN_HISTORY_DAYS,
     notificationChannel: "",
     alertChannel: "",
     slackRetentionDays: DEFAULT_SLACK_RETENTION_DAYS,
@@ -128,6 +132,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
         securityAlerts: booleanOr(await settings.get("securityAlerts"), true),
         includeModNote: booleanOr(await settings.get("includeModNote"), true),
+        banHistoryDays: nonNegativeInteger(await settings.get("banHistoryDays"), DEFAULT_BAN_HISTORY_DAYS),
         notificationChannel,
         // The setting's help text: "uses main channel if empty".
         alertChannel: alertChannel === "" ? notificationChannel : alertChannel,

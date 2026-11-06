@@ -4,6 +4,7 @@ import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js"
 import { isSecurityAction } from "../domain/alerting.js";
 import { banDurationText } from "../domain/banDuration.js";
 import { disciplineStep } from "../domain/discipline.js";
+import type { HistoryCounts, RecentHistory } from "../domain/history.js";
 import { isBlank } from "../domain/modAction.js";
 import type { Actor, ModAction, ModActionTarget } from "../domain/modAction.js";
 import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
@@ -79,6 +80,27 @@ function detailLines(modAction: ModAction, includeModNote: boolean): readonly st
         ...(modAction.type === "banuser" ? [`• *Ban Duration:* ${escapeText(banDurationText(modAction))}`] : []),
         ...noteLines(modAction, includeModNote),
     ];
+}
+
+/** The counted kinds, in the order the line gives them, with their names for one and for several. */
+const HISTORY_KINDS: readonly Readonly<{ kind: keyof HistoryCounts; one: string; many: string }>[] = [
+    { kind: "removal", one: "removal", many: "removals" },
+    { kind: "spam", one: "spam removal", many: "spam removals" },
+    { kind: "ban", one: "ban", many: "bans" },
+    { kind: "mute", one: "mute", many: "mutes" },
+    { kind: "note", one: "note", many: "notes" },
+];
+
+/** For a ban: what the user's mod notes record in the days before it, as counts. */
+function historyLines(history: RecentHistory | undefined): readonly string[] {
+    if (history === undefined) {
+        return [];
+    }
+    const counted = HISTORY_KINDS.filter(({ kind }): boolean => history.counts[kind] > 0).map(
+        ({ kind, one, many }): string => `${String(history.counts[kind])} ${history.counts[kind] === 1 ? one : many}`,
+    );
+    const summary = counted.length === 0 ? "nothing in mod notes" : counted.join(", ");
+    return [`• *Last ${String(history.days)} days:* ${summary}`];
 }
 
 /** For an unban or unmute: the ban or mute it lifts. */
@@ -169,6 +191,7 @@ function messageLines(modAction: ModAction, presentation: ModActionPresentation,
         ...targetLines(modAction.target),
         `• *When:* ${timestamp(modAction.occurredAt)}`,
         ...detailLines(modAction, presentation.includeModNote),
+        ...historyLines(modAction.recentHistory),
         ...relatedLines(modAction),
         ...statusLines(modAction, actor),
     ];

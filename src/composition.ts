@@ -67,7 +67,7 @@ export type AppContext = Readonly<{
     reddit: Readonly<
         Pick<
             TriggerContext["reddit"],
-            "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog" | "getPostById"
+            "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog" | "getModNotes" | "getPostById"
         >
     > &
         NoticeReddit;
@@ -129,6 +129,7 @@ function moderationConfig(config: AppConfig): ModerationConfig {
         excludedModerators: config.excludedModerators,
         flagUnknownModerators: config.flagUnknownModerators,
         securityAlerts: config.securityAlerts,
+        banHistoryDays: config.banHistoryDays,
         enableAutoModAlerts: config.enableAutoModAlerts,
     };
 }

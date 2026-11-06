@@ -3,6 +3,7 @@ import type { ModerationPorts } from "../../src/moderation/application/notifyMod
 import type { ModActionAlerts, ModerationLookups, ModerationRecords } from "../../src/moderation/application/ports.js";
 import type { BanLogEntry } from "../../src/moderation/domain/banDuration.js";
 import type { DisciplineEvent } from "../../src/moderation/domain/discipline.js";
+import type { NoteEntry } from "../../src/moderation/domain/history.js";
 import type { Actor, ModAction } from "../../src/moderation/domain/modAction.js";
 
 /** An alert the mod-action ports were asked to send. */
@@ -38,6 +39,9 @@ export function workingPorts(
             ),
             recentBans: vi.fn<ModerationLookups["recentBans"]>(
                 async (): Promise<readonly BanLogEntry[]> => await Promise.resolve([]),
+            ),
+            modNotes: vi.fn<ModerationLookups["modNotes"]>(
+                async (): Promise<readonly NoteEntry[]> => await Promise.resolve([]),
             ),
         },
         alerts: {

@@ -44,6 +44,7 @@ describe("a ban", (): void => {
             "• *Ban Duration:* 7 days",
             "• *Details:* 7 days",
             "• *Mod Note:* Spamming",
+            "• *Last 30 days:* nothing in mod notes",
         ]);
     });
 

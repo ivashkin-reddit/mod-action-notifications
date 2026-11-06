@@ -98,6 +98,7 @@ The developer sets the Slack bot token, for every installation at once. Moderato
 | Flag Unknown Moderators (`flagUnknownModerators`)                                                 | on or off                                  | Actions by accounts not on the mod list become security alerts.                                                                                                                                                                                       |
 | Security Alerts (`securityAlerts`)                                                                | on or off                                  | Sends the security actions (`addmoderator`, `removemoderator`, `invitemoderator`, `acceptmoderatorinvite`, `setpermissions`, `dev_platform_app_*`) as security alerts to the alert channel, whatever Enabled Mod Actions and Excluded Moderators say. |
 | Include Mod Note (`includeModNote`)                                                               | on or off                                  | Shows the moderator's note. Reddit's events carry none, so notes appear on bans only, read from the mod log.                                                                                                                                          |
+| Ban Alert History (Days) (`banHistoryDays`)                                                       | a whole number of 0 or more                | How many days before a ban its alert counts the user's mod notes, by kind. 0 leaves the history out, and the notes unread.                                                                                                                            |
 | Notification Channel (`notificationChannel`)                                                      | a channel ID, or a name                    | Channel for moderator and Reddit actions, and the summary. Blank turns off every alert.                                                                                                                                                               |
 | Alert Channel (`alertChannel`)                                                                    | a channel ID, or a name                    | Channel for security, modqueue and deleted-post alerts. Falls back to the notification channel.                                                                                                                                                       |
 | Slack Message Retention (Days) (`slackRetentionDays`)                                             | a whole number from 1 to 90; 90 by default | How many days the alert channels keep messages. The app remembers where each alert quoting a post or comment is for that long, to redact it if the content is deleted. Set it to the channels' retention in Slack.                                    |
@@ -152,14 +153,15 @@ For each mod action, the app works through these steps. Steps 2 to 4 happen even
     - Otherwise, with Flag Unknown Moderators on, the app checks the mod list, reusing it for five minutes per subreddit.
     - An account not on the list makes a security alert. If the mod list can't be read, the action is treated as a moderator's.
 7. **Once per action.** The action's ID is claimed for a day, so an event Reddit delivers again sends no second alert.
-8. **Queued** for Slack.
+8. **Ban history.** For a ban that alerts, the app reads up to 100 of the user's entries in Reddit's mod notes and counts, by kind, those from the Ban Alert History days before the ban. The ban's own note, made in the same second, is left out. If the notes can't be read, the ban alerts without them.
+9. **Queued** for Slack.
 
 **Alert content.** An alert names:
 
 - the action, the moderator, and the user acted on;
 - a link to the content and a quote of up to 200 characters;
 - when the action was taken (UTC);
-- for bans, the length, any details, and the mod note if enabled;
+- for bans, the length, any details, the mod note if enabled, and the user's mod-note history over Ban Alert History days, as counts by kind;
 - for unbans and unmutes, the ban or mute lifted: who issued it, when, and its details (the length), never its note;
 - a status line for unknown moderators, AutoModerator, Reddit's accounts and activity spikes.
 
@@ -351,15 +353,16 @@ Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`
 
 Lines that need attention besides those:
 
-| Line                                                        | Meaning                                                                                       |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `[deletions] Could not take a deleted post or comment …`    | Redis failed as content was deleted. Alerts already queued may be sent quoting it.            |
-| `[settings] Could not read the settings, so no alerts …`    | The settings couldn't be read, and none had been before in this app process: nothing is sent. |
-| `[setup] Could not set up the modqueue monitor …`           | Scheduling failed. Use **Setup Modqueue Monitoring** to try again.                            |
-| `[postdeletion] Could not check a deleted post:`            | Reddit couldn't return the post's score, so no deleted-post alert was considered.             |
-| `[outbox] Could not deliver the queued alerts …`            | Redis failed during a run; the alerts wait for the next one.                                  |
-| `[modaction] An account not on the mod list took an action` | Sent as a security alert.                                                                     |
-| `[health] Could not record a condition:`                    | Redis failed while noting a problem; the work went on, and the problem may be logged again.   |
+| Line                                                        | Meaning                                                                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `[deletions] Could not take a deleted post or comment …`    | Redis failed as content was deleted. Alerts already queued may be sent quoting it.                                              |
+| `[settings] Could not read the settings, so no alerts …`    | The settings couldn't be read, and none had been before in this app process: nothing is sent.                                   |
+| `[setup] Could not set up the modqueue monitor …`           | Scheduling failed. Use **Setup Modqueue Monitoring** to try again.                                                              |
+| `[postdeletion] Could not check a deleted post:`            | Reddit couldn't return the post's score, so no deleted-post alert was considered.                                               |
+| `[outbox] Could not deliver the queued alerts …`            | Redis failed during a run; the alerts wait for the next one.                                                                    |
+| `[modaction] An account not on the mod list took an action` | Sent as a security alert.                                                                                                       |
+| `[modaction] Could not read the user's mod notes …`         | Reddit couldn't return the banned user's mod notes, or gave no name for the subreddit. The ban was alerted without its history. |
+| `[health] Could not record a condition:`                    | Redis failed while noting a problem; the work went on, and the problem may be logged again.                                     |
 
 ## Known limitations
 

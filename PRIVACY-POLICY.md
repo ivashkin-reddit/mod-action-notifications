@@ -36,6 +36,7 @@ Two other things stay out of the app's records. A **mod note**, the text a moder
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Mod action alerts          | Each mod action in the subreddit: its type and time, the moderator, the user acted on, and the post or comment (title, link, and up to 200 characters of its text). For a ban, its length, details and mod note. | To tell the mod team about the action.                   |
 | Ban lengths                | The subreddit's 10 most recent bans in the mod log, when a ban doesn't say how long it lasts.                                                                                                                    | To show how long the ban lasts.                          |
+| Ban history                | When a ban is alerted: the banned user's entries in the subreddit's mod notes from the days before it (30 by default), their kinds and dates, not their text.                                                    | To show the ban in context.                              |
 | Unknown moderators         | The subreddit's mod list, at most once every five minutes.                                                                                                                                                       | To flag an action by an account that isn't a moderator.  |
 | Deleted posts              | A post deleted by its own author: its score, Reddit's deletion reason, and a link without its title.                                                                                                             | To flag a popular post deleted by its author.            |
 | Deleted posts and comments | The ID of each post or comment deleted in the subreddit.                                                                                                                                                         | To take deleted content out of alerts not yet sent.      |
@@ -52,7 +53,7 @@ Alerts can contain:
 
 - usernames: of the moderator who acted, and of the user acted on;
 - post titles, links, and up to 200 characters of a removed post's or comment's text;
-- for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for an unban or unmute, who issued the ban or mute it lifts, when, and its length;
+- for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for a ban, how many removals, spam removals, bans, mutes and notes the user's mod notes record in the days before it; for an unban or unmute, who issued the ban or mute it lifts, when, and its length;
 - for modqueue alerts, counts, and links to the oldest items waiting;
 - a deleted post's score.
 

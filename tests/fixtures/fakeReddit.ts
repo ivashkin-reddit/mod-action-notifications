@@ -24,7 +24,7 @@ export interface ModLogEntry {
     readonly target?: Readonly<{ author: string }>;
 }
 
-interface Listing<T> {
+export interface Listing<T> {
     readonly all: () => Promise<readonly T[]>;
 }
 
@@ -49,6 +49,16 @@ export interface FakeUser {
 /** A modmail notification, as `reddit.modMail.createModNotification` takes it. */
 export type ModNotification = Readonly<{ subject: string; bodyMarkdown: string; subredditId: string }>;
 
+/** An entry in a user's mod notes, as `reddit.getModNotes(...).all()` returns it: what the app reads. */
+export interface FakeModNote {
+    readonly user: string;
+    readonly type: string;
+    readonly createdAt: Date;
+}
+
+/** What `reddit.getModNotes` is asked for. */
+type ModNotesQuery = Readonly<{ subreddit: string; user: string; limit: number }>;
+
 export interface FakeReddit {
     /** The mod list's usernames. */
     moderators: readonly string[];
@@ -64,6 +74,8 @@ export interface FakeReddit {
     modLog: readonly ModLogEntry[];
     /** The posts getPostById finds; it rejects any other ID, as Reddit does. */
     posts: readonly FakePost[];
+    /** Every user's mod notes; getModNotes returns those of the user asked for. */
+    modNotes: readonly FakeModNote[];
     readonly moderatorsAll: ListAll<Readonly<{ username: string }>>;
     readonly modQueueAll: ListAll<QueueItem>;
     readonly unmoderatedAll: ListAll<QueueItem>;
@@ -80,6 +92,7 @@ export interface FakeReddit {
     readonly getCurrentUser: Mock<() => Promise<FakeUser | undefined>>;
     readonly getCurrentSubredditName: Mock<() => Promise<string>>;
     readonly getPostById: Mock<(id: string) => Promise<FakePost>>;
+    readonly getModNotes: Mock<(query: ModNotesQuery) => Listing<FakeModNote>>;
     readonly getModerationLog: Mock<
         (options: Readonly<{ subredditName: string; type: string; limit: number }>) => {
             readonly get: (count: number) => Promise<readonly ModLogEntry[]>;
@@ -99,7 +112,16 @@ type FakeSubreddit = Readonly<
 
 type RedditState = Pick<
     FakeReddit,
-    "moderators" | "currentUser" | "modQueue" | "unmoderated" | "reports" | "spam" | "edited" | "modLog" | "posts"
+    | "moderators"
+    | "currentUser"
+    | "modQueue"
+    | "unmoderated"
+    | "reports"
+    | "spam"
+    | "edited"
+    | "modLog"
+    | "posts"
+    | "modNotes"
 >;
 
 /** A user with these permissions in the subreddit: none for a user who does not moderate it. */
@@ -156,9 +178,19 @@ function subredditOf(
     };
 }
 
-/** The client's lookups beside the subreddit's listings: posts by ID, the mod log, and modmail. */
-function lookupsOf(state: () => RedditState): Pick<FakeReddit, "getPostById" | "getModerationLog" | "modMail"> {
+/** The client's lookups beside the subreddit's listings: posts by ID, mod notes, the mod log, and modmail. */
+function lookupsOf(
+    state: () => RedditState,
+): Pick<FakeReddit, "getPostById" | "getModNotes" | "getModerationLog" | "modMail"> {
     return {
+        getModNotes: vi.fn((query: ModNotesQuery): Listing<FakeModNote> => ({
+            all: async (): Promise<readonly FakeModNote[]> =>
+                await Promise.resolve(
+                    state().modNotes.filter(
+                        (note: FakeModNote): boolean => note.user.toLowerCase() === query.user.toLowerCase(),
+                    ),
+                ),
+        })),
         getPostById: vi.fn(async (id: string): Promise<FakePost> => {
             const post = state().posts.find((candidate: FakePost): boolean => candidate.id === id);
             if (post === undefined) {
@@ -187,6 +219,7 @@ export function createFakeReddit(subredditName: string): FakeReddit {
         edited: [],
         modLog: [],
         posts: [],
+        modNotes: [],
     };
     const state = (): RedditState => reddit;
     const { subreddit, alls } = subredditOf(state, subredditName);

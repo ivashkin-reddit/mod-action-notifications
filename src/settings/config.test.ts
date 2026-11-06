@@ -22,6 +22,7 @@ describe("reading the settings", (): void => {
             flagUnknownModerators: true,
             securityAlerts: true,
             includeModNote: true,
+            banHistoryDays: 30,
             notificationChannel: "",
             alertChannel: "",
             slackRetentionDays: 90,

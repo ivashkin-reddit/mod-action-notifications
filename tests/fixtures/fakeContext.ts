@@ -32,6 +32,7 @@ export interface Settings {
     flagUnknownModerators?: unknown;
     securityAlerts?: unknown;
     includeModNote?: unknown;
+    banHistoryDays?: unknown;
     notificationChannel?: unknown;
     alertChannel?: unknown;
     slackRetentionDays?: unknown;

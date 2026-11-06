@@ -43,6 +43,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "flagUnknownModerators", type: "boolean", defaultValue: true },
                 { name: "securityAlerts", type: "boolean", defaultValue: true },
                 { name: "includeModNote", type: "boolean", defaultValue: true },
+                { name: "banHistoryDays", type: "number", defaultValue: 30 },
                 { name: "notificationChannel", type: "string", defaultValue: undefined },
                 { name: "alertChannel", type: "string", defaultValue: undefined },
                 { name: "slackRetentionDays", type: "number", defaultValue: 90 },

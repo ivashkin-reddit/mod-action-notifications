@@ -52,6 +52,7 @@ function simulatedModAction(request: SimulationRequest, subredditName: string | 
         isAutoModerator: isAutoModeratorName(moderatorName),
         relatedAction: undefined,
         activitySpike: undefined,
+        recentHistory: undefined,
         ...banFields,
     };
 }

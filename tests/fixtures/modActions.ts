@@ -26,6 +26,7 @@ export function modAction(fields: Readonly<Partial<ModAction>> = {}): ModAction 
         banDurationLabel: undefined,
         relatedAction: undefined,
         activitySpike: undefined,
+        recentHistory: undefined,
         ...fields,
     };
 }
