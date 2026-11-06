@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { drive, NOW } from "../../tests/fixtures/app.js";
-import type { FakeRedis } from "../../tests/fixtures/fakeRedis.js";
+import type { FakeRedis, ZMember } from "../../tests/fixtures/fakeRedis.js";
 import { alertQuoting, drains, outboxFakes, queued, queuedQuoting, texts } from "../../tests/fixtures/outbox.js";
 import type { OutboxFakes } from "../../tests/fixtures/outbox.js";
 import { createSlackOutbox, forgetContent } from "./outbox.js";
@@ -165,6 +165,43 @@ describe("content deleted on Reddit", (): void => {
             ).toStrictEqual([]);
         },
     );
+
+    // In a busy thread most queued alerts quote its post: the post is looked up once, not once for each of them.
+    it("is looked up once, however many queued alerts quote it", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { dependencies, outbox, redis, slack } = fakeOutbox();
+        await redis.zAdd(
+            QUEUE_KEY,
+            queued("first", 20),
+            ...Array.from({ length: 10 }, (_unused: unknown, index: number): ZMember => {
+                const queuedAt = NOW.getTime() - 10 + index;
+                const comment = `t1_c${String(index)}`;
+                return {
+                    member: JSON.stringify({
+                        id: comment,
+                        queuedAt,
+                        message: { text: `removed ${comment}\n> what the post said` },
+                        contentIds: [comment, "t3_p"],
+                        withoutQuotes: { text: `removed ${comment}` },
+                    }),
+                    score: queuedAt,
+                };
+            }),
+        );
+        slack.respond(...ONE_DRAIN_OF_FAILURES);
+        const draining = outbox.deliverQueued();
+        await vi.advanceTimersByTimeAsync(500);
+        await forgetContent(dependencies, "t3_p");
+        redis.zScore.mockClear();
+
+        await drive(draining);
+
+        expect(stored(redis)).not.toContain("said");
+        expect(
+            redis.zScore.mock.calls.filter(([, member]: readonly unknown[]): boolean => member === "t3_p"),
+        ).toHaveLength(1);
+    });
 
     it("is not quoted by an alert a drain under way reaches after", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

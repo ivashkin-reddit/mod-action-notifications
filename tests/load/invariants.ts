@@ -26,9 +26,7 @@ const BOUNDS: readonly (readonly [string, readonly string[], number])[] = [
 
 /** Each alert's Slack message, taken once: no two posted messages are the same alert. */
 function duplicatesIn(harness: Harness): number {
-    const posted = harness.slack.requests
-        .filter(({ api }): boolean => api === "chat.postMessage")
-        .map(({ body }): string => JSON.stringify(body));
+    const posted = harness.posted();
     return posted.length - new Set(posted).size;
 }
 
@@ -48,11 +46,7 @@ export async function checkInvariants(
     const duplicates = duplicatesIn(harness);
     checks.push({ name: "no alert posted twice", holds: duplicates === 0, found: `${String(duplicates)} repeated` });
     if (expectations.alerts !== undefined) {
-        const posted = new Set(
-            harness.slack.requests
-                .filter(({ api }): boolean => api === "chat.postMessage")
-                .map(({ body }): string => JSON.stringify(body)),
-        ).size;
+        const posted = new Set(harness.posted()).size;
         checks.push({
             name: `${String(expectations.alerts)} alerts, as when each event came once`,
             holds: posted === expectations.alerts,

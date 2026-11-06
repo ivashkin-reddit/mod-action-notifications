@@ -94,6 +94,8 @@ export type Harness = Readonly<{
     /** Runs the one-off jobs now due, as the scheduler would: how many ran. */
     runDueJobs: () => Promise<number>;
     lines: () => readonly CompletionLine[];
+    /** The messages Slack took, as their request bodies. */
+    posted: () => readonly string[];
     clearLines: () => void;
     slack: FakeSlack;
     reddit: FakeReddit;
@@ -197,6 +199,8 @@ export async function createHarness(
     const scheduler = createFakeScheduler();
     const slack = createFakeSlack();
     let lines: CompletionLine[] = [];
+    /** The messages Slack took, as their request bodies: failed attempts, retried, are not among them. */
+    const posted: string[] = [];
     const collect = (line: unknown): void => {
         const completion = parsed(line);
         if (completion !== undefined) {
@@ -213,7 +217,18 @@ export async function createHarness(
             if (Math.random() < faults.slackFailureRate) {
                 slack.respond(503);
             }
-            return await slack.fetch(url, init);
+            const response = await slack.fetch(url, init);
+            const answer: unknown = JSON.parse(await response.text());
+            if (
+                url.endsWith("chat.postMessage") &&
+                typeof answer === "object" &&
+                answer !== null &&
+                "ok" in answer &&
+                answer.ok === true
+            ) {
+                posted.push(typeof init?.body === "string" ? init.body : "");
+            }
+            return response;
         },
     );
     devvit.reset();
@@ -262,6 +277,7 @@ export async function createHarness(
             return due.length;
         },
         lines: (): readonly CompletionLine[] => lines,
+        posted: (): readonly string[] => posted,
         clearLines: (): void => {
             lines = [];
         },

@@ -239,11 +239,7 @@ describe("the load scenarios", (): void => {
                 REALISTIC_SHAPE,
                 11,
             );
-            const alerts = new Set(
-                once.slack.requests
-                    .filter(({ api }): boolean => api === "chat.postMessage")
-                    .map(({ body }): string => JSON.stringify(body)),
-            ).size;
+            const alerts = new Set(once.posted()).size;
             await once.close();
             const twice = await fresh(1);
             const result = await drive(
@@ -258,7 +254,14 @@ describe("the load scenarios", (): void => {
                 }),
                 seededRandom(12),
             );
-            const checks = await checkInvariants(twice, { alerts });
+            const checks = [
+                ...(await checkInvariants(twice, { alerts })),
+                {
+                    name: "the same events, each delivered twice",
+                    holds: result.events === control.result.events,
+                    found: `${String(result.events)} against ${String(control.result.events)}`,
+                },
+            ];
             record("duplicates", { control: control.result, controlAlerts: alerts, twice: result, checks });
             await twice.close();
 
@@ -314,6 +317,7 @@ describe("the load scenarios", (): void => {
                 ["reddit 10% rate-limited", { ...NO_FAULTS, redditRateLimited: 0.1 }],
                 ["reddit all rate-limited", { ...NO_FAULTS, redditRateLimited: 1 }],
                 ["slack 20% failing", { ...NO_FAULTS, slackFailureRate: 0.2 }],
+                ["slack 5 s", { ...NO_FAULTS, slackLatencyMs: 5000 }],
             ] as const;
             const results: unknown[] = [];
             for (const [name, faults] of phases) {

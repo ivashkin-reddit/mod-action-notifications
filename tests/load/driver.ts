@@ -1,4 +1,5 @@
-import type { GeneratedEvent, EventStream } from "./events.js";
+import { seededRandom } from "./events.js";
+import type { EventStream, GeneratedEvent } from "./events.js";
 import type { CompletionLine, Harness } from "./harness.js";
 
 /**
@@ -177,6 +178,8 @@ export async function drive(
     let jobsAt = started + (profile.jobsEveryMs ?? Number.POSITIVE_INFINITY);
     let dueAt = started;
     let events = 0;
+    // Copies draw from their own stream, so a run with copies delivers the same events at the same times as one without.
+    const copies = seededRandom(Math.floor(random() * 4_294_967_296));
     let next = started + (-Math.log(1 - random()) / profile.ratePerMinute) * 60_000;
     while (Date.now() - started < profile.durationMs) {
         const now = Date.now();
@@ -184,10 +187,10 @@ export async function drive(
             const event = generator.next();
             events += 1;
             work.push(handle(event));
-            if (random() < profile.duplicates) {
+            if (copies() < profile.duplicates) {
                 work.push(
                     (async (): Promise<void> => {
-                        await sleep(random() * profile.duplicateDelayMs);
+                        await sleep(copies() * profile.duplicateDelayMs);
                         await handle(event);
                     })(),
                 );
