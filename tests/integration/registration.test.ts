@@ -42,6 +42,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "excludedModerators", type: "string", defaultValue: undefined },
                 { name: "flagUnknownModerators", type: "boolean", defaultValue: true },
                 { name: "securityAlerts", type: "boolean", defaultValue: true },
+                { name: "dormantModeratorDays", type: "number", defaultValue: 90 },
                 { name: "includeModNote", type: "boolean", defaultValue: true },
                 { name: "banHistoryDays", type: "number", defaultValue: 30 },
                 { name: "notificationChannel", type: "string", defaultValue: undefined },

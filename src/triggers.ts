@@ -1,4 +1,5 @@
 import {
+    actionNameOf,
     alertsConfigured,
     configOf,
     healthReports,
@@ -26,6 +27,13 @@ import {
     postDeletionFromTriggerEvent,
 } from "./postDeletion/index.js";
 import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.js";
+import {
+    createRedditConfigWiki,
+    createRedisSecurityStore,
+    createSlackSecurityAlerts,
+    watchModAction,
+} from "./security/index.js";
+import type { WatchedAction, WatchedActor } from "./security/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { forgetContent } from "./slack/delivery.js";
 import { countModAction, createRedisStatisticsStore } from "./statistics/index.js";
@@ -94,18 +102,63 @@ async function countForStatistics(action: ModAction, context: AppContext): Promi
     }
 }
 
+function watchedActorOf(action: ModAction): WatchedActor {
+    if (isRedditAccount(action.moderatorName)) {
+        return "reddit";
+    }
+    return action.isAutoModerator ? "automoderator" : "moderator";
+}
+
+function watchedActionOf(action: ModAction): WatchedAction {
+    return {
+        type: action.type,
+        moderatorName: action.moderatorName,
+        actor: watchedActorOf(action),
+        occurredAt: action.occurredAt,
+        subredditName: action.subredditName,
+        targetName: action.target?.author,
+    };
+}
+
+/** Watches the action for signs of a compromised account or a broken tool; logs rather than rejects. */
+async function watchForSecurity(
+    action: ModAction,
+    context: AppContext,
+    { config, ready }: Readonly<{ config: AppConfig; ready: boolean }>,
+): Promise<void> {
+    try {
+        await watchModAction(
+            watchedActionOf(action),
+            {
+                securityAlerts: config.securityAlerts,
+                dormantModeratorDays: config.dormantModeratorDays,
+                alertsReady: ready,
+            },
+            {
+                store: createRedisSecurityStore(context.redis),
+                wiki: createRedditConfigWiki(context.reddit),
+                alerts: createSlackSecurityAlerts(outboxOf(context, config).send, config.alertChannel, actionNameOf),
+            },
+        );
+    } catch (error) {
+        console.warn("[security] Could not watch a mod action:", error);
+    }
+}
+
 /**
- * A mod action: alerted while Slack is set up, then counted toward the team's statistics whether or not it is, with
- * what the alert completed it with (a ban's length).
+ * A mod action: alerted while Slack is set up, then counted toward the team's statistics and watched for security
+ * whether or not it is, with what the alert completed it with (a ban's length).
  */
 export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
     const config = await configOf(context);
     const action = modActionFromTriggerEvent(event);
-    const completed = (await slackReady(context, config))
+    const ready = await slackReady(context, config);
+    const completed = ready
         ? await notifyModAction(action, moderationConfig(config), moderationPorts(context, config))
         : action;
     await countForStatistics(completed, context);
+    await watchForSecurity(completed, context, { config, ready });
 }
 
 /** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */

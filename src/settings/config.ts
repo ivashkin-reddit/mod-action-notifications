@@ -6,6 +6,7 @@ import {
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     DEFAULT_SPAM_QUEUE_THRESHOLD,
     DEFAULT_BAN_HISTORY_DAYS,
+    DEFAULT_DORMANT_MODERATOR_DAYS,
     DEFAULT_EDITED_QUEUE_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
     MAX_SLACK_RETENTION_DAYS,
@@ -23,6 +24,8 @@ export interface AppConfig {
     readonly flagUnknownModerators: boolean;
     /** Send every security action as a security alert. */
     readonly securityAlerts: boolean;
+    /** A moderator's first action after this many days is a security alert; 0 turns it off. */
+    readonly dormantModeratorDays: number;
     readonly includeModNote: boolean;
     /** How many days of the banned user's mod notes a ban alert counts; 0 leaves them out. */
     readonly banHistoryDays: number;
@@ -63,6 +66,7 @@ const DEFAULT_CONFIG: AppConfig = {
     excludedModerators: [],
     flagUnknownModerators: true,
     securityAlerts: true,
+    dormantModeratorDays: DEFAULT_DORMANT_MODERATOR_DAYS,
     includeModNote: true,
     banHistoryDays: DEFAULT_BAN_HISTORY_DAYS,
     notificationChannel: "",
@@ -134,6 +138,10 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
         securityAlerts: booleanOr(await settings.get("securityAlerts"), true),
+        dormantModeratorDays: nonNegativeInteger(
+            await settings.get("dormantModeratorDays"),
+            DEFAULT_DORMANT_MODERATOR_DAYS,
+        ),
         includeModNote: booleanOr(await settings.get("includeModNote"), true),
         banHistoryDays: nonNegativeInteger(await settings.get("banHistoryDays"), DEFAULT_BAN_HISTORY_DAYS),
         notificationChannel,

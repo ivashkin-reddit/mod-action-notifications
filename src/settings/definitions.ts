@@ -8,6 +8,7 @@ export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 export const DEFAULT_SPAM_QUEUE_THRESHOLD = 0;
 export const DEFAULT_BAN_HISTORY_DAYS = 30;
+export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
@@ -19,6 +20,9 @@ const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting 
 const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
 const HISTORY_DAYS_PROBLEM = "Enter a whole number of days, 0 or more (0 leaves the history out)";
+const DORMANT_DAYS_PROBLEM = "Enter a whole number of days, from 0 to 365 (0 turns this alert off)";
+/** A moderator's last action is kept 400 days, so a longer window could never be met. */
+const MAX_DORMANT_DAYS = 365;
 
 /** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
 function botTokenProblem(text: string): string | undefined {
@@ -28,6 +32,13 @@ function botTokenProblem(text: string): string | undefined {
 /** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
 function wholeNumberProblem(value: number | undefined): string | undefined {
     return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
+}
+
+/** Why the value cannot be the dormant moderator window: undefined when it is unset, or 0 to 365 days. */
+function dormantDaysProblem(value: number | undefined): string | undefined {
+    return value === undefined || (Number.isInteger(value) && value >= 0 && value <= MAX_DORMANT_DAYS)
+        ? undefined
+        : DORMANT_DAYS_PROBLEM;
 }
 
 /** Why the value cannot be a number of days of history: undefined when it is unset, or a whole number of 0 or more. */
@@ -71,8 +82,18 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         name: "securityAlerts",
         label: "Security Alerts",
         helpText:
-            "Always send changes to the mod team (moderators added, removed or invited, permissions changed) and to Devvit apps (installed, removed, enabled, disabled or changed) as security alerts to the alert channel, whatever Enabled Mod Actions and Excluded Moderators say",
+            "Always send changes to the mod team (moderators added, removed or invited, permissions changed) and to Devvit apps (installed, removed, enabled, disabled or changed) as security alerts to the alert channel, whatever Enabled Mod Actions and Excluded Moderators say. Also alert on edits to AutoModerator's config, AutoModerator removing far more than usual after one, and moderators acting after a long silence",
         defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "dormantModeratorDays",
+        label: "Dormant Moderator Alert (Days)",
+        helpText:
+            "Send a security alert when a moderator acts for the first time in at least this many days, as a compromised account might (0 to disable, at most 365)",
+        defaultValue: DEFAULT_DORMANT_MODERATOR_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            dormantDaysProblem(value),
     },
     {
         type: "boolean",

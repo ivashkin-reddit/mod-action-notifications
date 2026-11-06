@@ -21,6 +21,7 @@ describe("reading the settings", (): void => {
             excludedModerators: [],
             flagUnknownModerators: true,
             securityAlerts: true,
+            dormantModeratorDays: 90,
             includeModNote: true,
             banHistoryDays: 30,
             notificationChannel: "",

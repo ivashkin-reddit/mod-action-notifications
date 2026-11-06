@@ -1,5 +1,7 @@
 import { vi } from "vitest";
 import type { Mock } from "vitest";
+import { wikiOf } from "./fakeWiki.js";
+import type { FakeWikiMethods, FakeWikiRevision } from "./fakeWiki.js";
 
 /**
  * A stand-in for the Reddit client in Devvit's context: the members the app uses, each a vi.fn, with the state they
@@ -59,7 +61,7 @@ export interface FakeModNote {
 /** What `reddit.getModNotes` is asked for. */
 type ModNotesQuery = Readonly<{ subreddit: string; user: string; limit: number }>;
 
-export interface FakeReddit {
+export interface FakeReddit extends FakeWikiMethods {
     /** The mod list's usernames. */
     moderators: readonly string[];
     /** Who invokes menu items and forms: a moderator with every permission, unless a test says otherwise. */
@@ -76,6 +78,8 @@ export interface FakeReddit {
     posts: readonly FakePost[];
     /** Every user's mod notes; getModNotes returns those of the user asked for. */
     modNotes: readonly FakeModNote[];
+    /** AutoModerator's config page's revisions, newest first. */
+    wikiRevisions: readonly FakeWikiRevision[];
     readonly moderatorsAll: ListAll<Readonly<{ username: string }>>;
     readonly modQueueAll: ListAll<QueueItem>;
     readonly unmoderatedAll: ListAll<QueueItem>;
@@ -122,6 +126,7 @@ type RedditState = Pick<
     | "modLog"
     | "posts"
     | "modNotes"
+    | "wikiRevisions"
 >;
 
 /** A user with these permissions in the subreddit: none for a user who does not moderate it. */
@@ -220,6 +225,7 @@ export function createFakeReddit(subredditName: string): FakeReddit {
         modLog: [],
         posts: [],
         modNotes: [],
+        wikiRevisions: [],
     };
     const state = (): RedditState => reddit;
     const { subreddit, alls } = subredditOf(state, subredditName);
@@ -230,5 +236,6 @@ export function createFakeReddit(subredditName: string): FakeReddit {
         getCurrentUser: vi.fn(async (): Promise<FakeUser | undefined> => await Promise.resolve(reddit.currentUser)),
         getCurrentSubredditName: vi.fn(async (): Promise<string> => await Promise.resolve(subredditName)),
         ...lookupsOf(state),
+        ...wikiOf((): readonly FakeWikiRevision[] => reddit.wikiRevisions),
     });
 }

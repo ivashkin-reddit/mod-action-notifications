@@ -53,7 +53,13 @@ export type AppContext = Readonly<{
     reddit: Readonly<
         Pick<
             TriggerContext["reddit"],
-            "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog" | "getModNotes" | "getPostById"
+            | "getCurrentSubreddit"
+            | "getCurrentSubredditName"
+            | "getModerationLog"
+            | "getModNotes"
+            | "getPostById"
+            | "getWikiPageRevisions"
+            | "getWikiPage"
         >
     > &
         NoticeReddit;
