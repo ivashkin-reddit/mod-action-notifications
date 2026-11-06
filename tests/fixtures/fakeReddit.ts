@@ -58,6 +58,9 @@ export interface FakeReddit {
     modQueue: readonly QueueItem[];
     unmoderated: readonly QueueItem[];
     reports: readonly QueueItem[];
+    /** Reddit's spam queue, and its edited queue. */
+    spam: readonly QueueItem[];
+    edited: readonly QueueItem[];
     modLog: readonly ModLogEntry[];
     /** The posts getPostById finds; it rejects any other ID, as Reddit does. */
     posts: readonly FakePost[];
@@ -65,10 +68,14 @@ export interface FakeReddit {
     readonly modQueueAll: ListAll<QueueItem>;
     readonly unmoderatedAll: ListAll<QueueItem>;
     readonly reportsAll: ListAll<QueueItem>;
+    readonly spamAll: ListAll<QueueItem>;
+    readonly editedAll: ListAll<QueueItem>;
     readonly getModerators: Mock<() => Listing<Readonly<{ username: string }>>>;
     readonly getModQueue: QueueListing;
     readonly getUnmoderated: QueueListing;
     readonly getReports: QueueListing;
+    readonly getSpam: QueueListing;
+    readonly getEdited: QueueListing;
     readonly getCurrentSubreddit: Mock<() => Promise<FakeSubreddit>>;
     readonly getCurrentUser: Mock<() => Promise<FakeUser | undefined>>;
     readonly getCurrentSubredditName: Mock<() => Promise<string>>;
@@ -85,12 +92,14 @@ export interface FakeReddit {
 }
 
 type FakeSubreddit = Readonly<
-    Pick<FakeReddit, "getModerators" | "getModQueue" | "getUnmoderated" | "getReports"> & { name: string }
+    Pick<FakeReddit, "getModerators" | "getModQueue" | "getUnmoderated" | "getReports" | "getSpam" | "getEdited"> & {
+        name: string;
+    }
 >;
 
 type RedditState = Pick<
     FakeReddit,
-    "moderators" | "currentUser" | "modQueue" | "unmoderated" | "reports" | "modLog" | "posts"
+    "moderators" | "currentUser" | "modQueue" | "unmoderated" | "reports" | "spam" | "edited" | "modLog" | "posts"
 >;
 
 /** A user with these permissions in the subreddit: none for a user who does not moderate it. */
@@ -107,40 +116,51 @@ function listingOf<T>(read: () => readonly T[]): Readonly<{ all: ListAll<T>; ope
     return { all, open: vi.fn((): Listing<T> => ({ all })) };
 }
 
-export function createFakeReddit(subredditName: string): FakeReddit {
-    const reddit: RedditState = {
-        moderators: ["ModA", "ModB"],
-        currentUser: fakeUser("ModA", ["all"]),
-        modQueue: [],
-        unmoderated: [],
-        reports: [],
-        modLog: [],
-        posts: [],
-    };
+/** The `all` mocks of the subreddit's listings, with which tests make a listing fail or count its reads. */
+type ListingAlls = Pick<
+    FakeReddit,
+    "moderatorsAll" | "modQueueAll" | "unmoderatedAll" | "reportsAll" | "spamAll" | "editedAll"
+>;
+
+/** The subreddit's listings, reading the state when their `all` is called, and the subreddit that opens them. */
+function subredditOf(
+    state: () => RedditState,
+    name: string,
+): Readonly<{ subreddit: FakeSubreddit; alls: ListingAlls }> {
     const moderators = listingOf((): readonly Readonly<{ username: string }>[] =>
-        reddit.moderators.map((username: string): { username: string } => ({ username })),
+        state().moderators.map((username: string): { username: string } => ({ username })),
     );
-    const modQueue = listingOf((): readonly QueueItem[] => reddit.modQueue);
-    const unmoderated = listingOf((): readonly QueueItem[] => reddit.unmoderated);
-    const reports = listingOf((): readonly QueueItem[] => reddit.reports);
-    const subreddit: FakeSubreddit = {
-        name: subredditName,
-        getModerators: moderators.open,
-        getModQueue: modQueue.open,
-        getUnmoderated: unmoderated.open,
-        getReports: reports.open,
+    const modQueue = listingOf((): readonly QueueItem[] => state().modQueue);
+    const unmoderated = listingOf((): readonly QueueItem[] => state().unmoderated);
+    const reports = listingOf((): readonly QueueItem[] => state().reports);
+    const spam = listingOf((): readonly QueueItem[] => state().spam);
+    const edited = listingOf((): readonly QueueItem[] => state().edited);
+    return {
+        subreddit: {
+            name,
+            getModerators: moderators.open,
+            getModQueue: modQueue.open,
+            getUnmoderated: unmoderated.open,
+            getReports: reports.open,
+            getSpam: spam.open,
+            getEdited: edited.open,
+        },
+        alls: {
+            moderatorsAll: moderators.all,
+            modQueueAll: modQueue.all,
+            unmoderatedAll: unmoderated.all,
+            reportsAll: reports.all,
+            spamAll: spam.all,
+            editedAll: edited.all,
+        },
     };
-    return Object.assign(reddit, {
-        moderatorsAll: moderators.all,
-        modQueueAll: modQueue.all,
-        unmoderatedAll: unmoderated.all,
-        reportsAll: reports.all,
-        ...subreddit,
-        getCurrentSubreddit: vi.fn(async (): Promise<FakeSubreddit> => await Promise.resolve(subreddit)),
-        getCurrentUser: vi.fn(async (): Promise<FakeUser | undefined> => await Promise.resolve(reddit.currentUser)),
-        getCurrentSubredditName: vi.fn(async (): Promise<string> => await Promise.resolve(subredditName)),
+}
+
+/** The client's lookups beside the subreddit's listings: posts by ID, the mod log, and modmail. */
+function lookupsOf(state: () => RedditState): Pick<FakeReddit, "getPostById" | "getModerationLog" | "modMail"> {
+    return {
         getPostById: vi.fn(async (id: string): Promise<FakePost> => {
-            const post = reddit.posts.find((candidate: FakePost): boolean => candidate.id === id);
+            const post = state().posts.find((candidate: FakePost): boolean => candidate.id === id);
             if (post === undefined) {
                 throw new Error(`post ${id} not found`);
             }
@@ -151,7 +171,31 @@ export function createFakeReddit(subredditName: string): FakeReddit {
         },
         getModerationLog: vi.fn((): { readonly get: (count: number) => Promise<readonly ModLogEntry[]> } => ({
             get: async (count: number): Promise<readonly ModLogEntry[]> =>
-                await Promise.resolve(reddit.modLog.slice(0, count)),
+                await Promise.resolve(state().modLog.slice(0, count)),
         })),
+    };
+}
+
+export function createFakeReddit(subredditName: string): FakeReddit {
+    const reddit: RedditState = {
+        moderators: ["ModA", "ModB"],
+        currentUser: fakeUser("ModA", ["all"]),
+        modQueue: [],
+        unmoderated: [],
+        reports: [],
+        spam: [],
+        edited: [],
+        modLog: [],
+        posts: [],
+    };
+    const state = (): RedditState => reddit;
+    const { subreddit, alls } = subredditOf(state, subredditName);
+    return Object.assign(reddit, {
+        ...alls,
+        ...subreddit,
+        getCurrentSubreddit: vi.fn(async (): Promise<FakeSubreddit> => await Promise.resolve(subreddit)),
+        getCurrentUser: vi.fn(async (): Promise<FakeUser | undefined> => await Promise.resolve(reddit.currentUser)),
+        getCurrentSubredditName: vi.fn(async (): Promise<string> => await Promise.resolve(subredditName)),
+        ...lookupsOf(state),
     });
 }

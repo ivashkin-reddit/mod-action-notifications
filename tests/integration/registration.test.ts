@@ -49,6 +49,8 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "modqueueThreshold", type: "number", defaultValue: 50 },
                 { name: "unmoderagedAgeHours", type: "number", defaultValue: 24 },
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
+                { name: "spamQueueThreshold", type: "number", defaultValue: 0 },
+                { name: "editedQueueThreshold", type: "number", defaultValue: 0 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },

@@ -1,6 +1,12 @@
 import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
-import type { AgedContentAlert, ModqueueAlerts, MonitorFailingAlert, QueueTooLongAlert } from "../application/ports.js";
+import type {
+    AgedContentAlert,
+    ModqueueAlerts,
+    MonitorFailingAlert,
+    QueueTooLongAlert,
+    WatchedQueue,
+} from "../application/ports.js";
 import { hoursWaiting } from "../domain/monitoring.js";
 import type { QueueItem } from "../domain/monitoring.js";
 
@@ -10,9 +16,16 @@ function slackTimestamp(): number {
     return Math.floor(Date.now() / MS_PER_SECOND);
 }
 
-function queueTooLongMessage({ size, posts, comments, threshold }: QueueTooLongAlert): SlackMessage {
+/** How each watched queue's size alert is titled. */
+const QUEUE_TITLES: Readonly<Record<WatchedQueue, string>> = {
+    modqueue: "Modqueue Alert",
+    spam: "Spam Queue Alert",
+    edited: "Edited Queue Alert",
+};
+
+function queueTooLongMessage({ queue, size, posts, comments, threshold }: QueueTooLongAlert): SlackMessage {
     return {
-        text: `⚠️ Modqueue Alert: ${String(size)} items pending`,
+        text: `⚠️ ${QUEUE_TITLES[queue]}: ${String(size)} items pending`,
         username: "Mod Action Notifications",
         icon_emoji: ":warning:",
         attachments: [

@@ -138,6 +138,8 @@ export function monitorThresholds(config: AppConfig): MonitorThresholds {
         queueSizeThreshold: config.modqueueThreshold,
         unmoderatedAgeHours: config.unmoderatedAgeHours,
         reportedAgeHours: config.reportedContentAgeHours,
+        spamQueueThreshold: config.spamQueueThreshold,
+        editedQueueThreshold: config.editedQueueThreshold,
     };
 }
 

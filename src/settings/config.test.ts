@@ -28,6 +28,8 @@ describe("reading the settings", (): void => {
             modqueueThreshold: 50,
             unmoderatedAgeHours: 24,
             reportedContentAgeHours: 24,
+            spamQueueThreshold: 0,
+            editedQueueThreshold: 0,
             enableAutoModAlerts: false,
             postDeletionUpvoteThreshold: 100,
             dailySummary: false,

@@ -38,6 +38,8 @@ export interface Settings {
     modqueueThreshold?: unknown;
     unmoderagedAgeHours?: unknown;
     reportedContentAgeHours?: unknown;
+    spamQueueThreshold?: unknown;
+    editedQueueThreshold?: unknown;
     enableAutoModAlerts?: unknown;
     postDeletionUpvoteThreshold?: unknown;
     dailySummary?: unknown;

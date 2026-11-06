@@ -17,6 +17,8 @@ const THRESHOLDS = [
     ["unmoderagedAgeHours"],
     ["reportedContentAgeHours"],
     ["postDeletionUpvoteThreshold"],
+    ["spamQueueThreshold"],
+    ["editedQueueThreshold"],
 ];
 
 /** What the settings form says of `value` for the named setting as a moderator saves it: a message rejects it. */

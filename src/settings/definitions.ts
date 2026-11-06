@@ -6,6 +6,8 @@ export const DEFAULT_MODQUEUE_THRESHOLD = 50;
 export const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
+export const DEFAULT_SPAM_QUEUE_THRESHOLD = 0;
+export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
 /** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
@@ -123,6 +125,25 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         helpText:
             "Alert when reported posts/comments at least this many hours old are waiting for review (0 to disable)",
         defaultValue: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "number",
+        name: "spamQueueThreshold",
+        label: "Spam Queue Size Alert Threshold",
+        helpText: "Alert when Reddit's spam queue holds at least this many items (0 to disable)",
+        defaultValue: DEFAULT_SPAM_QUEUE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "number",
+        name: "editedQueueThreshold",
+        label: "Edited Queue Size Alert Threshold",
+        helpText:
+            "Alert when Reddit's edited queue, of recently edited posts and comments, holds at least this many items (0 to disable)",
+        defaultValue: DEFAULT_EDITED_QUEUE_THRESHOLD,
         onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
             wholeNumberProblem(value),
     },

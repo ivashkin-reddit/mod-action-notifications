@@ -4,6 +4,8 @@ import {
     DEFAULT_UNMODERATED_AGE_HOURS,
     DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
+    DEFAULT_SPAM_QUEUE_THRESHOLD,
+    DEFAULT_EDITED_QUEUE_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
     MAX_SLACK_RETENTION_DAYS,
 } from "./definitions.js";
@@ -33,6 +35,10 @@ export interface AppConfig {
     readonly unmoderatedAgeHours: number;
     /** 0 turns the old-reported-content alert off. */
     readonly reportedContentAgeHours: number;
+    /** 0 turns the spam queue alert off. */
+    readonly spamQueueThreshold: number;
+    /** 0 turns the edited queue alert off. */
+    readonly editedQueueThreshold: number;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
@@ -59,6 +65,8 @@ const DEFAULT_CONFIG: AppConfig = {
     modqueueThreshold: DEFAULT_MODQUEUE_THRESHOLD,
     unmoderatedAgeHours: DEFAULT_UNMODERATED_AGE_HOURS,
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+    spamQueueThreshold: DEFAULT_SPAM_QUEUE_THRESHOLD,
+    editedQueueThreshold: DEFAULT_EDITED_QUEUE_THRESHOLD,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
@@ -132,6 +140,11 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         reportedContentAgeHours: nonNegativeInteger(
             await settings.get("reportedContentAgeHours"),
             DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+        ),
+        spamQueueThreshold: nonNegativeInteger(await settings.get("spamQueueThreshold"), DEFAULT_SPAM_QUEUE_THRESHOLD),
+        editedQueueThreshold: nonNegativeInteger(
+            await settings.get("editedQueueThreshold"),
+            DEFAULT_EDITED_QUEUE_THRESHOLD,
         ),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         dailySummary: booleanOr(await settings.get("dailySummary"), false),

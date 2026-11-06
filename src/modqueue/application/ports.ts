@@ -8,6 +8,10 @@ export interface ModerationQueues {
     readonly unmoderated: () => Promise<readonly QueueItem[]>;
     /** Reported content. */
     readonly reported: () => Promise<readonly QueueItem[]>;
+    /** Reddit's spam queue: content its spam filter, or a moderator, marked as spam. */
+    readonly spam: () => Promise<readonly QueueItem[]>;
+    /** Reddit's edited queue: posts and comments edited lately. */
+    readonly edited: () => Promise<readonly QueueItem[]>;
 }
 
 /**
@@ -23,7 +27,10 @@ export interface MonitorHealth {
 }
 
 /** The kinds of queue alert, each throttled on its own. */
-export type QueueAlert = "queue-size" | "unmoderated" | "reported";
+export type QueueAlert = "queue-size" | "spam-size" | "edited-size" | "unmoderated" | "reported";
+
+/** A queue whose size the monitor watches. */
+export type WatchedQueue = "modqueue" | "spam" | "edited";
 
 /** What the monitor keeps between runs. */
 export interface MonitorStore {
@@ -53,6 +60,8 @@ export interface MonitorScheduler {
 }
 
 export interface QueueTooLongAlert {
+    /** Which queue is too long. */
+    readonly queue: WatchedQueue;
     readonly size: number;
     readonly posts: number;
     readonly comments: number;
