@@ -12,7 +12,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Mod action alerts.** Choose which moderator actions to hear about: removals, spam, approvals, bans, mutes, locks, flair edits, moderator changes and more. Each alert shows the action, the moderator, the user, a link to the content and a short quote of it, and when it happened.
 
-**Security alerts.** Changes to your mod team (moderators added, removed or invited, and changes to their permissions) and to the Devvit apps installed in your subreddit always come as security alerts, to a separate channel if you like. So do an edit to AutoModerator's config (who made it, why, and how many lines changed, never the config itself), AutoModerator removing far more than usual in the hour after one, and a moderator acting for the first time in 90 days, as a compromised account might. So does an action by an account that isn't on your mod list. Actions by Reddit's own accounts (u/reddit for Crowd Control and Reddit's filters, and Anti-Evil Operations for admin removals) are labelled as Reddit actions, not as security alerts.
+**Security alerts.** Changes to your mod team (moderators added, removed or invited, and changes to their permissions) and to the Devvit apps installed in your subreddit always come as security alerts, to a separate channel if you like. So do an edit to AutoModerator's config (who made it, why, and how many lines changed, never the config itself), AutoModerator removing far more than usual in the hour after one, and a moderator acting for the first time in 90 days, as a compromised account might. So does any action you're alerted to that was taken by an account that isn't on your mod list. Actions by Reddit's own accounts (u/reddit for Crowd Control and Reddit's filters, and Anti-Evil Operations for admin removals) are labelled as Reddit actions, not as security alerts.
 
 **Ban and mute context.** A ban alert shows how long the ban lasts, read from the mod log, and counts what Reddit's mod notes record about the user in the 30 days before (removals, spam removals, bans, mutes and notes), without their text. When a user is unbanned or unmuted, the alert names the ban or mute being lifted: who issued it, when, and for how long. The app keeps that as metadata, never the mod note, for 90 days, and only while unban or unmute alerts are on.
 
@@ -81,13 +81,13 @@ Setting a threshold to 0 turns that alert off.
 
 These appear in the subreddit's mod tools menu, and only moderators of the subreddit can use them.
 
-| Action                    | What it does                                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                                                                         |
-| Show Bot Status           | Shows how the app is doing: any problems, alerts waiting for Slack, when it last delivered an alert and ran the modqueue monitor, and today's counts. |
-| Show Team Stats           | Shows the team's moderation over the last 7 days, as a whole, and today's actions.                                                                    |
-| Simulate Mod Action       | Sends a sample alert so you can see how alerts look, without touching any real data.                                                                  |
-| Setup Modqueue Monitoring | Schedules or cancels the modqueue monitor to match your settings.                                                                                     |
+| Action                    | What it does                                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                                                                                     |
+| Show Bot Status           | Shows how the app is doing: any problems, alerts waiting for Slack, when it last delivered an alert and ran the modqueue monitor, and today's counts.             |
+| Show Team Stats           | Shows the team's moderation over the last 7 days, as a whole, and today's actions.                                                                                |
+| Simulate Mod Action       | Sends a sample alert, marked as a simulation, so you can see how alerts look, without touching any real data. It goes only to your Notification or Alert Channel. |
+| Setup Modqueue Monitoring | Schedules or cancels the modqueue monitor to match your settings.                                                                                                 |
 
 ## Your data
 
