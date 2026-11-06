@@ -62,13 +62,13 @@ export default defineConfig(
     },
     {
         // ESLint and Vitest load their config files through the default export.
-        files: ["eslint.config.mjs", "vitest.config.ts"],
+        files: ["eslint.config.mjs", "vitest.config.ts", "vitest.load.config.ts"],
         rules: {
             "import-x/no-default-export": "off",
         },
     },
     {
-        files: ["vitest.config.ts"],
+        files: ["vitest.config.ts", "vitest.load.config.ts"],
         rules: {
             "@typescript-eslint/naming-convention": [
                 "error",

@@ -31,7 +31,8 @@ type Seen = Readonly<{
     lastCall: string | undefined;
     lastFailure: string | undefined;
     alerts: number;
-    debug: boolean;
+    /** Debug Logging, as the invocation read it; undefined when it read no settings. */
+    debug: boolean | undefined;
 }>;
 
 const NOTHING_SEEN: Seen = {
@@ -40,7 +41,7 @@ const NOTHING_SEEN: Seen = {
     lastCall: undefined,
     lastFailure: undefined,
     alerts: 0,
-    debug: false,
+    debug: undefined,
 };
 
 /** A call as the meter tracks it: its dependency, its name (`redis.get`), and when it started. */
@@ -127,8 +128,8 @@ export type Meter = Invocation &
     Readonly<{
         /** Counts and times a call; `name` is the dependency's method, `modMail.getConversations` for a nested one. */
         call: <T>(dependency: Dependency, name: string, run: () => T) => T;
-        /** Whether the invocation read Debug Logging as on. */
-        debug: () => boolean;
+        /** Debug Logging, as the invocation read it; undefined when it read no settings. */
+        debug: () => boolean | undefined;
         /** The tallies and facts for the completion line. */
         tallies: () => Readonly<Record<string, unknown>>;
         /** What failed, for an invocation that rejected. */
@@ -177,7 +178,7 @@ export function createMeter(): Meter {
         noteAlert: (): void => {
             update((current: Seen): Seen => ({ ...current, alerts: current.alerts + 1 }));
         },
-        debug: (): boolean => seen.debug,
+        debug: (): boolean | undefined => seen.debug,
         call: <T>(dependency: Dependency, name: string, run: () => T): T =>
             counted(update, { dependency, name: `${dependency}.${name}`, started: Date.now() }, run),
         tallies: (): Readonly<Record<string, unknown>> => talliesOf(seen),

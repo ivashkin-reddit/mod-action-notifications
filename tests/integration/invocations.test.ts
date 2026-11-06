@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { drive, loadApp } from "../fixtures/app.js";
-import { removedPost } from "../fixtures/events.js";
+import { commentDeleteEvent, removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
@@ -65,6 +65,25 @@ describe("an invocation's completion line", (): void => {
             });
             expect(line?.["id"]).toMatch(/^[\da-z]{8}$/u);
             expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toMatch(/Hello world|Moderator7|Poster9/u);
+        },
+    );
+
+    // A comment deletion reads no settings: its line follows Debug Logging as the installation last read it.
+    it(
+        "is logged for an invocation that reads no settings, while Debug Logging was last read as on",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { debugLogging: true });
+
+            await app.fire("ModAction", removedPost());
+            await app.fire("CommentDelete", commentDeleteEvent({ commentId: "t1_x", postId: "t3_abc" }));
+
+            expect(completionLines("info").map(({ handler }): unknown => handler)).toStrictEqual([
+                "ModAction",
+                "CommentDelete",
+            ]);
         },
     );
 

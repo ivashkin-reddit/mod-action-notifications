@@ -100,6 +100,23 @@ type Outcome = Readonly<{ failed: false }> | Readonly<{ failed: true; error: unk
 type Running = Readonly<{ handler: string; event: unknown; context: AppContext; meter: Meter; started: number }>;
 
 /**
+ * Debug Logging as each installation last read it, for as long as the process lives: an invocation that reads no
+ * settings (a comment deletion, AutoModerator holding something for review) follows it. Losing it only means a line
+ * less, until the next invocation that reads the settings.
+ */
+const debugByInstallation = new Map<string, boolean>();
+
+/** Whether Debug Logging is on for the invocation: as it read it, else as its installation last did. */
+function debugFor(running: Running): boolean {
+    const read = running.meter.debug();
+    if (read !== undefined) {
+        debugByInstallation.set(running.context.subredditId, read);
+        return read;
+    }
+    return debugByInstallation.get(running.context.subredditId) ?? false;
+}
+
+/**
  * When each handler last logged a failed or slow line, and how many it has held back since, for as long as the process
  * lives. Losing it only means a line more.
  */
@@ -149,7 +166,7 @@ type Ending = Readonly<{ outcome: Outcome; ms: number; slow: boolean; now: numbe
  * at most a minute apart for each handler, and for every invocation while Debug Logging is on. Undefined when none is.
  */
 function dueAfter(running: Running, { outcome, slow, now }: Ending): number | undefined {
-    if (running.meter.debug()) {
+    if (debugFor(running)) {
         return 0;
     }
     return outcome.failed || slow

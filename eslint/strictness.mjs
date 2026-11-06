@@ -180,7 +180,14 @@ export const strictness = defineConfig({
         "import-x/no-extraneous-dependencies": [
             "error",
             {
-                devDependencies: ["**/*.test.ts", "tests/**", "vitest.config.ts", "eslint.config.mjs", "eslint/**"],
+                devDependencies: [
+                    "**/*.test.ts",
+                    "tests/**",
+                    "vitest.config.ts",
+                    "vitest.load.config.ts",
+                    "eslint.config.mjs",
+                    "eslint/**",
+                ],
                 includeInternal: true,
                 includeTypes: true,
             },
