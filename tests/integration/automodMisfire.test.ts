@@ -108,4 +108,20 @@ describe("removals by AutoModerator far above usual after its config is edited",
 
         expect(misfireAlerts(app.slack.messages)).toStrictEqual([]);
     });
+
+    // A day of removal counts is read only while a misfire could be found: in the hour after an edit.
+    it("reads no removal counts once the hour after the edit is over", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await afterConfigEdit(1);
+        app.context.redis.hGetAll.mockClear();
+
+        await autoModRemovalsAt(app, afterEdit(1, 61));
+
+        expect(
+            app.context.redis.hGetAll.mock.calls.filter(([key]: readonly [string]): boolean =>
+                key.startsWith("security:automod_removals:"),
+            ),
+        ).toStrictEqual([]);
+    });
 });

@@ -13,8 +13,12 @@ import type { DayCounts } from "../domain/report.js";
 const KEPT_SECONDS = 1_296_000;
 const CLAIM_SECONDS = 86_400;
 const MS_PER_SECOND = 1000;
-/** At most this many posts are kept a day, those with the most removals. */
-const MAX_THREADS = 100;
+/**
+ * At most this many posts are kept a day, those with the most removals: a bound far above any subreddit's threads
+ * with removals in a day. Posts with equal counts rank by ID, older first, so a cut near the day's own count would
+ * drop an older thread's first removal each time, and a megathread could never count past one.
+ */
+const MAX_THREADS = 10_000;
 
 type StatisticsRedis = Readonly<
     Pick<

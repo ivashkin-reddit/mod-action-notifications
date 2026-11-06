@@ -113,6 +113,11 @@ export function lineChanges(before: string, after: string): Readonly<{ added: nu
     return { added: linesBeyond(afterLines, beforeLines), removed: linesBeyond(beforeLines, afterLines) };
 }
 
+/** Whether `now` falls in the hour after the edit at `editAt`, when a misfire is looked for. */
+export function isMisfireWindow(editAt: number, now: number): boolean {
+    return now >= editAt && now - editAt <= MINUTES_PER_HOUR * MS_PER_MINUTE;
+}
+
 /**
  * Whether AutoModerator seems to be misfiring at `now`, given its removals by minute (minute, count): within the hour after the edit
  * at `editAt`, it removed at least 20 items, and five times its hourly average over the day before.
@@ -122,7 +127,7 @@ export function misfireAfter(
     editAt: number,
     now: number,
 ): Misfire | undefined {
-    if (now < editAt || now - editAt > MINUTES_PER_HOUR * MS_PER_MINUTE) {
+    if (!isMisfireWindow(editAt, now)) {
         return undefined;
     }
     const { from, to } = misfireMinutes(editAt);

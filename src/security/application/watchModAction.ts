@@ -2,6 +2,7 @@ import {
     daysDormant,
     isAutoModeratorRemoval,
     isEditBy,
+    isMisfireWindow,
     lineChanges,
     misfireAfter,
     misfireMinutes,
@@ -115,8 +116,11 @@ async function watchConfig(action: WatchedAction, config: SecurityConfig, ports:
     }
 }
 
-/** Alerts once if AutoModerator's removals since the edit look like a misfire. */
+/** Alerts once if AutoModerator's removals since the edit look like a misfire; reads nothing outside its hour. */
 async function checkMisfire(action: WatchedAction, edit: ConfigEdit, ports: SecurityPorts): Promise<void> {
+    if (!isMisfireWindow(edit.at, action.occurredAt.getTime())) {
+        return;
+    }
     const { from, to } = misfireMinutes(edit.at);
     const misfire = misfireAfter(await ports.store.autoModRemovals(from, to), edit.at, action.occurredAt.getTime());
     if (misfire !== undefined && (await ports.store.claimMisfire(edit.at))) {

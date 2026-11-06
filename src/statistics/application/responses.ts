@@ -86,11 +86,12 @@ async function outcomesOf(
     { itemId, settling }: Readonly<{ itemId: string; settling: Settling }>,
     waiting: WaitingStore,
 ): Promise<Tally> {
-    // Anyone's removal or approval takes the item off the queue; only a moderator's is counted.
-    const entry = await waiting.takeAwaiting(itemId);
+    // Only a moderator settles an item: AutoModerator's filter is itself logged as its removal, in either order with
+    // the filter event, and Reddit's filters remove reported items, which still wait for a moderator.
     if (action.actor !== "moderators") {
         return {};
     }
+    const entry = await waiting.takeAwaiting(itemId);
     const queued = entry === undefined ? {} : queueOutcome(entry, settling, action.occurredAt.getTime());
     return settling === "approved" ? { ...queued, ...(await reversalOf(action, itemId, waiting)) } : queued;
 }

@@ -32,6 +32,22 @@ function approvedPost(id: string, moderator: string): ReturnType<typeof modActio
     });
 }
 
+/** `moderator` removes Commenter's comment t1_c. */
+function removedComment(id: string, moderator: string): ReturnType<typeof modActionEvent> {
+    return modActionEvent({
+        id,
+        action: "removecomment",
+        moderator: { name: moderator },
+        targetUser: { name: "Commenter" },
+        targetComment: {
+            id: "t1_c",
+            postId: "t3_abc",
+            permalink: "/r/testsub/comments/abc/hello_world/c/",
+            author: "Commenter",
+        },
+    });
+}
+
 /** `moderator` approves Commenter's comment t1_c. */
 function approvedComment(id: string, moderator: string): ReturnType<typeof modActionEvent> {
     return modActionEvent({
@@ -107,27 +123,43 @@ describe("the time the team takes to act on the queue", (): void => {
         });
     });
 
+    it("counts an item once when two moderators act on it at once", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.fire("PostReport", postReported());
+        // Devvit can run the handlers for both at once.
+        await Promise.all([
+            app.fire("ModAction", removedPost({ id: "ModAction_1" })),
+            app.fire("ModAction", removedPost({ id: "ModAction_2", moderator: { name: "ModB" } })),
+        ]);
+
+        await expect(responseLines(app)).resolves.toMatchObject({
+            "Time to act on the queue": "median within 15 minutes, of 1 item handled",
+            "Reported items": "1 removed (100%), 0 approved (0%)",
+        });
+    });
+
+    // AutoModerator's filter is itself logged as its removal, in either order with the filter event; Reddit's
+    // filters remove reported items too. The item waits on for a moderator.
     it(
-        "counts an item once when two moderators act on it at once, and not at all when AutoModerator does",
+        "leaves an item waiting for a moderator whatever AutoModerator or Reddit does to it",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit);
-            await app.fire("PostReport", postReported());
-            // Devvit can run the handlers for both at once.
-            await Promise.all([
-                app.fire("ModAction", removedPost({ id: "ModAction_1" })),
-                app.fire("ModAction", removedPost({ id: "ModAction_2", moderator: { name: "ModB" } })),
-            ]);
             await app.fire("AutomoderatorFilterComment", commentFiltered());
-            await app.fire("ModAction", approvedComment("ModAction_3", "AutoModerator"));
-            await app.fire("ModAction", approvedComment("ModAction_4", "ModA"));
+            await app.fire("ModAction", removedComment("ModAction_1", "AutoModerator"));
+            await app.fire("PostReport", postReported());
+            await app.fire("ModAction", removedPost({ id: "ModAction_2", moderator: { name: "reddit" } }));
+            await app.fire("ModAction", approvedComment("ModAction_3", "ModA"));
+            await app.fire("ModAction", approvedPost("ModAction_4", "ModA"));
 
             await expect(responseLines(app)).resolves.toMatchObject({
-                "Time to act on the queue": "median within 15 minutes, of 1 item handled",
-                "Reported items": "1 removed (100%), 0 approved (0%)",
-                "Filtered by AutoModerator": "none",
+                "Time to act on the queue": "median within 15 minutes, of 2 items handled",
+                "Reported items": "0 removed (0%), 1 approved (100%)",
+                "Filtered by AutoModerator": "0 removed (0%), 1 approved (100%)",
             });
         },
     );

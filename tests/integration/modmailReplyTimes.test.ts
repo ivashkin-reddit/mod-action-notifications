@@ -36,6 +36,38 @@ describe("modmail replies", (): void => {
             "Modmail replies": "median within 4 hours, of 1 reply",
         });
     });
+
+    // Devvit can deliver a message late: the wait runs between when the messages were written.
+    it(
+        "are timed by when the messages were written, not when the app heard of them",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            await app.fire(
+                "ModMail",
+                modmailReceived({
+                    author: "SomeUser",
+                    messageId: "ModmailMessage_m1",
+                    createdAt: new Date(Date.now() - 3 * HOUR),
+                }),
+            );
+            await app.fire(
+                "ModMail",
+                modmailReceived({
+                    author: "ModA",
+                    authorType: "moderator",
+                    messageId: "ModmailMessage_m2",
+                    createdAt: new Date(),
+                }),
+            );
+
+            await expect(responseLines(app)).resolves.toMatchObject({
+                "Modmail replies": "median within 4 hours, of 1 reply",
+            });
+        },
+    );
 });
 
 describe("modmail replies in an archived conversation", (): void => {
