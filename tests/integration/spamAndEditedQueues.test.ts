@@ -26,8 +26,6 @@ const FIELDS = [
 function sizeAlert(text: string): unknown {
     return {
         text,
-        username: "Mod Action Notifications",
-        icon_emoji: ":warning:",
         channel: CHANNEL,
         attachments: [
             {

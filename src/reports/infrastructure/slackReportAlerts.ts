@@ -17,8 +17,6 @@ function contentLines({ kind, permalink }: ContentReport): readonly string[] {
 function message(text: string, color: string, lines: readonly string[]): SlackMessage {
     return {
         text,
-        username: "Mod Action Notifications",
-        icon_emoji: ":rotating_light:",
         attachments: [
             {
                 color,

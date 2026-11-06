@@ -57,11 +57,11 @@ interface ConditionText {
 
 const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
     "token-missing": {
-        title: "No Slack bot token is set",
+        title: "Slack isn't connected",
         level: "warn",
         started: (): string =>
-            "No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.",
-        resolved: "A Slack bot token is set: alerts are sent again.",
+            "Slack isn't connected, so no alerts are sent. A moderator connects it with Connect Slack, as the app's README says.",
+        resolved: "Slack is connected: alerts are sent again.",
     },
     "channel-missing": {
         title: "No Slack channel is set",
@@ -74,7 +74,7 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         title: "Slack is refusing alerts",
         level: "error",
         started: (detail: string): string =>
-            `Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.`,
+            `Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.`,
         resolved: "Slack is taking alerts again.",
     },
     "slack-unreachable": {

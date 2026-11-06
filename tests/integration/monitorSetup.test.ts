@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { monitorJobs, monitorRuns } from "../fixtures/jobs.js";
+import { keysBesidesConnection } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -24,7 +25,7 @@ describe("installing or upgrading the app", (): void => {
             await app.fire(trigger, { type: trigger });
 
             expect(monitorJobs(app.context.scheduler.jobs)).toStrictEqual([MONITOR_JOB]);
-            expect(app.context.redis.keys()).toStrictEqual([]);
+            expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
         },
     );
 
@@ -66,7 +67,7 @@ describe("installing or upgrading the app", (): void => {
 
         expect(app.context.scheduler.cancelJob).toHaveBeenCalledWith("job-1");
         expect(monitorJobs(app.context.scheduler.jobs)).toStrictEqual([]);
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
     });
 
     it("forgets the job even when cancelling it fails", TEST_OPTIONS, async (): Promise<void> => {
@@ -85,7 +86,7 @@ describe("installing or upgrading the app", (): void => {
         await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
         expect(app.context.scheduler.cancelJob).toHaveBeenCalledExactlyOnceWith("job-gone");
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
     });
 
     // Versions before this remembered the job's ID in Redis, which could name a job since cancelled. The scheduler
@@ -102,7 +103,7 @@ describe("installing or upgrading the app", (): void => {
             await app.fire("AppUpgrade", { type: "AppUpgrade" });
 
             expect(monitorJobs(app.context.scheduler.jobs)).toStrictEqual([MONITOR_JOB]);
-            expect(app.context.redis.keys()).toStrictEqual([]);
+            expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
         },
     );
 
@@ -188,7 +189,7 @@ describe("installing or upgrading the app", (): void => {
         await app.fire(trigger, { type: trigger });
 
         expect(console.error).toHaveBeenCalledExactlyOnceWith(logMessage, error);
-        expect(app.context.redis.keys()).toStrictEqual([]);
+        expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
     });
 });
 

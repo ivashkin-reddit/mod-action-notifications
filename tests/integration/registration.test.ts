@@ -33,7 +33,6 @@ describe("what the app registers with Devvit", (): void => {
                     }),
                 ),
             ).toStrictEqual([
-                { name: "slackBotToken", type: "string", defaultValue: undefined },
                 {
                     name: "enabledActions",
                     type: "select",
@@ -67,21 +66,16 @@ describe("what the app registers with Devvit", (): void => {
     );
 
     // Devvit encrypts a secret, and only the developer can set it, from the command line: moderators never see it.
-    it(
-        "registers the Slack bot token as a secret the developer sets for the whole app",
-        TEST_OPTIONS,
-        async (): Promise<void> => {
-            expect.hasAssertions();
+    // Each subreddit connects its own Slack workspace with Connect Slack: the app holds no token of its own.
+    it("registers no secret, and no setting for the app as a whole", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
 
-            const app = await loadApp(devvit);
+        const app = await loadApp(devvit);
 
-            expect(
-                app.registrations.settings
-                    .filter(({ isSecret }): boolean => isSecret === true)
-                    .map(({ name, scope }): { name: string; scope: string | undefined } => ({ name, scope })),
-            ).toStrictEqual([{ name: "slackBotToken", scope: "app" }]);
-        },
-    );
+        expect(
+            app.registrations.settings.filter(({ isSecret, scope }): boolean => isSecret === true || scope === "app"),
+        ).toStrictEqual([]);
+    });
 
     it("offers every mod action type the Slack messages know how to name", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
@@ -200,7 +194,7 @@ describe("what the app registers with Devvit", (): void => {
         },
     );
 
-    it("adds five subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
+    it("adds six subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -218,6 +212,7 @@ describe("what the app registers with Devvit", (): void => {
                 }),
             ),
         ).toStrictEqual([
+            { label: "Connect Slack", location: "subreddit", forUserType: "moderator" },
             { label: "Test Slack Connection", location: "subreddit", forUserType: "moderator" },
             { label: "Show Bot Status", location: "subreddit", forUserType: "moderator" },
             { label: "Show Team Stats", location: "subreddit", forUserType: "moderator" },

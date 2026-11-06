@@ -13,7 +13,7 @@ function input(fields: Readonly<Partial<StatusInput>> = {}): StatusInput {
     return {
         now: NOW,
         version: "1.2.3",
-        slack: "set-up",
+        slack: { setup: "set-up", workspace: "Mod Team" },
         monitor: { enabled: true, job: "scheduled", cron: "*/15 * * * *" },
         problems: [],
         queue: { waiting: 0, oldestQueuedAt: undefined },
@@ -27,6 +27,27 @@ function input(fields: Readonly<Partial<StatusInput>> = {}): StatusInput {
 function line(status: StatusInput, label: string): string | undefined {
     return statusLines(status).find((statusLine): boolean => statusLine.label === label)?.value;
 }
+
+describe("the Slack line", (): void => {
+    it.each([
+        ["connected", { setup: "set-up", workspace: "Mod Team" }, "Connected to Mod Team"],
+        [
+            "not connected",
+            { setup: "token-missing", workspace: "" },
+            "Not connected, so no alerts are sent. Use Connect Slack",
+        ],
+        [
+            "without a channel",
+            { setup: "channel-missing", workspace: "Mod Team" },
+            "No Notification Channel is set, so no alerts are sent",
+        ],
+        ["when Redis could not say", undefined, "Unknown: Redis could not be read"],
+    ] as const)("names the workspace or what is missing: %s", TEST_OPTIONS, (_label, slack, text): void => {
+        expect.hasAssertions();
+
+        expect(line(input({ slack }), "Slack app")).toBe(text);
+    });
+});
 
 describe("a length of time", (): void => {
     it.each([

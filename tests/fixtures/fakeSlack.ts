@@ -8,7 +8,6 @@ export type SlackField = Readonly<{ title: string; value: string; short: boolean
 export interface SlackMessage {
     readonly text: string;
     readonly username?: string;
-    readonly icon_emoji?: string;
     readonly channel?: string;
     readonly attachments?: readonly Readonly<{
         color: string;
@@ -85,6 +84,8 @@ const TOO_MANY_REQUESTS = 429;
 const FIRST_NON_SUCCESS = 300;
 const MS_PER_SECOND = 1000;
 const TS_SEQUENCE_DIGITS = 6;
+/** The name of the Slack workspace whose token the fake takes, as auth.test answers it. */
+export const WORKSPACE = "Test Workspace";
 
 function isSlackMessage(value: unknown): value is SlackMessage {
     return typeof value === "object" && value !== null && "text" in value && typeof value.text === "string";
@@ -98,9 +99,9 @@ function bodyOf(body: unknown): Readonly<Record<string, unknown>> {
     return Object.fromEntries(Object.entries(parsed));
 }
 
-/** The message a call carries, which every call but chat.delete must. */
+/** The message a call carries, which every call but chat.delete and auth.test must. */
 function messageIn(api: string, body: Readonly<Record<string, unknown>>): SlackMessage | undefined {
-    if (api === "chat.delete") {
+    if (api === "chat.delete" || api === "auth.test") {
         return undefined;
     }
     if (!isSlackMessage(body)) {
@@ -128,6 +129,9 @@ function response(status: number, body: string, retryAfter: string | null = null
  * the call gave it for an edit or a deletion.
  */
 function taken(request: SlackRequest, sequence: number): FakeResponse {
+    if (request.api === "auth.test") {
+        return response(OK, JSON.stringify({ ok: true, team: WORKSPACE, user: "mod-action-notifications" }));
+    }
     const seconds = Math.floor(request.sentAt / MS_PER_SECOND);
     const ts =
         request.api === "chat.postMessage"

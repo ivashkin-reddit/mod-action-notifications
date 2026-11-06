@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, WHEN_NOW } from "../fixtures/messages.js";
+import { keysBesidesConnection } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -74,7 +75,7 @@ describe("the Simulate Mod Action menu item", (): void => {
                 "• *Mod Note:* Testing",
             ]);
             expect(app.context.reddit.getModerators).not.toHaveBeenCalled();
-            expect(app.context.redis.keys()).toStrictEqual([]);
+            expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
             expect(app.toasts).toStrictEqual([{ text: "✅ Simulation delivered to Slack!", appearance: "success" }]);
         },
     );
@@ -175,7 +176,7 @@ describe("the Simulate Mod Action menu item", (): void => {
     it("reports that it cannot send without a bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: "" });
+        const app = await loadApp(devvit, { connectedToken: "" });
 
         await app.fillForm("Simulate Mod Action", {});
 

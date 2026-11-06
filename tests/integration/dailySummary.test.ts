@@ -99,8 +99,6 @@ describe("the daily summary", (): void => {
             expect(app.slack.messages.slice(-1)).toStrictEqual([
                 {
                     text: "📊 Daily summary for 2026-11-04 (UTC)",
-                    username: "Mod Action Notifications",
-                    icon_emoji: ":bar_chart:",
                     channel: "#mod-log",
                     attachments: [
                         {
@@ -163,7 +161,7 @@ describe("the daily summary", (): void => {
     it("sends nothing while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { dailySummary: true, slackBotToken: undefined });
+        const app = await loadApp(devvit, { dailySummary: true, connectedToken: undefined });
 
         await app.runJob("dailySummary");
 

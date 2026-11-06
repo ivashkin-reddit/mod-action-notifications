@@ -37,8 +37,6 @@ export function createSlackEditAlerts(send: SlackSender, alertChannel: string): 
             const author = escapeText(update.author);
             const alert = {
                 text: `✏️ Edited after approval: u/${author}'s ${update.kind}`,
-                username: "Mod Action Notifications",
-                icon_emoji: ":pencil2:",
                 attachments: [
                     {
                         color: "#ff8800",

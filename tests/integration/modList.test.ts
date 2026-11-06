@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp } from "../fixtures/app.js";
+import { connect, loadApp } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import { createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
@@ -68,6 +68,7 @@ describe("the mod list", (): void => {
 
         const app = await loadApp(devvit);
         const { context: otherInstallation } = createFakeContext(defaultSettings(), "t5_other");
+        connect(otherInstallation.redis);
 
         await app.fire("ModAction", removedPost());
         await app.fire("ModAction", removedPost(), otherInstallation);

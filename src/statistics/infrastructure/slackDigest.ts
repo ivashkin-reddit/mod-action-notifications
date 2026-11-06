@@ -13,8 +13,6 @@ function digestMessage({ from, to, report, weekBeforeTotal }: WeeklyDigest, name
     ];
     return {
         text: `📊 Team statistics, ${from} to ${to}: ${countOf(report.actions.total, "action")}`,
-        username: "Mod Action Notifications",
-        icon_emoji: ":bar_chart:",
         attachments: [
             {
                 color: "#0088ff",

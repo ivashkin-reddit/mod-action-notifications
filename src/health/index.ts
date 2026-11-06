@@ -9,7 +9,14 @@ export { SUMMARY_JOB_NAME, yesterdayOf } from "./domain/summary.js";
 export type { ConditionStore } from "./application/ports.js";
 export type { Condition } from "./domain/conditions.js";
 export { dayOf, type HealthEvent } from "./domain/events.js";
-export { statusLines, type MonitorState, type QueueState, type StatusInput, type StatusLine } from "./domain/status.js";
+export {
+    statusLines,
+    type MonitorState,
+    type QueueState,
+    type SlackStatus,
+    type StatusInput,
+    type StatusLine,
+} from "./domain/status.js";
 export { createRedisConditionStore } from "./infrastructure/redisConditionStore.js";
 export { createRedisEventStore } from "./infrastructure/redisEventStore.js";
 export { createModmailNotices, type NoticeReddit } from "./infrastructure/modmailNotices.js";

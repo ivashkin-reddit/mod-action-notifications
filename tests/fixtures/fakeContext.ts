@@ -25,8 +25,6 @@ const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
 
 /** Installation settings as a moderator would have saved them. Keys are the setting names the app registers. */
 export interface Settings {
-    /** The app-wide secret, which Devvit reads through the same settings client. */
-    slackBotToken?: unknown;
     enabledActions?: unknown;
     excludedModerators?: unknown;
     flagUnknownModerators?: unknown;
@@ -53,10 +51,9 @@ export interface Settings {
     weeklyStatistics?: unknown;
 }
 
-/** The app's own setting defaults, with Slack set up: a bot token and a notification channel. */
+/** The app's own setting defaults, with a notification channel. */
 export function defaultSettings(): Settings {
     return {
-        slackBotToken: BOT_TOKEN,
         notificationChannel: CHANNEL,
         enabledActions: ["removelink", "removecomment", "spamlink", "spamcomment", "banuser", "unbanuser"],
         flagUnknownModerators: true,

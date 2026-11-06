@@ -21,8 +21,8 @@ import { createDevvitMonitorScheduler, createRedisMonitorStore, isMonitoringEnab
 import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
-import { createSlackOutbox } from "./slack/delivery.js";
-import type { DeliveryHealth, SlackOutbox } from "./slack/delivery.js";
+import { createSlackOutbox, readConnection } from "./slack/delivery.js";
+import type { DeliveryHealth, SlackConnection, SlackOutbox } from "./slack/delivery.js";
 
 /**
  * The composition root's shared wiring: the settings, Slack's setup, the health log and the outbox, built from a
@@ -85,21 +85,38 @@ export type AppContext = Readonly<{
 // Each installation's last settings read successfully, for as long as the app process lives: it can serve several.
 const loadConfig = createConfigLoader();
 
-export async function configOf(context: AppContext): Promise<AppConfig> {
+/** The installation's settings, as last read successfully. */
+export async function settingsOf(context: AppContext): Promise<AppConfig> {
     return await loadConfig(context.settings, context.subredditId);
+}
+
+/**
+ * The installation's settings with its connection to Slack: the bot token its moderators connected ('' for none), and
+ * the workspace's name.
+ */
+export type Installation = AppConfig & Readonly<{ slackBotToken: string; slackWorkspace: string }>;
+
+/** The settings with the Slack connection the moderators made, if any. */
+export function withConnection(config: AppConfig, connection: SlackConnection | undefined): Installation {
+    return { ...config, slackBotToken: connection?.token ?? "", slackWorkspace: connection?.team ?? "" };
+}
+
+/** The installation's settings, and the Slack connection its moderators made. Rejects when Redis fails. */
+export async function configOf(context: AppContext): Promise<Installation> {
+    return withConnection(await settingsOf(context), await readConnection(context.redis));
 }
 
 /** Whether Slack is set up: what is missing, if anything, for alerts to be sent. */
 export type SlackSetup = "set-up" | "token-missing" | "channel-missing";
 
-export function slackSetup(config: AppConfig): SlackSetup {
+export function slackSetup(config: Installation): SlackSetup {
     if (config.slackBotToken === "") {
         return "token-missing";
     }
     return config.notificationChannel === "" ? "channel-missing" : "set-up";
 }
 
-export function alertsConfigured(config: AppConfig): boolean {
+export function alertsConfigured(config: Installation): boolean {
     return slackSetup(config) === "set-up";
 }
 
@@ -112,7 +129,7 @@ function conditionPorts(context: AppContext): ConditionPorts {
 }
 
 /** Whether alerts can be sent, noting for the health log whether the bot token or the channel is missing. */
-export async function slackReady(context: AppContext, config: AppConfig): Promise<boolean> {
+export async function slackReady(context: AppContext, config: Installation): Promise<boolean> {
     const conditions = conditionPorts(context);
     const setup = slackSetup(config);
     await (setup === "token-missing"
@@ -156,7 +173,7 @@ export function healthReports(context: AppContext): DeliveryHealth & MonitorHeal
 }
 
 /** The installation's Slack outbox, through which every alert goes. */
-export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
+export function outboxOf(context: AppContext, config: Installation): SlackOutbox {
     return createSlackOutbox({
         token: config.slackBotToken,
         retentionDays: config.slackRetentionDays,
@@ -167,7 +184,7 @@ export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
 }
 
 /** The installation's modmail, its alert claims, and where its alerts and problems go. */
-export function modmailPorts(context: AppContext, config: AppConfig): ModmailPorts {
+export function modmailPorts(context: AppContext, config: Installation): ModmailPorts {
     return {
         reader: createRedditModmail(context.reddit, context.subredditName),
         claims: createRedisModmailClaims(context.redis),

@@ -36,8 +36,6 @@ function averageLabel(average: number): string {
 function message(text: string, color: string, lines: readonly string[]): SlackMessage {
     return {
         text,
-        username: "Mod Action Notifications",
-        icon_emoji: ":shield:",
         attachments: [
             {
                 color,

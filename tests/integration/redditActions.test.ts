@@ -29,7 +29,6 @@ describe("an action by one of Reddit's own accounts", (): void => {
 
             expect(message).toMatchObject({
                 text: "🗑️ Post Removed by Reddit",
-                icon_emoji: ":shield:",
                 channel: "#mod-log",
             });
             expect([lines(message)[0], lastLine(message)]).toStrictEqual([

@@ -9,7 +9,6 @@ const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
 vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: devvit.api }));
 
 const TEST_OPTIONS = { timeout: 5000 };
-const TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
 const THRESHOLDS = [
@@ -29,34 +28,6 @@ function validation(app: Readonly<Pick<App, "registrations">>, name: string, val
     }
     return validate({ value, isEditing: true }, {});
 }
-
-// A user token (xoxp-) would post as the person who made it, and other Slack secrets cannot post at all: only the
-// Slack app's bot token is taken.
-describe("setting the Slack bot token", (): void => {
-    it.each([
-        ["blank, which turns alerts off", ""],
-        ["a bot token", "xoxb-1234-5678-abcd"],
-        ["one with spaces around it", "  xoxb-1234-5678-abcd  "],
-    ])("accepts %s", TEST_OPTIONS, async (_label: string, value: string): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        expect(validation(app, "slackBotToken", value)).toBeUndefined();
-    });
-
-    it.each([
-        ["a user token", "xoxp-1234-5678-abcd"],
-        ["an incoming webhook URL", "https://hooks.slack.com/services/T000/B000/XXXX"],
-        ["the app's signing secret", "8f742231b10e8888abcd99yyyzzz85a5"],
-    ])("refuses %s", TEST_OPTIONS, async (_label: string, value: string): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit);
-
-        expect(validation(app, "slackBotToken", value)).toBe(TOKEN_PROBLEM);
-    });
-});
 
 // The app remembers where its alerts are for as long as Slack keeps them, and can edit them for at most 90 days.
 describe("saving the Slack message retention", (): void => {

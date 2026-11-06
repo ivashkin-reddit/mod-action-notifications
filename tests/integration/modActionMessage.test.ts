@@ -32,8 +32,6 @@ describe("a mod action", (): void => {
         });
         expect(request.message).toStrictEqual({
             text: "🗑️ Post Removed",
-            username: "Mod Action Notifications",
-            icon_emoji: ":shield:",
             channel: CHANNEL,
             attachments: [
                 {

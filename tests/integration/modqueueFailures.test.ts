@@ -49,8 +49,6 @@ describe("a failing modqueue monitor run", (): void => {
 
             const alert = {
                 text: "⚠️ Critical: Modqueue Monitoring Failed 3 Times",
-                username: "Mod Action Notifications",
-                icon_emoji: ":warning:",
                 channel: CHANNEL,
                 attachments: [
                     {

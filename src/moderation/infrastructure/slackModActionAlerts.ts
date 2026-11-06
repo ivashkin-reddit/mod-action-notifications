@@ -124,7 +124,6 @@ type ActorStyle = Readonly<{
     header: string;
     /** The message's text, given the action's title. */
     text: (title: string) => string;
-    icon: string;
     /** A status for the actor; '' for none. */
     status: string;
 }>;
@@ -133,19 +132,16 @@ const ACTOR_STYLES: Readonly<Record<Actor, ActorStyle>> = {
     "moderator": {
         header: "🔔 *Moderator Action*",
         text: (title: string): string => title,
-        icon: ":shield:",
         status: "",
     },
     "unknown-moderator": {
         header: "🚨 *Security Alert*",
         text: (title: string): string => `🚨 SECURITY ALERT: ${title} by unknown moderator`,
-        icon: ":warning:",
         status: "Unknown moderator (alert)",
     },
     "reddit": {
         header: "🔶 *Reddit Action*",
         text: (title: string): string => `${title} by Reddit`,
-        icon: ":shield:",
         status: "Origin Reddit",
     },
 };
@@ -154,7 +150,6 @@ const ACTOR_STYLES: Readonly<Record<Actor, ActorStyle>> = {
 const SECURITY_STYLE: ActorStyle = {
     header: "🛡️ *Security Alert*",
     text: (title: string): string => `🛡️ Security alert: ${title}`,
-    icon: ":shield:",
     status: "",
 };
 
@@ -202,8 +197,6 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
     const style = styleOf(modAction, actor, presentation);
     const message: SlackMessage = {
         text: style.text(actionTitle(modAction.type, modAction.target?.commentId !== undefined)),
-        username: "Mod Action Notifications",
-        icon_emoji: style.icon,
         attachments: [
             {
                 color: unknownModerator ? "#ff0000" : actionColor(modAction.type),

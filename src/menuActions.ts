@@ -1,8 +1,16 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import { actionNameOf, configOf, modActionPresentation, monitorWanted, slackSetup } from "./composition.js";
-import type { AppContext, SlackSetup } from "./composition.js";
+import {
+    actionNameOf,
+    configOf,
+    modActionPresentation,
+    monitorWanted,
+    settingsOf,
+    slackSetup,
+    withConnection,
+} from "./composition.js";
+import type { AppContext } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
-import type { MonitorState, StatusLine } from "./health/index.js";
+import type { MonitorState, SlackStatus, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
     simulateModAction,
@@ -14,7 +22,8 @@ import { createDevvitMonitorScheduler, monitorJobStatus } from "./modqueue/index
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
 import type { AppConfig } from "./settings/index.js";
-import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
+import { createDirectSender, queueState, readConnection } from "./slack/delivery.js";
+import type { SlackConnection } from "./slack/delivery.js";
 import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
 import type { ReportLine, TeamReport } from "./statistics/index.js";
 
@@ -101,14 +110,19 @@ function readFailed(error: unknown): undefined {
  * statusForm, which Devvit requires to be plain JSON.
  */
 export async function botStatus(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
-    const config = await configOf(context);
+    const config = await settingsOf(context);
     const job = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
     const events = createRedisEventStore(context.redis);
     const now = Date.now();
     const lines = statusLines({
         now,
         version: context.appVersion,
-        slack: slackSetup(config),
+        slack: await readConnection(context.redis)
+            .then((connection: SlackConnection | undefined): SlackStatus => {
+                const installation = withConnection(config, connection);
+                return { setup: slackSetup(installation), workspace: installation.slackWorkspace };
+            })
+            .catch(readFailed),
         monitor: monitorState(monitorWanted(config), job),
         problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
         queue: await queueState(context.redis).catch(readFailed),
@@ -193,42 +207,10 @@ export async function teamStats(
     return { lines: lines.map(({ label, value }: ReportLine): { label: string; value: string } => ({ label, value })) };
 }
 
-/** How sending a test message went, or what kept it from being sent. */
-type ConnectionTest = "delivered" | Exclude<SlackSetup, "set-up"> | "failed";
-
-const CONNECTION_TEST_TOASTS: Readonly<
-    Record<ConnectionTest, Readonly<{ text: string; appearance: "neutral" | "success" }>>
-> = {
-    "delivered": { text: "🧪 Test alert sent! Check your Slack channel and bot logs.", appearance: "success" },
-    "token-missing": { text: "⚠️ No Slack bot token is set. The app's developer sets it.", appearance: "neutral" },
-    "channel-missing": {
-        text: "⚠️ No Notification Channel is set. Set it in the app's settings.",
-        appearance: "neutral",
-    },
-    "failed": {
-        text: "❌ Slack did not accept the test alert. Check the Notification Channel, and that the Slack app is in it.",
-        appearance: "neutral",
-    },
-};
-
-async function testSlackConnection(context: AppContext): Promise<ConnectionTest> {
-    const config = await configOf(context);
-    const setup = slackSetup(config);
-    if (setup !== "set-up") {
-        return setup;
-    }
-    return (await sendTestMessage(config.slackBotToken, config.notificationChannel)) ? "delivered" : "failed";
-}
-
-/** Sends a test message to Slack, and says how it went. */
-export async function sendTestAlert(context: MenuContext): Promise<void> {
-    context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
-}
-
 /**
  * The channel the form names, without its #: '' for none, so the alert goes where a real one would. Only the
- * configured channels may be named: the bot token is the app's, and reaches every channel the Slack app is in,
- * other subreddits' included. Undefined for any other channel.
+ * configured channels may be named: the bot token reaches every channel the Slack app is in, not only the alert
+ * channels. Undefined for any other channel.
  */
 function simulationChannel(values: SimulateFormValues, config: AppConfig): string | undefined {
     const channel = slackChannelFromForm(values).replace(/^#+/u, "");

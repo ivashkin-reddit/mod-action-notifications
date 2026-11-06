@@ -41,10 +41,11 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 You'll need moderator permissions on the subreddit and a Slack workspace where you can add an app.
 
 1. **Install the app** on your subreddit. This is a private moderation app, uploaded from this repository with the Devvit command-line tool. The [Operators Guide](./OPERATORS-GUIDE.md#deploying) walks through it.
-2. **Set up the Slack app.** Alerts are posted by a Slack app in your workspace, made from the template in [slack-app/](./slack-app/README.md), which says how. Whoever deploys the app gives it the Slack app's token; moderators never see it. Add the Slack app to the channels alerts should go to.
+2. **Make the Slack app.** Alerts are posted by a Slack app in your own workspace, made from the template in [slack-app/](./slack-app/README.md), which says how. Add it to the channels alerts should go to.
 3. **Open the app's settings** for your subreddit and enter the channel's ID as the Notification Channel. Choose the mod actions you want alerts for; the defaults cover removals, spam and bans.
-4. **Send a test.** From the subreddit's mod tools menu, choose **Test Slack Connection**. A test message should arrive in Slack within seconds.
-5. **Turn on modqueue monitoring.** Set the thresholds you want, then choose **Setup Modqueue Monitoring**. Run it again whenever you turn monitoring on or off.
+4. **Connect Slack.** From the subreddit's mod tools menu, choose **Connect Slack** and paste the Slack app's **Bot User OAuth Token**. The app checks it with Slack, posts a message in each alert channel, and keeps the token where no form shows it again.
+5. **Send a test.** Choose **Test Slack Connection**. A test message should arrive in Slack within seconds.
+6. **Turn on modqueue monitoring.** Set the thresholds you want, then choose **Setup Modqueue Monitoring**. Run it again whenever you turn monitoring on or off.
 
 ## Settings
 
@@ -83,6 +84,7 @@ These appear in the subreddit's mod tools menu, and only moderators of the subre
 
 | Action                    | What it does                                                                                                                                                      |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connect Slack             | Connects the app to your Slack workspace with your Slack app's bot token, once Slack takes it, or disconnects it. The token is never shown again.                 |
 | Test Slack Connection     | Sends a test message and tells you whether Slack accepted it.                                                                                                     |
 | Show Bot Status           | Shows how the app is doing: any problems, alerts waiting for Slack, when it last delivered an alert and ran the modqueue monitor, and today's counts.             |
 | Show Team Stats           | Shows the team's moderation over the last 7 days, as a whole, and today's actions.                                                                                |
@@ -106,8 +108,9 @@ The app reads only what it needs to write an alert. Apart from alerts waiting to
 - **Team statistics** (metadata): counts of the team's actions by day, kind and hour, bans by length, removals per thread, and how many moderators acted, by a short hash of each name rather than the name: 15 days. To time responses, it also notes which posts and comments wait for a moderator and which modmail conversations await a reply, and since when (a week at most), and who removed a post or comment, as Reddit or a moderator's hash (two days).
 - **Approvals** (metadata), to spot an edit after one: which moderator approved which post or comment, and when. Kept for as many days as **Edits After Approval Alert** says, 7 by default and at most 30.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
+- **The Slack connection**: your Slack app's bot token, and your workspace's name, until you connect another, disconnect it or uninstall the app. No form, log or message shows the token.
 
-Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.
+Everything else it keeps expires on its own. The only service it sends anything to is your Slack workspace.
 
 Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, while your channels still keep the alert, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. Alerts stay in Slack under your workspace's message retention. Reddit doesn't tell apps when an account is deleted, so retention is also what takes a deleted account's username out of alerts. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends, and keep them no longer than the 90 days the app can still edit them. Then set **Slack Message Retention** to the same number of days, so the app forgets where its alerts are when Slack deletes them. [slack-app/README.md](./slack-app/README.md#deploying-it) shows how, and what the free plan allows.
 

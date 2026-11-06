@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
+import type { Setup } from "../fixtures/app.js";
 import { bigPost, DeletionReason, DeletionSource, userDeletion } from "../fixtures/events.js";
 import { CHANNEL } from "../fixtures/fakeContext.js";
-import type { Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastField } from "../fixtures/messages.js";
 import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
@@ -27,8 +27,6 @@ describe("a user deleting their own post", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "🗑️ User Deleted High-Score Post: 150 upvotes",
-                username: "Mod Action Notifications",
-                icon_emoji: ":wastebasket:",
                 channel: CHANNEL,
                 attachments: [
                     {
@@ -177,9 +175,9 @@ describe("a deletion that is not alerted", (): void => {
 
     it.each([
         ["deletion alerts are off", { postDeletionUpvoteThreshold: 0 }],
-        ["no bot token is set", { slackBotToken: "" }],
+        ["no bot token is set", { connectedToken: "" }],
         ["no notification channel is set", { notificationChannel: "" }],
-    ])("is one made while %s", TEST_OPTIONS, async (_label: string, settings: Readonly<Settings>): Promise<void> => {
+    ])("is one made while %s", TEST_OPTIONS, async (_label: string, settings: Readonly<Setup>): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, settings);

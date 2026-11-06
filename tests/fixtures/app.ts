@@ -1,12 +1,24 @@
 import { vi } from "vitest";
-import { createFakeContext, defaultSettings } from "./fakeContext.js";
-import type { FakeContext, Settings, ShownForm, Toast } from "./fakeContext.js";
+import { BOT_TOKEN, createFakeContext, defaultSettings } from "./fakeContext.js";
+import type { CreatedContext, FakeContext, Settings, ShownForm, Toast } from "./fakeContext.js";
 import type { FakeDevvit, FormDefinition, Handler, Registrations } from "./fakeDevvit.js";
-import { createFakeSlack } from "./fakeSlack.js";
+import type { FakeRedis } from "./fakeRedis.js";
+import { createFakeSlack, WORKSPACE } from "./fakeSlack.js";
 import type { FakeSlack } from "./fakeSlack.js";
 
 /** The instant every test starts at. Fake timers hold the clock here until a test advances it. */
 export const NOW = new Date("2026-11-04T12:00:00.000Z");
+
+/**
+ * What a test sets up an installation with: its settings, and the bot token its moderators connected with Connect
+ * Slack, BOT_TOKEN unless the test says otherwise (undefined or  for none).
+ */
+export type Setup = Settings & Readonly<{ connectedToken?: string | undefined }>;
+
+/** Stores a connection to WORKSPACE with `token`, as Connect Slack does once Slack takes it. */
+export function connect(redis: Readonly<Pick<FakeRedis, "seed">>, token = BOT_TOKEN): void {
+    redis.seed("slack_connection", JSON.stringify({ token, team: WORKSPACE }));
+}
 
 export type App = Readonly<{
     /** What the app registered with Devvit. */
@@ -33,6 +45,8 @@ export type App = Readonly<{
     fillForm: (menuItem: string, values: Readonly<Record<string, unknown>>) => Promise<void>;
     /** Moves the clock forward, running any timers that fall due. */
     advance: (ms: number) => Promise<void>;
+    /** Connects the installation to WORKSPACE with `token`, as Connect Slack does once Slack takes it. */
+    connectSlack: (token: string) => void;
 }>;
 
 const STILL_RUNNING = Symbol("still running");
@@ -114,10 +128,20 @@ function actions(registrations: Registrations, context: unknown, shownForms: rea
  * Loads src/main.ts afresh, so each test gets a new bot with no cached settings or moderator list, and wires it to
  * fake Devvit services, a fake Slack Web API and a clock frozen at NOW.
  */
-export async function loadApp(devvit: FakeDevvit, settingsOverrides: Readonly<Settings> = {}): Promise<App> {
-    vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
+/** An installation set up so: its settings, and its Slack connection when it has one. */
+function installationOf(setup: Readonly<Setup>): CreatedContext & Readonly<{ settings: Settings }> {
+    const { connectedToken, ...settingsOverrides } = { connectedToken: BOT_TOKEN, ...setup };
     const settings: Settings = { ...defaultSettings(), ...settingsOverrides };
-    const { context, toasts, shownForms } = createFakeContext(settings);
+    const created = createFakeContext(settings);
+    if (connectedToken !== undefined && connectedToken !== "") {
+        connect(created.context.redis, connectedToken);
+    }
+    return { ...created, settings };
+}
+
+export async function loadApp(devvit: FakeDevvit, setup: Readonly<Setup> = {}): Promise<App> {
+    vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const { context, toasts, shownForms, settings } = installationOf(setup);
     const slack = createFakeSlack();
     vi.stubGlobal("fetch", slack.fetch);
 
@@ -126,5 +150,15 @@ export async function loadApp(devvit: FakeDevvit, settingsOverrides: Readonly<Se
     await import("../../src/main.js");
     const registrations = devvit.registrations();
 
-    return { registrations, settings, context, slack, toasts, ...actions(registrations, context, shownForms) };
+    return {
+        registrations,
+        settings,
+        context,
+        slack,
+        toasts,
+        connectSlack: (token: string): void => {
+            connect(context.redis, token);
+        },
+        ...actions(registrations, context, shownForms),
+    };
 }

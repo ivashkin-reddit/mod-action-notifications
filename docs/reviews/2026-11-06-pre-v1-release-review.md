@@ -281,7 +281,7 @@ The verdict is conditional on:
 
     Watch the logs for ERROR lines, and for any sign of R3.
 
-2. **The owner deciding R2:** accept a shared Slack workspace for the subreddits it will be installed in, or ask for per-installation channel limits.
+2. ~~**The owner deciding R2:** accept a shared Slack workspace for the subreddits it will be installed in, or ask for per-installation channel limits.~~ The owner chose a Slack workspace per subreddit, for the app directory: done, see [section 14](#14-addendum-r2-a-slack-workspace-per-subreddit).
 3. ~~**The owner accepting R1 for v1**, with the per-alert index scheduled for v1.1, or asking for it now.~~ The owner asked for it now: fixed, see [section 13](#13-addendum-r1-fixed).
 
 ## 12. Final recommendation
@@ -332,3 +332,53 @@ Six deliberate breaks were each caught by a test:
 - the earlier version's hash not read at all.
 
 **What remains.** An entry outlives its alert until the next alert is sent, and every entry goes at most `slackRetentionDays` after the last alert. An entry holds only the post or comment's ID, the channel and the timestamp; the alert's text goes on time. The operators guide and privacy policy say so.
+
+## 14. Addendum: R2, a Slack workspace per subreddit
+
+The owner wants the app in Reddit's app directory, which rules out one Slack workspace for every subreddit. They chose, the same day:
+
+- Each subreddit makes its own Slack app from `slack-app/manifest.json`.
+- A moderator gives its bot token to a new **Connect Slack** form. The app checks it with Slack, keeps it, and never shows it again.
+- The developer's app-wide `slackBotToken` secret goes.
+- So does the `chat:write.customize` scope: alerts post under the Slack app's own name.
+
+**Why this design.** Research against Devvit's and Slack's documentation found:
+
+- Devvit allows secrets only app-wide ("Secrets can only be global"). An installation's settings are visible to its moderators.
+- Slack's incoming webhooks can't edit or delete what they post, and return no timestamp. So they can't take deleted content out of alerts, which Devvit's rules require.
+- A Slack "Add to Slack" OAuth flow needs an inbound redirect. Devvit offers that only as a limited-access, experimental external endpoint, at a host per subreddit.
+- A published directory app, Subreddit Status, already has moderators paste a bot token made from a manifest.
+
+**What changed.**
+
+- **The connection.** `slack_connection` holds the token and the workspace's name, per installation, until it is replaced or emptied. Connecting:
+    - calls `auth.test`;
+    - posts a message to each alert channel;
+    - keeps the token only when Slack takes all of them;
+    - starts an outbox run, as no run delivers while Slack isn't connected.
+- **What reads it.** `configOf` reads it with the settings. Show Bot Status names the workspace, or says Slack isn't connected, or, when Redis fails, unknown.
+- **Messages.** They no longer set `username` or `icon_emoji`.
+- **Documentation.** The README, the Slack app guide, the operators guide, the privacy policy and the playtest runbook (a new step 13) describe the connection.
+
+**Tests.** `connectSlack.test.ts` covers twelve cases, all failing before the change:
+
+- connecting;
+- what is kept;
+- delivery of what was queued;
+- replacing a connection;
+- each refusal;
+- disconnecting;
+- the token never logged;
+- the status line.
+
+The moderators-only tests cover the new menu item and form. The registration test pins that the app registers no secret.
+
+**Found on the way.** A scheduled outbox run that found Slack not set up returned before releasing its claim (`slack_outbox_drain_scheduled`). For up to 46 seconds after it ran, that claim made any new drain look already scheduled, so a drain scheduled in that window, as Connect Slack schedules one, was never run. Such a run now releases its claim first. `slackOutboxNotConnected.test.ts`, "lets a later drain be scheduled once a run has found it so", failed before the fix.
+
+**For the owner.**
+
+- The installation already running, on the developer's token, stops alerting after the upgrade until a moderator uses **Connect Slack** once.
+- The Slack app already made can be reused: remove `chat:write.customize` in its manifest and reinstall, or keep it, as it is unused.
+- Publishing still needs Reddit's review. Two points in Devvit's rules aren't settled by documentation:
+    - whether a moderator pasting a bot token counts as collecting credentials, which the Subreddit Status precedent suggests it doesn't;
+    - whether a link to a Slack workspace counts as an "account-linked service".

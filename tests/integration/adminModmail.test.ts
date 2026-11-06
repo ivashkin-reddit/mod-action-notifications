@@ -140,7 +140,7 @@ describe("modmail from a Reddit admin", (): void => {
     it("sends nothing while Slack is not set up", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { ...SETTINGS, slackBotToken: undefined });
+        const app = await loadApp(devvit, { ...SETTINGS, connectedToken: undefined });
         app.context.reddit.conversations = [conversationWithAdmin("Hello")];
 
         await app.fire("ModMail", modmailReceived());

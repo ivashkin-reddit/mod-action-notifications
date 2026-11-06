@@ -174,7 +174,7 @@ describe("an edit after a moderator approved the post or comment", (): void => {
     it("sends nothing while Slack is not set up", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { ...SETTINGS, slackBotToken: undefined });
+        const app = await loadApp(devvit, { ...SETTINGS, connectedToken: undefined });
         await app.fire("ModAction", approvedPost());
 
         await app.fire("PostUpdate", postEdited());

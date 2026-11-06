@@ -7,15 +7,9 @@ const MS_PER_SECOND = 1000;
 const MODMAIL = "https://mod.reddit.com/mail";
 const FOLDER_LINKS = `• *Modmail:* <${MODMAIL}/new|New> · <${MODMAIL}/inprogress|In Progress> · <${MODMAIL}/appeals|Appeals>`;
 
-function message(
-    text: string,
-    style: Readonly<{ color: string; icon: string }>,
-    lines: readonly string[],
-): SlackMessage {
+function message(text: string, style: Readonly<{ color: string }>, lines: readonly string[]): SlackMessage {
     return {
         text,
-        username: "Mod Action Notifications",
-        icon_emoji: style.icon,
         attachments: [
             {
                 color: style.color,
@@ -57,7 +51,7 @@ export function createSlackModmailAlerts(send: SlackSender, alertChannel: string
             subject,
         }: Readonly<{ conversationId: string; author: string; subject: string }>): Promise<void> => {
             const name = escapeText(author);
-            const alert = message(`🛡️ Modmail from a Reddit admin: u/${name}`, { color: "#ff4500", icon: ":shield:" }, [
+            const alert = message(`🛡️ Modmail from a Reddit admin: u/${name}`, { color: "#ff4500" }, [
                 "🛡️ *Modmail From a Reddit Admin*",
                 `• *From:* u/${name}`,
                 `• *Subject:* ${escapeText(subject)}`,
@@ -70,7 +64,7 @@ export function createSlackModmailAlerts(send: SlackSender, alertChannel: string
             const hours = plural(waiting.longestHours, "hour", "hours");
             const alert = message(
                 `📬 Modmail waiting for a reply: ${atLeast(waiting)}${String(waiting.waiting)} ${conversations}`,
-                { color: "#ff8800", icon: ":incoming_envelope:" },
+                { color: "#ff8800" },
                 [
                     "📬 *Modmail Waiting*",
                     waitingLine(waiting),

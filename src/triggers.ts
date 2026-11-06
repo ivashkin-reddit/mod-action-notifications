@@ -9,7 +9,7 @@ import {
     outboxOf,
     slackReady,
 } from "./composition.js";
-import type { AppContext } from "./composition.js";
+import type { AppContext, Installation } from "./composition.js";
 import { createRedisEventStore, noteEvent } from "./health/index.js";
 import {
     createModListCache,
@@ -60,7 +60,7 @@ function moderationConfig(config: AppConfig): ModerationConfig {
     };
 }
 
-function moderationPorts(context: AppContext, config: AppConfig): ModerationPorts {
+function moderationPorts(context: AppContext, config: Installation): ModerationPorts {
     return {
         records: createRedisModerationRecords(context.redis),
         lookups: createRedditModerationLookups(context.reddit, {
@@ -136,7 +136,7 @@ function watchedActionOf(action: ModAction): WatchedAction {
 async function watchForSecurity(
     action: ModAction,
     context: AppContext,
-    { config, ready }: Readonly<{ config: AppConfig; ready: boolean }>,
+    { config, ready }: Readonly<{ config: Installation; ready: boolean }>,
 ): Promise<void> {
     try {
         await watchModAction(

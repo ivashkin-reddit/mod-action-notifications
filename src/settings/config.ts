@@ -19,8 +19,6 @@ const DECIMAL = 10;
 
 /** The installation's settings, validated. */
 export interface AppConfig {
-    /** The Slack app's bot token, trimmed, or '' when none is set. The developer sets it for every installation. */
-    readonly slackBotToken: string;
     readonly enabledActions: readonly string[];
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
@@ -74,7 +72,6 @@ type SettingValue = unknown;
 
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
-    slackBotToken: "",
     enabledActions: [],
     excludedModerators: [],
     flagUnknownModerators: true,
@@ -187,7 +184,6 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     const notificationChannel = channelName(await settings.get("notificationChannel"));
     const alertChannel = channelName(await settings.get("alertChannel"));
     return {
-        slackBotToken: trimmed(await settings.get("slackBotToken")),
         enabledActions: selected(await settings.get("enabledActions")),
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
@@ -246,7 +242,7 @@ export function createConfigLoader(): ConfigLoader {
         } catch (error) {
             const last = lastRead.get(installation);
             if (last === undefined) {
-                // The defaults set no bot token: nothing is sent until the settings can be read.
+                // The defaults name no channel: nothing is sent until the settings can be read.
                 console.error(
                     "[settings] Could not read the settings, so no alerts are sent until they can be:",
                     error,

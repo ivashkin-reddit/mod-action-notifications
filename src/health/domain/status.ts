@@ -20,8 +20,8 @@ export interface StatusInput {
     /** When the status is shown, in ms since the epoch. */
     readonly now: number;
     readonly version: string;
-    /** Whether Slack is set up: what is missing, if anything, for alerts to be sent. */
-    readonly slack: "set-up" | "token-missing" | "channel-missing";
+    /** Whether Slack is set up, and the workspace connected; undefined when Redis could not say. */
+    readonly slack: SlackStatus | undefined;
     readonly monitor: MonitorState;
     readonly problems: readonly InForce[] | undefined;
     readonly queue: QueueState | undefined;
@@ -30,15 +30,17 @@ export interface StatusInput {
     readonly today: Counts | undefined;
 }
 
+/** Whether Slack is set up (what is missing, if anything, for alerts to be sent), and the workspace connected. */
+export type SlackStatus = Readonly<{ setup: "set-up" | "token-missing" | "channel-missing"; workspace: string }>;
+
 /** One line of the status: what it is about, and what it says. */
 export interface StatusLine {
     readonly label: string;
     readonly value: string;
 }
 
-const SLACK_TEXT: Readonly<Record<StatusInput["slack"], string>> = {
-    "set-up": "Set up",
-    "token-missing": "No bot token is set, so no alerts are sent. The app's developer sets it",
+const SLACK_TEXT: Readonly<Record<Exclude<SlackStatus["setup"], "set-up">, string>> = {
+    "token-missing": "Not connected, so no alerts are sent. Use Connect Slack",
     "channel-missing": "No Notification Channel is set, so no alerts are sent",
 };
 
@@ -162,10 +164,17 @@ function monitorText(monitor: MonitorState): string {
     }
 }
 
+function slackText(slack: SlackStatus | undefined): string {
+    if (slack === undefined) {
+        return UNKNOWN;
+    }
+    return slack.setup === "set-up" ? `Connected to ${slack.workspace}` : SLACK_TEXT[slack.setup];
+}
+
 export function statusLines(input: StatusInput): readonly StatusLine[] {
     return [
         { label: "App version", value: input.version },
-        { label: "Slack app", value: SLACK_TEXT[input.slack] },
+        { label: "Slack app", value: slackText(input.slack) },
         { label: "Current problems", value: problemsText(input.problems, input.now) },
         { label: "Alerts waiting", value: waitingText(input.queue, input.now) },
         { label: "Last alert delivered", value: lastDeliveredText(input.lastSeen, input.now) },

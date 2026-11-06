@@ -11,7 +11,7 @@ Mod action, edit, report, modmail, deletion ─┐
                                              ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
 Every 15 minutes, daily, weekly ─────────────┘                                         ▲
 Post or comment deleted ─► its text leaves queued alerts ──────────────────────────────┘
-Mod tools menu ─► Test Slack Connection, Simulate Mod Action ────────────────────────────────────────► Slack app
+Mod tools menu ─► Connect Slack, Test Slack Connection, Simulate Mod Action ──────────────────────────► Slack app
 ```
 
 | Reddit calls it for                                                                                         | It does                                                                                                                        |
@@ -28,7 +28,7 @@ Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────
 | The `dailySummary` job, at 08:00 UTC each day                                                               | Posts the summary of the day before, when the Daily Summary setting is on.                                                     |
 | The `weeklyStatistics` job, at 08:00 UTC each Monday                                                        | Posts the team's statistics for the week before, when the Weekly Statistics setting is on.                                     |
 | Install and upgrade (`AppInstall`, `AppUpgrade`)                                                            | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary and statistics jobs.                   |
-| The mod tools menu                                                                                          | Runs the five menu actions, for moderators only.                                                                               |
+| The mod tools menu                                                                                          | Runs the six menu actions, for moderators only.                                                                                |
 
 ## Deploying
 
@@ -55,10 +55,9 @@ npx devvit login
 npx devvit playtest <test-subreddit>   # optional: try it live on a test subreddit
 npx devvit upload
 npx devvit install <your-subreddit>
-npx devvit settings set slackBotToken  # the Slack app's bot token
 ```
 
-The bot token comes from the Slack app: [slack-app/README.md](./slack-app/README.md) says how to create it, and how to add it to the alert channels. Then follow the [README's Getting started](./README.md#getting-started) to configure the app. Before a release, try each feature on a test subreddit as [docs/playtest-runbook.md](./docs/playtest-runbook.md) sets out.
+Each subreddit posts to its own Slack workspace: [slack-app/README.md](./slack-app/README.md) says how its moderators create the Slack app, add it to the alert channels, and connect it with **Connect Slack**. Then follow the [README's Getting started](./README.md#getting-started) to configure the app. Before a release, try each feature on a test subreddit as [docs/playtest-runbook.md](./docs/playtest-runbook.md) sets out.
 
 ### Before the first release
 
@@ -81,6 +80,7 @@ Upload a new version. Each installation then upgrades, and the `AppUpgrade` trig
 
 Data written by earlier versions is carried over as it's used:
 
+- **The Slack bot token.** Earlier versions read it from the app-wide `slackBotToken` secret, set by the developer. This version reads only the connection each subreddit makes with **Connect Slack**. After the upgrade, a moderator connects once; until then no alerts are sent, and **Show Bot Status** says Slack isn't connected. The old secret is no longer read.
 - **Ban and mute records** kept under the earlier format (`mod_actions:discipline:*`) are moved to the current one the first time they're needed, without the mod note they held. The old key is then deleted. Records nobody needs expire within 90 days.
 - **Ban and mute records** written before mod notes were left out of them still hold the note. Nothing reads it, and it expires with the record, within 90 days.
 - **The monitor job ID** that earlier versions kept (`modqueue_monitor_job_id`) is deleted by setup. The scheduler itself now says which job runs.
@@ -94,11 +94,10 @@ Uninstalling removes the installation's settings and stored data. Reinstalling s
 
 ## Configuration
 
-The developer sets the Slack bot token, for every installation at once. Moderators set the rest under the app's settings for the subreddit. The stored names are permanent; renaming one would lose what installations have saved.
+Moderators set these under the app's settings for the subreddit, and connect Slack with **Connect Slack**. The stored names are permanent; renaming one would lose what installations have saved.
 
 | Setting (stored name)                                                                             | Accepted values                            | Effect                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Slack Bot Token (`slackBotToken`)                                                                 | `xoxb-…`, or blank                         | The Slack app's token, set with `npx devvit settings set slackBotToken`. Blank turns off every alert.                                                                                                                                                 |
 | Enabled Mod Actions (`enabledActions`)                                                            | any of 43 action types                     | Which actions send an alert.                                                                                                                                                                                                                          |
 | Excluded Moderators (`excludedModerators`)                                                        | usernames separated by commas              | Their actions never send an alert. Names are matched ignoring case.                                                                                                                                                                                   |
 | Flag Unknown Moderators (`flagUnknownModerators`)                                                 | on or off                                  | An alerted action by an account not on the mod list becomes a security alert. The mod list is reused for five minutes, and fetched again for a name it lacks, so a new moderator isn't flagged.                                                       |
@@ -126,7 +125,7 @@ The developer sets the Slack bot token, for every installation at once. Moderato
 
 A threshold of 0 turns its alert off. Turning all three modqueue thresholds off turns the monitor off once **Setup Modqueue Monitoring** runs.
 
-**Saving.** The bot token must start `xoxb-`: a user token would post as the person who made it. The settings form rejects any threshold that isn't a whole number of 0 or more.
+**Saving.** The settings form rejects any threshold that isn't a whole number of 0 or more.
 
 **Reading.**
 
@@ -135,7 +134,12 @@ A threshold of 0 turns its alert off. Turning all three modqueue thresholds off 
 
 **Channels.** Name a channel by its ID (it starts with `C`, and is at the bottom of the channel's details), or a public channel by its name, with or without `#`. An ID keeps working when the channel is renamed, and a private channel needs one. The Slack app must be added to each channel.
 
-**The bot token** is an app-wide secret: Devvit encrypts it, only the developer can set it, from the command line, and moderators never see it. Every installation uses it, so every subreddit the app is installed on posts to the one Slack workspace.
+**The Slack connection.** Each subreddit posts to its own workspace, through a Slack app its moderators made from [slack-app/manifest.json](./slack-app/manifest.json).
+
+- **Connect Slack** takes that app's bot token. It must start `xoxb-`: a user token would post as the person who made it.
+- The app asks Slack whose the token is (`auth.test`), and posts a message to the Notification Channel and the Alert Channel. Only when Slack takes all of them does it keep the token, with the workspace's name (`slack_connection`), in place of any before it, and start a run of the outbox.
+- No form, log line or message shows the token again: it goes only into a request's authorization header. Devvit has no secret per installation, so it is kept in the installation's Redis.
+- Leaving the token empty disconnects Slack. No alerts are sent until it is connected again; what was already queued waits for it.
 
 ## Daily summary
 
@@ -208,7 +212,7 @@ Items and conversations that wait over a week are forgotten when the `weeklyStat
 
 For each mod action, the app works through these steps. Steps 2 to 4 happen even for actions that send no alert, so the context is there when it's needed.
 
-1. **Slack not set up?** Without a bot token or a notification channel nothing happens, and the health log notes which is missing (see [Reading the logs](#reading-the-logs)).
+1. **Slack not set up?** Without Slack connected or a notification channel nothing happens, and the health log notes which is missing (see [Reading the logs](#reading-the-logs)).
 2. **Ban length.** For a ban that doesn't say how long it lasts, the app reads the mod log's 10 most recent bans and takes the matching entry. It tries the entry with the action's own ID first, then one for the same user by the same moderator, then one by the same moderator, and last one within two minutes of the action.
 3. **Ban and mute history.** Each ban, unban, mute and unmute is recorded as moderation metadata: who acted, on whom, when, and its details (for a ban, its length), never the mod note. Records are kept for 90 days, the latest 20 per user. Only unban and unmute alerts read them, so bans and unbans are recorded only while unban alerts are on, and mutes and unmutes only while unmute alerts are on. An unban or unmute alert names the latest ban or mute taken before it. This works even when Reddit delivers the events out of order.
 4. **Activity.** Each action counts toward its moderator's activity by the time it was taken, apart from AutoModerator's and Reddit's actions. A moderator's fifth action within a minute marks a spike.
@@ -298,13 +302,13 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
     - A deletion reads the alerts quoting the post or comment a hundred at a time, and queues their redactions in requests of at most a megabyte, so a busy thread's post, quoted by thousands of alerts, is redacted in full. Redactions wait 5,000 at most, as below.
     - Alerts **Test Slack Connection** or **Simulate Mod Action** send aren't remembered.
 
-**Direct sends.** **Test Slack Connection** and **Simulate Mod Action** skip the queue, because a moderator is waiting for the answer. They retry after 1, 2 and 4 seconds before reporting failure. A simulated alert says it is one, in its text and footer, and its channel override can name only the Notification or Alert Channel: the bot token is the app's, and reaches every channel the Slack app is in. An alert the queue can't take, when Redis fails, goes straight to Slack too; it isn't remembered, so it keeps its quotes if its content is deleted later.
+**Direct sends.** **Test Slack Connection** and **Simulate Mod Action** skip the queue, because a moderator is waiting for the answer. They retry after 1, 2 and 4 seconds before reporting failure. A simulated alert says it is one, in its text and footer, and its channel override can name only the Notification or Alert Channel: the bot token reaches every channel the Slack app is in. An alert the queue can't take, when Redis fails, goes straight to Slack too; it isn't remembered, so it keeps its quotes if its content is deleted later.
 
 ## Data stored
 
 **Content and metadata.** The [Privacy Policy](./PRIVACY-POLICY.md#content-and-metadata) defines both, as Reddit's rules for apps use them. **Content** is what redditors write: titles and text of posts and comments. **Metadata** is the record of moderation: action types, IDs of posts, comments and actions, times, ban lengths, and usernames as the moderator who acted or the user acted on. Each key below holds one of them, or nothing about anyone. Only the queue holds content, for at most a day. No key holds a mod note or a Reddit user ID (`t2_…`).
 
-**Redis.** All of this is per installation. Every key expires, or is cleared once it's used.
+**Redis.** All of this is per installation. Every key expires, or is cleared once it's used, apart from the Slack connection, kept until it's replaced or emptied.
 
 | Key                                                                         | Kind                 | Holds                                                                                                                               | Kept for                                                                                         | Limit                   |
 | --------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------- |
@@ -352,9 +356,10 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `slack_outbox_lease`                                                        | none                 | which run is delivering                                                                                                             | 46.1 seconds                                                                                     | 1 key                   |
 | `slack_outbox_last_sent`                                                    | none                 | when Slack was last sent a message                                                                                                  | 1 minute                                                                                         | 1 key                   |
 | `slack_outbox_refusing`                                                     | none                 | the channel Slack last refused an alert to, so only an alert taken there ends the condition                                         | 1 day                                                                                            | one                     |
+| `slack_connection`                                                          | secret               | the bot token of the moderators' Slack app, and the workspace's name                                                                | until Connect Slack replaces or empties it, or the app is uninstalled                            | one                     |
 | `slack_outbox_drain_scheduled`, `slack_outbox_recovery_scheduled`           | none                 | that a follow-up or recovery run is scheduled                                                                                       | until it runs                                                                                    | 1 key each              |
 
-**Settings** are stored by Devvit for each installation, apart from the bot token, an encrypted app-wide secret that moderators can't read.
+**Settings** are stored by Devvit for each installation. The Slack app's bot token isn't one of them: **Connect Slack** keeps it in Redis (`slack_connection`), and no form shows it.
 
 **Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Content deleted before an alert is sent leaves it; content deleted after, while the alert is within the channels' retention (`slackRetentionDays`, at most 90 days), is taken out of it in Slack, by an edit or, failing that, by deleting the alert. Alerts stay in Slack under your workspace's message retention.
 
@@ -362,7 +367,7 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 
 ## Access control
 
-Reddit shows the five menu actions only to moderators, but Devvit runs a menu action's handler for whoever invokes it. So each menu action, and each form it opens, checks that the user has moderator permissions in the subreddit. If they don't, or if Reddit can't say, the action is refused with `🔒 Only this subreddit's moderators can use this.`
+Reddit shows the six menu actions only to moderators, but Devvit runs a menu action's handler for whoever invokes it. So each menu action, and each form it opens, checks that the user has moderator permissions in the subreddit. If they don't, or if Reddit can't say, the action is refused with `🔒 Only this subreddit's moderators can use this.`
 
 ## Troubleshooting
 
@@ -376,7 +381,7 @@ Moderators can't read the app's logs, so this is where they see how it's doing. 
 | Current problems     | Each health condition in force (see [Reading the logs](#reading-the-logs)), with what the app saw and for how long, and what to do; or `None`.                       |
 | Alerts waiting       | How many alerts wait for Slack, and how long the oldest has waited.                                                                                                  |
 | Last alert delivered | When Slack last took an alert, or `None in the last week`.                                                                                                           |
-| Slack app            | `Set up`, or what is missing: the bot token or the notification channel. Without both, no alerts are sent.                                                           |
+| Slack app            | `Connected to <workspace>`, or what is missing: the connection (use **Connect Slack**) or the notification channel. Without both, no alerts are sent.                |
 | Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds and Modmail Waiting Alert are 0; or `Unknown`. |
 | Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                                                 |
 | Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.                             |
@@ -389,9 +394,20 @@ A line reads `Unknown: Redis could not be read` when Redis fails; the rest still
 | Result                                    | Meaning                                                                                                                       |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `🧪 Test alert sent!`                     | Slack accepted the message, in the notification channel.                                                                      |
-| `⚠️ No Slack bot token is set.`           | The developer sets it: see [slack-app/README.md](./slack-app/README.md).                                                      |
+| `⚠️ Slack isn't connected.`               | Use **Connect Slack**: see [slack-app/README.md](./slack-app/README.md).                                                      |
 | `⚠️ No Notification Channel is set.`      | Set it in the app's settings.                                                                                                 |
 | `❌ Slack did not accept the test alert.` | Slack refused it or couldn't be reached. Check the channel, that the Slack app is in it, and the logs for Slack's error code. |
+
+### Connect Slack
+
+| Result                                  | Meaning                                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `✅ Connected to <workspace>.`          | Slack took the token and a message in each alert channel. Alerts are sent with it from now on.             |
+| `❌ That isn't a bot token.`            | It doesn't start `xoxb-`. Copy the Bot User OAuth Token from the Slack app's **OAuth & Permissions** page. |
+| `❌ Slack didn't take that token (…)`   | Slack's error code says why: `invalid_auth` for a token it doesn't know, `token_revoked` for one revoked.  |
+| `❌ Slack didn't post to <channel> (…)` | Usually `not_in_channel`: add the Slack app to the channel, then connect again. Nothing was kept.          |
+| `⚠️ Set the Notification Channel …`     | Set it in the app's settings first, as connecting posts to it.                                             |
+| `Slack is disconnected: …`              | The token was left empty. No alerts are sent until Slack is connected again.                               |
 
 ### Common problems
 
@@ -431,7 +447,7 @@ Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`
 
 | Condition                                        | Level | Starts when                                                                                                                                            | Ends when                                      | Modmail            |
 | ------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------ |
-| No Slack bot token is set                        | WARN  | a mod action finds no bot token                                                                                                                        | a mod action finds one                         | never              |
+| Slack isn't connected                            | WARN  | a mod action finds no connection                                                                                                                       | a mod action finds one                         |
 | No Slack channel is set                          | WARN  | a mod action finds no notification channel                                                                                                             | a mod action finds one                         | never              |
 | Slack is refusing alerts                         | ERROR | Slack refuses an alert with an error code, and it is dropped                                                                                           | Slack takes an alert to the channel it refused | at once            |
 | Slack is not taking alerts                       | WARN  | a run leaves an alert queued after Slack failed or timed out                                                                                           | Slack takes an alert                           | after half an hour |

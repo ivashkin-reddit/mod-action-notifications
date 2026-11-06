@@ -21,7 +21,6 @@ import {
     forModerators,
     readOnlyForm,
     sendSimulation,
-    sendTestAlert,
     setUpFromMenu,
     statusForm,
     teamStats,
@@ -42,6 +41,8 @@ import {
 } from "./scheduledJobs.js";
 import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
+import { connectForm, connectFromForm, sendTestAlert, testForm } from "./slackConnection.js";
+import type { ConnectFormValues } from "./slackConnection.js";
 import { DIGEST_JOB_NAME } from "./statistics/index.js";
 import { alertOnModAction, onCommentDelete, onPostDelete } from "./triggers.js";
 import type { CommentDeleteEvent } from "./triggers.js";
@@ -193,26 +194,17 @@ Devvit.addSchedulerJob({
 
 // Forms and menu items, for moderators only: each checks the user who invokes it.
 
-const testForm = Devvit.createForm(
-    {
-        title: "Mod Action Notifications",
-        description: "Test your bot configuration and send a test alert to Slack",
-        fields: [
-            {
-                name: "info",
-                label: "Bot Status",
-                type: "paragraph",
-                defaultValue:
-                    'This app tells your mod team in Slack about moderator actions. Click "Send Test Alert" to check that it can post to your Notification Channel.',
-                disabled: true,
-            },
-        ],
-        acceptLabel: "Send Test Alert",
-        cancelLabel: "Close",
-    },
-    async (_event: unknown, context: MenuContext): Promise<void> => {
+const slackTestForm = Devvit.createForm(testForm, async (_event: unknown, context: MenuContext): Promise<void> => {
+    await forModerators(context, async (): Promise<void> => {
+        await sendTestAlert(context);
+    });
+});
+
+const connectSlackForm = Devvit.createForm(
+    connectForm,
+    async ({ values }: Readonly<{ values: ConnectFormValues }>, context: MenuContext): Promise<void> => {
         await forModerators(context, async (): Promise<void> => {
-            await sendTestAlert(context);
+            await connectFromForm(values, context);
         });
     },
 );
@@ -233,12 +225,23 @@ const simulateActionForm = Devvit.createForm(
 );
 
 Devvit.addMenuItem({
+    label: "Connect Slack",
+    location: "subreddit",
+    forUserType: "moderator",
+    onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
+        await forModerators(context, (): void => {
+            context.ui.showForm(connectSlackForm);
+        });
+    },
+});
+
+Devvit.addMenuItem({
     label: "Test Slack Connection",
     location: "subreddit",
     forUserType: "moderator",
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
         await forModerators(context, (): void => {
-            context.ui.showForm(testForm);
+            context.ui.showForm(slackTestForm);
         });
     },
 });

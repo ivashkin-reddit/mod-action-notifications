@@ -143,7 +143,7 @@ describe("team statistics", (): void => {
     it("are counted while Slack is not set up", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
 

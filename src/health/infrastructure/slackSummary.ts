@@ -7,8 +7,6 @@ const MS_PER_SECOND = 1000;
 function summaryMessage({ day, lines }: DailySummary): SlackMessage {
     return {
         text: `📊 Daily summary for ${day} (UTC)`,
-        username: "Mod Action Notifications",
-        icon_emoji: ":bar_chart:",
         attachments: [
             {
                 color: "#0088ff",

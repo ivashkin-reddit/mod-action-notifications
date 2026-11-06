@@ -128,7 +128,7 @@ describe("a report", (): void => {
     it("sends nothing while Slack is not set up", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { ...URGENT, reportPileUpThreshold: 1, slackBotToken: undefined });
+        const app = await loadApp(devvit, { ...URGENT, reportPileUpThreshold: 1, connectedToken: undefined });
 
         await app.fire("PostReport", postReported({ reason: "personal information", numReports: 5 }));
 

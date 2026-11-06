@@ -109,8 +109,8 @@ async function deliveryOf(response: SlackResponse, retryAfter: number | undefine
         : { outcome: "rejected", failure };
 }
 
-/** The Web API methods the app calls: all three need only the chat:write scope. */
-type SlackMethod = "chat.postMessage" | "chat.update" | "chat.delete";
+/** The Web API methods the app calls: the chat methods need only the chat:write scope, auth.test none. */
+type SlackMethod = "auth.test" | "chat.postMessage" | "chat.update" | "chat.delete";
 
 /**
  * Calls a Web API method once, with the Slack app's bot token. The token goes in the authorization header, never in
@@ -156,7 +156,7 @@ export async function postMessage(token: string, message: SlackMessage): Promise
 
 /**
  * Puts `message` in place of the app's message at `posted`, once: its text and attachments, which replace all the
- * old ones, as an empty list removes them (docs.slack.dev, chat.update). The name and icon it was posted with stay.
+ * old ones, as an empty list removes them (docs.slack.dev, chat.update).
  */
 export async function updateMessage(token: string, posted: Posted, message: SlackMessage): Promise<Delivery> {
     return await callSlack(token, "chat.update", {
@@ -165,6 +165,14 @@ export async function updateMessage(token: string, posted: Posted, message: Slac
         text: message.text,
         attachments: message.attachments ?? [],
     });
+}
+
+/** Asks Slack, once, whose the token is; the name of its workspace, when Slack takes it. */
+async function authTest(token: string): Promise<Delivery<Readonly<{ team: string }>>> {
+    const delivery = await callSlack(token, "auth.test", {});
+    return delivery.outcome === "delivered"
+        ? { outcome: "delivered", answer: { team: textIn(delivery.answer, "team") } }
+        : delivery;
 }
 
 /** Deletes the app's message at `posted`, once. */
@@ -200,20 +208,36 @@ function retriesDirectly(delivery: Delivery<unknown>, retryCount: number): boole
 }
 
 /**
- * Posts the message, retrying server errors, rate limiting and network errors up to three times with exponential
- * backoff; true when Slack accepted it. Never rejects.
+ * Makes a call for a moderator waiting on it, retrying server errors, rate limiting and network errors up to three
+ * times with exponential backoff; how the last attempt went. Never rejects.
  */
-async function postToSlack(token: string, message: SlackMessage, retryCount: number): Promise<boolean> {
-    const delivery = await postMessage(token, message);
-    if (delivery.outcome === "delivered") {
-        return true;
-    }
+async function withDirectRetries<T>(call: () => Promise<Delivery<T>>, retryCount = 0): Promise<Delivery<T>> {
+    const delivery = await call();
     if (!retriesDirectly(delivery, retryCount)) {
+        return delivery;
+    }
+    await wait(backoffMs(retryCount));
+    return await withDirectRetries(call, retryCount + 1);
+}
+
+/** Posts the message for a moderator waiting on it, retrying as withDirectRetries does. Never rejects. */
+export async function postDirectly(token: string, message: SlackMessage): Promise<Delivery<Posted>> {
+    return await withDirectRetries(async (): Promise<Delivery<Posted>> => await postMessage(token, message));
+}
+
+/** Asks Slack whose the token is, for a moderator waiting on it, retrying as withDirectRetries does. */
+export async function checkToken(token: string): Promise<Delivery<Readonly<{ team: string }>>> {
+    return await withDirectRetries(async (): Promise<Delivery<Readonly<{ team: string }>>> => await authTest(token));
+}
+
+/** Posts the message as postDirectly does; true when Slack accepted it, the failure logged when not. */
+async function postToSlack(token: string, message: SlackMessage): Promise<boolean> {
+    const delivery = await postDirectly(token, message);
+    if (delivery.outcome !== "delivered") {
         logFailure(delivery.failure);
         return false;
     }
-    await wait(backoffMs(retryCount));
-    return await postToSlack(token, message, retryCount + 1);
+    return true;
 }
 
 /**
@@ -221,7 +245,7 @@ async function postToSlack(token: string, message: SlackMessage, retryCount: num
  * the result. Alerts go through the outbox instead.
  */
 export function createDirectSender(token: string): DirectSlackSender {
-    return async (message: SlackMessage): Promise<boolean> => await postToSlack(token, message, 0);
+    return async (message: SlackMessage): Promise<boolean> => await postToSlack(token, message);
 }
 
 /** Sends a test message to the channel, a channel ID or name; true when Slack accepted it. */
@@ -231,8 +255,6 @@ export async function sendTestMessage(token: string, channel: string): Promise<b
         inChannel(
             {
                 text: "🧪 Test message from Mod Action Notifications",
-                username: "Mod Action Notifications (Test)",
-                icon_emoji: ":robot_face:",
                 attachments: [
                     {
                         color: "#00ff00",
@@ -246,6 +268,5 @@ export async function sendTestMessage(token: string, channel: string): Promise<b
             },
             channel,
         ),
-        0,
     );
 }

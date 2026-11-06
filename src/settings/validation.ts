@@ -2,9 +2,6 @@
 
 /** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
 export const MAX_SLACK_RETENTION_DAYS = 90;
-/** A Slack bot token starts so; a user token (xoxp-) would post as the person who made it. */
-const BOT_TOKEN_PREFIX = "xoxb-";
-const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
 const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
 const HISTORY_DAYS_PROBLEM = "Enter a whole number of days, 0 or more (0 leaves the history out)";
@@ -14,11 +11,6 @@ const MAX_DORMANT_DAYS = 365;
 /** An approval is remembered for at most this many days. */
 const MAX_EDITS_AFTER_APPROVAL_DAYS = 30;
 const APPROVAL_DAYS_PROBLEM = "Enter a whole number of days, from 0 to 30 (0 turns this alert off)";
-
-/** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
-export function botTokenProblem(text: string): string | undefined {
-    return text === "" || text.startsWith(BOT_TOKEN_PREFIX) ? undefined : BOT_TOKEN_PROBLEM;
-}
 
 /** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
 export function wholeNumberProblem(value: number | undefined): string | undefined {

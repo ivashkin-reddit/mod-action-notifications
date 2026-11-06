@@ -242,14 +242,12 @@ describe("an alert in Slack quoting Reddit content", (): void => {
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const { text, attachments, username, icon_emoji: iconEmoji } = await alertWithoutQuotes();
+            const { text, attachments } = await alertWithoutQuotes();
             const app = await loadApp(devvit);
             await app.fire("ModAction", removedComment);
 
             expect(JSON.parse((await app.context.redis.get(FIRST_ALERT_KEY)) ?? "")).toStrictEqual({
                 text,
-                username,
-                icon_emoji: iconEmoji,
                 channel: CHANNEL,
                 attachments,
             });

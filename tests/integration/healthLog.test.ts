@@ -13,14 +13,14 @@ const TEST_OPTIONS = { timeout: 5000 };
 const DAY_SECONDS = 86_400;
 const DAY = DAY_SECONDS * 1000;
 const NO_TOKEN =
-    "[health] No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.";
+    "[health] Slack isn't connected, so no alerts are sent. A moderator connects it with Connect Slack, as the app's README says.";
 
 // A problem that lasts is logged when it starts, not each time the app meets it: Devvit keeps only 5,000 log entries.
 describe("a missing bot token", (): void => {
     it("is logged once, however many mod actions find it", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
 
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
@@ -33,7 +33,7 @@ describe("a missing bot token", (): void => {
     it("is logged again each day it lasts, saying since when", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
         await app.advance(DAY - 1);
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
@@ -55,7 +55,7 @@ describe("a missing bot token", (): void => {
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const app = await loadApp(devvit, { slackBotToken: undefined });
+            const app = await loadApp(devvit, { connectedToken: undefined });
 
             await app.fire("ModAction", removedPost());
 
@@ -70,16 +70,14 @@ describe("a missing bot token", (): void => {
     it("is logged as resolved once a bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
         await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
-        app.settings.slackBotToken = BOT_TOKEN;
+        app.connectSlack(BOT_TOKEN);
 
         await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
-        expect(console.info).toHaveBeenCalledExactlyOnceWith(
-            "[health] A Slack bot token is set: alerts are sent again.",
-        );
+        expect(console.info).toHaveBeenCalledExactlyOnceWith("[health] Slack is connected: alerts are sent again.");
     });
 });
 
@@ -120,7 +118,7 @@ describe("a Slack that refuses alerts", (): void => {
         await app.fire("ModAction", removedPost({ id: "ModAction_3" }));
 
         expect(console.error).toHaveBeenCalledExactlyOnceWith(
-            "[health] Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
+            "[health] Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.",
         );
         expect(console.info).toHaveBeenCalledExactlyOnceWith("[health] Slack is taking alerts again.");
     });

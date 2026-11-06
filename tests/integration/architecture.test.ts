@@ -85,6 +85,7 @@ const EDGE_FILES = [
     "main.ts",
     "menuActions.ts",
     "scheduledJobs.ts",
+    "slackConnection.ts",
     "triggers.ts",
 ];
 // Modules without layers: each is its own files, importing only each other.

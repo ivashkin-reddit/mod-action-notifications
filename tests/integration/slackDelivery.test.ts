@@ -31,7 +31,7 @@ function outboxJobs(
 
 /** The health log's line for Slack refusing alerts, with what Slack answered. */
 function refusing(detail: string): string {
-    return `[health] Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.`;
+    return `[health] Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.`;
 }
 
 /** The health log's line for Slack not taking alerts, with why. */

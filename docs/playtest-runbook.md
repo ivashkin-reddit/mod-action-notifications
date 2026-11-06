@@ -8,7 +8,7 @@ It takes about 1 hour 30 minutes, most of it waiting for the modmail alert, whic
 
 You need:
 
-- **A test subreddit** you moderate, and **a test Slack workspace** with the Slack app in two channels: one for notifications, one for alerts.
+- **A test subreddit** you moderate, and **a test Slack workspace** with a Slack app made from [slack-app/manifest.json](../slack-app/manifest.json) in two channels: one for notifications, one for alerts. Have its Bot User OAuth Token to hand.
 - **Three Reddit accounts:**
     - **Mod A**, the account you playtest with;
     - **Mod B**, a second moderator with every permission;
@@ -31,7 +31,8 @@ Then:
     Leave the rest at their defaults.
 
 - [ ] As **User**, submit five text posts titled `Playtest P1` to `Playtest P5`.
-- [ ] As **Mod A**, choose **Test Slack Connection** from the mod tools menu. **Expect:** the test message in the notifications channel. Then **Show Bot Status**. **Expect:** "Modqueue monitor: On, scheduled (cron …)", and no word of a missing bot token (if there is, run `npx devvit settings set slackBotToken`).
+- [ ] As **Mod A**, choose **Connect Slack** from the mod tools menu and paste the bot token. **Expect:** "✅ Connected to <workspace>", and a "🔗 Connected" message in both channels.
+- [ ] Choose **Test Slack Connection**. **Expect:** the test message in the notifications channel. Then **Show Bot Status**. **Expect:** "Slack app: Connected to <workspace>" and "Modqueue monitor: On, scheduled (cron …)".
 
 ## Steps
 
@@ -119,7 +120,16 @@ Then:
 - [ ] **Expect:** the unban alert names the ban it lifts: who issued it, when, and for 3 days.
 - **Settles:** the app's account can read mod notes, and Devvit's `getModNotes` accepts the notes mod actions make.
 
-### 13. Logs
+### 13. Connecting Slack
+
+- [ ] **Do:** as **Mod A**, choose **Connect Slack** and paste `xoxb-not-a-real-token`.
+- [ ] **Expect:** "❌ Slack didn't take that token (invalid_auth)", and alerts still go: the connection from the start is kept.
+- [ ] **Do:** remove the Slack app from the alerts channel, then connect with the real token.
+- [ ] **Expect:** "❌ Slack didn't post to <alerts channel> (not_in_channel)". Add the app back and connect again: "✅ Connected".
+- [ ] **Do:** open **Connect Slack** once more. **Expect:** the token field is empty: the app never shows the token.
+- **Settles:** `auth.test` and posting work through Devvit's fetch, Slack's error codes reach the moderator, and the token is kept and used per installation.
+
+### 14. Logs
 
 - [ ] **Expect:** no `ERROR` lines in the logs for the session. A `WARN` line from the table in [OPERATORS-GUIDE.md](../OPERATORS-GUIDE.md#reading-the-logs) points to the step that failed.
 

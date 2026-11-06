@@ -1,7 +1,6 @@
 import type { SettingsFormField } from "@devvit/public-api";
 import {
     approvalDaysProblem,
-    botTokenProblem,
     dormantDaysProblem,
     historyDaysProblem,
     retentionProblem,
@@ -235,27 +234,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
 ];
 
 /**
- * The settings: the Slack app's bot token, which the developer sets for every installation, then the form moderators
- * fill in, and the validated configuration read from it.
+ * The settings: the form moderators fill in, and the validated configuration read from it. The Slack app's bot token
+ * is not among them: moderators connect it with Connect Slack, and the app keeps it where no form shows it.
  *
  * Devvit stores the values under these setting names, so renaming one loses what was saved. The form lists the
  * settings in this order.
  */
 export function settingsDefinitions(modActions: ModActionChoices): SettingsFormField[] {
     return [
-        {
-            type: "string",
-            name: "slackBotToken",
-            label: "Slack Bot Token",
-            helpText:
-                "The Slack app's Bot User OAuth Token (xoxb-...). The app's developer sets it with `devvit settings set slackBotToken`",
-            // An app-wide secret: Devvit encrypts it, and only the developer can set it, from the command line.
-            // Moderators never see it.
-            scope: "app",
-            isSecret: true,
-            onValidate: ({ value }: Readonly<{ value?: string | undefined }>): string | undefined =>
-                botTokenProblem((value ?? "").trim()),
-        },
         {
             type: "select",
             name: "enabledActions",

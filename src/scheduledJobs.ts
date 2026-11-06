@@ -28,6 +28,7 @@ import {
     setupMonitoring,
 } from "./modqueue/index.js";
 import type { ModerationQueues, MonitoringSetup } from "./modqueue/index.js";
+import { continuationStarted } from "./slack/delivery.js";
 import {
     createDevvitDigestScheduler,
     createRedisStatisticsStore,
@@ -143,6 +144,9 @@ export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
 export async function deliverQueuedAlerts(context: AppContext): Promise<void> {
     const config = await configOf(context);
     if (!alertsConfigured(config)) {
+        // This run has started, so a drain scheduled once Slack is set up again, as Connect Slack schedules one, is
+        // not taken as covered by it.
+        await continuationStarted(context);
         return;
     }
     try {

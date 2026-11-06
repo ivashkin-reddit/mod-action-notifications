@@ -19,7 +19,7 @@ describe("the modqueue monitor", (): void => {
     it("does nothing without a bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
 
         await app.runJob("modqueueMonitor");
 
@@ -39,8 +39,6 @@ describe("the modqueue monitor", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "⚠️ Modqueue Alert: 3 items pending",
-                username: "Mod Action Notifications",
-                icon_emoji: ":warning:",
                 channel: CHANNEL,
                 attachments: [
                     {
@@ -162,8 +160,6 @@ describe("the modqueue monitor", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "⏰ Unmoderated Content Alert: 6 items over 24h old",
-                username: "Mod Action Notifications",
-                icon_emoji: ":alarm_clock:",
                 channel: CHANNEL,
                 attachments: [
                     {
