@@ -55,6 +55,38 @@ describe("an unban or unmute", (): void => {
         );
     });
 
+    // The note is shown, where the setting allows it, in the alert for the ban itself.
+    it.each([
+        ["on", true],
+        ["off", false],
+    ])(
+        "reminds moderators of the ban's length, never its note, with mod notes %s",
+        TEST_OPTIONS,
+        async (_label: string, includeModNote: boolean): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { includeModNote });
+            app.context.reddit.modLog = [
+                {
+                    id: "ModAction_1",
+                    moderatorName: "ModA",
+                    createdAt: NOW,
+                    description: "Spamming",
+                    target: { author: "Troll" },
+                },
+            ];
+            await app.fire("ModAction", bannedUser());
+            await app.advance(DAY);
+
+            await app.fire("ModAction", unbanAt(new Date(NOW.getTime() + DAY)));
+
+            expect(relatedBan(app.slack.messages[1])).toBe(
+                "• *Related Ban:* Moderator <https://www.reddit.com/u/ModA|u/ModA> • on 2026-11-04T12:00:00.000Z",
+            );
+            expect(JSON.stringify(app.slack.messages[1])).not.toContain("Spamming");
+        },
+    );
+
     it(
         "keeps bans and unbans in Redis for 90 days, and reminds of a ban only once",
         TEST_OPTIONS,

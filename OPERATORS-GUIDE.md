@@ -155,7 +155,7 @@ For each mod action, the app works through these steps. Steps 2 to 4 happen even
 - a link to the content and a quote of up to 200 characters;
 - when the action was taken (UTC);
 - for bans, the length, any details, and the mod note if enabled;
-- for unbans and unmutes, the ban or mute lifted;
+- for unbans and unmutes, the ban or mute lifted: who issued it, when, and its details (the length), never its note;
 - a status line for unknown moderators, AutoModerator, Reddit's accounts and activity spikes.
 
 Text from Reddit is escaped, so text such as `<!channel>` in a post shows as written and notifies no one.

@@ -14,7 +14,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Security alerts.** An action by an account that isn't on your mod list is sent as a security alert, to a separate channel if you like. Actions by Reddit's own accounts (u/reddit for Crowd Control and Reddit's filters, and Anti-Evil Operations for admin removals) are labelled as Reddit actions, not as security alerts.
 
-**Ban and mute context.** A ban alert shows how long the ban lasts, read from the mod log. When a user is unbanned or unmuted, the alert names the ban or mute being lifted: who issued it, when and why. That context is remembered for 90 days.
+**Ban and mute context.** A ban alert shows how long the ban lasts, read from the mod log. When a user is unbanned or unmuted, the alert names the ban or mute being lifted: who issued it, when, and for how long. That context is remembered for 90 days.
 
 **Activity spikes.** When one moderator takes five or more actions within a minute, the alert says so.
 

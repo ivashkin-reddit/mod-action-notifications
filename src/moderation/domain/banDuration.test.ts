@@ -98,6 +98,8 @@ describe("how a ban's length reads in an alert", (): void => {
         ["its label, without a length", { banDurationLabel: "until appeal", details: "x" }, "until appeal"],
         ["its details, trimmed, without a label", { details: " 3 days " }, "3 days"],
         ["a length in its note, without details", { description: "7 day ban" }, "7 days"],
+        // The note is the moderator's, shown only as a mod note, where the setting allows it.
+        ["no length for a note that states none", { description: "Spamming" }, "Unknown Duration"],
         ["nothing known", {}, "Unknown Duration"],
     ])("gives %s", TEST_OPTIONS, (_label: string, fields: Readonly<Partial<typeof BAN>>, text: string): void => {
         expect.hasAssertions();
@@ -229,6 +231,16 @@ describe("completing a ban from its mod log entry", (): void => {
         expect(withBanLogEntry(BAN, logged({ details: undefined, description: "permanent" }))).toMatchObject({
             banDuration: 0,
             banDurationLabel: "Permanent Ban",
+        });
+    });
+
+    it("takes no length from a note that states none", TEST_OPTIONS, (): void => {
+        expect.hasAssertions();
+
+        expect(withBanLogEntry(BAN, logged({ details: undefined, description: "Spamming" }))).toMatchObject({
+            banDuration: undefined,
+            banDurationLabel: undefined,
+            description: "Spamming",
         });
     });
 

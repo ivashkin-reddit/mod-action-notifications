@@ -43,7 +43,7 @@ Alerts can contain:
 
 - usernames: of the moderator who acted, of the user acted on, and of the author of a deleted post;
 - post titles, links, and up to 200 characters of a removed post's or comment's text;
-- for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for an unban or unmute, the ban or mute it lifts;
+- for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for an unban or unmute, who issued the ban or mute it lifts, when, and its length;
 - for modqueue alerts, counts, and links to the oldest items waiting;
 - a deleted post's score.
 

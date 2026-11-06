@@ -51,6 +51,15 @@ export function parseBanDuration(text: string | undefined): BanDuration {
     return { days, label: daysLabel(days) };
 }
 
+/**
+ * The length a ban's note states, such as "7 day ban"; none for a note that states none. The note is the
+ * moderator's, shown only as a mod note where the setting allows it, so its text is never taken as the length.
+ */
+function lengthInNote(note: string | undefined): BanDuration {
+    const stated = parseBanDuration(note);
+    return stated.days === undefined ? { days: undefined, label: undefined } : stated;
+}
+
 /** Whether a ban says anything about its length; when not, the mod log is consulted. */
 export function hasBanDurationMetadata(modAction: ModAction): boolean {
     return (
@@ -72,10 +81,7 @@ export function banDurationText(modAction: ModAction): string {
     if (details !== "") {
         return details;
     }
-    return (
-        (isBlank(modAction.description) ? undefined : parseBanDuration(modAction.description).label) ??
-        "Unknown Duration"
-    );
+    return lengthInNote(modAction.description).label ?? "Unknown Duration";
 }
 
 /** Lower-cased, or undefined for no text. */
@@ -124,9 +130,12 @@ function unlessBlank(value: string | undefined, fallback: string | undefined): s
     return isBlank(value) && !isBlank(fallback) ? fallback : value;
 }
 
-/** The ban, completed from its mod log entry: details and reason it lacks, and the length the entry gives. */
+/**
+ * The ban, completed from its mod log entry: details and note it lacks, and the length the entry gives: its
+ * details, or else a length its note states.
+ */
 export function withBanLogEntry(modAction: ModAction, entry: BanLogEntry): ModAction {
-    const parsed = parseBanDuration(entry.details ?? entry.description);
+    const parsed = isBlank(entry.details) ? lengthInNote(entry.description) : parseBanDuration(entry.details);
     const fromEntry =
         parsed.days === undefined
             ? { banDurationLabel: unlessBlank(modAction.banDurationLabel, parsed.label) }

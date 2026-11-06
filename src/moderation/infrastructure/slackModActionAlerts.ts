@@ -84,11 +84,11 @@ function relatedLines(modAction: ModAction): readonly string[] {
     if (related === undefined) {
         return [];
     }
-    const detail = isBlank(related.details) ? related.description : related.details;
     const pieces = [
         ...(isBlank(related.moderatorName) ? [] : [`Moderator ${userLink(related.moderatorName)}`]),
         ...(related.occurredAt === undefined ? [] : [`on ${related.occurredAt.toISOString()}`]),
-        ...(isBlank(detail) ? [] : [`Details ${escapeText(detail)}`]),
+        // Its details, never its note: the note is shown, where the setting allows it, in the ban's own alert.
+        ...(isBlank(related.details) ? [] : [`Details ${escapeText(related.details)}`]),
     ];
     const title = disciplineStep(modAction.type)?.kind === "mute" ? "Related Mute" : "Related Ban";
     return pieces.length === 0 ? [] : [`• *${title}:* ${pieces.join(" • ")}`];

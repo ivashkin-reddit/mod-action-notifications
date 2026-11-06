@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { bannedUser } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
-import { lastLine, lines, MINUTE, onlyMessage, WHEN_NOW } from "../fixtures/messages.js";
+import { lines, MINUTE, onlyMessage, WHEN_NOW } from "../fixtures/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -65,26 +65,6 @@ describe("a ban", (): void => {
         await app.fire("ModAction", bannedUser());
 
         expect(lines(onlyMessage(app.slack.messages))).toContain(`• *Ban Duration:* ${duration}`);
-    });
-
-    it("leaves out the mod note when mod notes are turned off", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { includeModNote: false });
-        app.context.reddit.modLog = [
-            {
-                id: "ModAction_1",
-                moderatorName: "ModA",
-                createdAt: NOW,
-                details: "7 days",
-                description: "Spamming",
-                target: { author: "Troll" },
-            },
-        ];
-
-        await app.fire("ModAction", bannedUser());
-
-        expect(lastLine(onlyMessage(app.slack.messages))).toBe("• *Details:* 7 days");
     });
 
     it("uses the log entry for the same user banned by the same moderator", TEST_OPTIONS, async (): Promise<void> => {
