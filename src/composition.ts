@@ -8,34 +8,18 @@ import {
     raiseCondition,
 } from "./health/index.js";
 import type { Condition, ConditionPorts, HealthEvent, NoticeReddit } from "./health/index.js";
-import {
-    createModListCache,
-    createRedditModerationLookups,
-    createRedisModerationRecords,
-    createSlackModActionAlerts,
-    modActionFromTriggerEvent,
-    notifyModAction,
-} from "./moderation/index.js";
-import type { ModActionEvent, ModActionPresentation, ModerationConfig, ModerationPorts } from "./moderation/index.js";
+import type { ModActionPresentation } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, createRedisMonitorStore } from "./modqueue/index.js";
 import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
-import {
-    alertOnUserDeletion,
-    createRedditPostLookup,
-    createRedisDeletionClaims,
-    createSlackPostDeletionAlerts,
-    postDeletionFromTriggerEvent,
-} from "./postDeletion/index.js";
-import type { PostDeleteEvent, PostDeletionConfig } from "./postDeletion/index.js";
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
-import { createSlackOutbox, forgetContent } from "./slack/delivery.js";
+import { createSlackOutbox } from "./slack/delivery.js";
 import type { DeliveryHealth, SlackOutbox } from "./slack/delivery.js";
 
 /**
- * The composition root's wiring: for each trigger and scheduler job, read the settings and build the capability's
- * adapters from that handler's context. main.ts registers the handlers, and menuActions.ts does what menu items and
- * forms do. Without a bot token and a channel, alerts have nowhere to go: the handlers that send them do nothing.
+ * The composition root's shared wiring: the settings, Slack's setup, the health log and the outbox, built from a
+ * handler's context. triggers.ts, scheduledJobs.ts and menuActions.ts do what each handler does, and main.ts registers
+ * them. Without a bot token and a channel, alerts have nowhere to go: the handlers that send them do nothing.
  */
 
 /** The Devvit APIs the app calls. Trigger, scheduler, menu and form contexts all satisfy this. */
@@ -79,10 +63,8 @@ export type AppContext = Readonly<{
     subredditName?: string | undefined;
 }>;
 
-// These live as long as the app process, which can serve several installations: each installation's last settings
-// read successfully, and its mod list as last fetched.
+// Each installation's last settings read successfully, for as long as the app process lives: it can serve several.
 const loadConfig = createConfigLoader();
-const modListCache = createModListCache();
 
 export async function configOf(context: AppContext): Promise<AppConfig> {
     return await loadConfig(context.settings, context.subredditId);
@@ -111,7 +93,7 @@ function conditionPorts(context: AppContext): ConditionPorts {
 }
 
 /** Whether alerts can be sent, noting for the health log whether the bot token or the channel is missing. */
-async function slackReady(context: AppContext, config: AppConfig): Promise<boolean> {
+export async function slackReady(context: AppContext, config: AppConfig): Promise<boolean> {
     const conditions = conditionPorts(context);
     const setup = slackSetup(config);
     await (setup === "token-missing"
@@ -123,17 +105,6 @@ async function slackReady(context: AppContext, config: AppConfig): Promise<boole
     return setup === "set-up";
 }
 
-function moderationConfig(config: AppConfig): ModerationConfig {
-    return {
-        enabledActions: config.enabledActions,
-        excludedModerators: config.excludedModerators,
-        flagUnknownModerators: config.flagUnknownModerators,
-        securityAlerts: config.securityAlerts,
-        banHistoryDays: config.banHistoryDays,
-        enableAutoModAlerts: config.enableAutoModAlerts,
-    };
-}
-
 export function monitorThresholds(config: AppConfig): MonitorThresholds {
     return {
         queueSizeThreshold: config.modqueueThreshold,
@@ -142,10 +113,6 @@ export function monitorThresholds(config: AppConfig): MonitorThresholds {
         spamQueueThreshold: config.spamQueueThreshold,
         editedQueueThreshold: config.editedQueueThreshold,
     };
-}
-
-function postDeletionConfig(config: AppConfig): PostDeletionConfig {
-    return { upvoteThreshold: config.postDeletionUpvoteThreshold };
 }
 
 /** The installation's health log, where the outbox and the monitor report lasting problems. */
@@ -184,76 +151,9 @@ export function modActionPresentation(config: AppConfig): ModActionPresentation 
     };
 }
 
-function moderationPorts(context: AppContext, config: AppConfig): ModerationPorts {
-    return {
-        records: createRedisModerationRecords(context.redis),
-        lookups: createRedditModerationLookups(context.reddit, {
-            cache: modListCache,
-            installation: context.subredditId,
-        }),
-        alerts: createSlackModActionAlerts(outboxOf(context, config).send, modActionPresentation(config)),
-    };
-}
-
 export function monitorJobPorts(context: AppContext): MonitorJobPorts {
     return {
         store: createRedisMonitorStore(context.redis),
         scheduler: createDevvitMonitorScheduler(context.scheduler),
     };
-}
-
-export async function alertOnModAction(event: ModActionEvent, context: AppContext): Promise<void> {
-    await noteEvent(createRedisEventStore(context.redis), "mod-action", 1);
-    const config = await configOf(context);
-    if (!(await slackReady(context, config))) {
-        return;
-    }
-    await notifyModAction(modActionFromTriggerEvent(event), moderationConfig(config), moderationPorts(context, config));
-}
-
-/** What the app reads from a CommentDelete trigger event; Devvit's event type satisfies it. */
-export type CommentDeleteEvent = Readonly<{ commentId: string }>;
-
-/**
- * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, stays out of any queued later,
- * and is taken out of the alerts already in Slack that quote it, whether or not Slack is set up. Logs rather than
- * rejects, so a trigger goes on to its other work.
- */
-async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
-    try {
-        await forgetContent(
-            { redis: context.redis, scheduler: context.scheduler, health: healthReports(context) },
-            contentId,
-        );
-    } catch (error) {
-        console.error("[deletions] Could not take a deleted post or comment out of queued alerts:", error);
-    }
-}
-
-async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext): Promise<void> {
-    const config = await configOf(context);
-    if (!alertsConfigured(config)) {
-        return;
-    }
-    await alertOnUserDeletion(postDeletionConfig(config), postDeletionFromTriggerEvent(event), {
-        posts: createRedditPostLookup(context.reddit),
-        claims: createRedisDeletionClaims(context.redis),
-        alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
-    });
-}
-
-/**
- * A post was deleted: its text leaves queued alerts, then a user's own deletion of a high-score post is alerted, by
- * a link to it without its title or author.
- */
-export async function onPostDelete(event: PostDeleteEvent, context: AppContext): Promise<void> {
-    await noteEvent(createRedisEventStore(context.redis), "post-delete", 1);
-    await forgetDeletedContent(event.postId, context);
-    await alertOnPostDeletion(event, context);
-}
-
-/** A comment was deleted: its text leaves queued alerts. */
-export async function onCommentDelete(event: CommentDeleteEvent, context: AppContext): Promise<void> {
-    await noteEvent(createRedisEventStore(context.redis), "comment-delete", 1);
-    await forgetDeletedContent(event.commentId, context);
 }

@@ -1,11 +1,10 @@
 /**
  * The app's entry point and composition root: everything it registers with Devvit (settings, triggers, the
- * scheduler jobs, forms and menu items). composition.ts builds what each trigger and job needs, menuActions.ts does
- * what each menu item and form does, and the capability modules do the work.
+ * scheduler jobs, forms and menu items). triggers.ts, scheduledJobs.ts and menuActions.ts do what each does,
+ * composition.ts builds what they share, and the capability modules do the work.
  */
 import { Devvit } from "@devvit/public-api";
-import { alertOnModAction, onCommentDelete, onPostDelete } from "./composition.js";
-import type { AppContext, CommentDeleteEvent } from "./composition.js";
+import type { AppContext } from "./composition.js";
 import { SUMMARY_JOB_NAME } from "./health/index.js";
 import { botStatus, forModerators, sendSimulation, sendTestAlert, setUpFromMenu, statusForm } from "./menuActions.js";
 import type { MenuContext } from "./menuActions.js";
@@ -16,6 +15,8 @@ import type { PostDeleteEvent } from "./postDeletion/index.js";
 import { deliverQueuedAlerts, runModqueueMonitor, sendSummary, setUpScheduledJobs } from "./scheduledJobs.js";
 import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
+import { alertOnModAction, onCommentDelete, onPostDelete } from "./triggers.js";
+import type { CommentDeleteEvent } from "./triggers.js";
 
 // devvit.json grants these permissions; Devvit 0.15 takes them from there, not from here.
 Devvit.configure({
