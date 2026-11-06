@@ -11,6 +11,7 @@ export const DEFAULT_BAN_HISTORY_DAYS = 30;
 export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
 export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
 export const DEFAULT_REPORT_PILE_UP_THRESHOLD = 0;
+export const DEFAULT_MODMAIL_WAIT_HOURS = 0;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
 /** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
@@ -187,6 +188,16 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
             wholeNumberProblem(value),
     },
     {
+        type: "number",
+        name: "modmailWaitHours",
+        label: "Modmail Waiting Alert (Hours)",
+        helpText:
+            "Alert, at most every six hours, when a user has waited this many hours for a reply in modmail, counting ban appeals apart (0 to disable)",
+        defaultValue: DEFAULT_MODMAIL_WAIT_HOURS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
         type: "string",
         name: "urgentReportReasons",
         label: "Urgent Report Reasons",
@@ -201,6 +212,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         defaultValue: DEFAULT_REPORT_PILE_UP_THRESHOLD,
         onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
             wholeNumberProblem(value),
+    },
+    {
+        type: "boolean",
+        name: "adminModmailAlerts",
+        label: "Admin Modmail Alerts",
+        helpText:
+            "Alert the alert channel at once when a Reddit admin writes to the subreddit's modmail (enabled by default)",
+        defaultValue: true,
     },
     {
         type: "boolean",

@@ -1,5 +1,7 @@
 import { vi } from "vitest";
 import type { Mock } from "vitest";
+import { modmailOf } from "./fakeModmail.js";
+import type { FakeConversation, FakeModmailMethods } from "./fakeModmail.js";
 import { wikiOf } from "./fakeWiki.js";
 import type { FakeWikiMethods, FakeWikiRevision } from "./fakeWiki.js";
 
@@ -80,6 +82,8 @@ export interface FakeReddit extends FakeWikiMethods {
     modNotes: readonly FakeModNote[];
     /** AutoModerator's config page's revisions, newest first. */
     wikiRevisions: readonly FakeWikiRevision[];
+    /** The subreddit's modmail conversations, in their folders. */
+    conversations: readonly FakeConversation[];
     readonly moderatorsAll: ListAll<Readonly<{ username: string }>>;
     readonly modQueueAll: ListAll<QueueItem>;
     readonly unmoderatedAll: ListAll<QueueItem>;
@@ -102,10 +106,12 @@ export interface FakeReddit extends FakeWikiMethods {
             readonly get: (count: number) => Promise<readonly ModLogEntry[]>;
         }
     >;
-    readonly modMail: Readonly<{
-        /** Sends a notification to the subreddit's modmail, and returns its conversation's ID. */
-        createModNotification: Mock<(notification: ModNotification) => Promise<string>>;
-    }>;
+    readonly modMail: Readonly<
+        {
+            /** Sends a notification to the subreddit's modmail, and returns its conversation's ID. */
+            createModNotification: Mock<(notification: ModNotification) => Promise<string>>;
+        } & FakeModmailMethods
+    >;
 }
 
 type FakeSubreddit = Readonly<
@@ -127,6 +133,7 @@ type RedditState = Pick<
     | "posts"
     | "modNotes"
     | "wikiRevisions"
+    | "conversations"
 >;
 
 /** A user with these permissions in the subreddit: none for a user who does not moderate it. */
@@ -205,6 +212,7 @@ function lookupsOf(
         }),
         modMail: {
             createModNotification: vi.fn(async (): Promise<string> => await Promise.resolve("modmail-1")),
+            ...modmailOf((): readonly FakeConversation[] => state().conversations),
         },
         getModerationLog: vi.fn((): { readonly get: (count: number) => Promise<readonly ModLogEntry[]> } => ({
             get: async (count: number): Promise<readonly ModLogEntry[]> =>
@@ -226,6 +234,7 @@ export function createFakeReddit(subredditName: string): FakeReddit {
         posts: [],
         modNotes: [],
         wikiRevisions: [],
+        conversations: [],
     };
     const state = (): RedditState => reddit;
     const { subreddit, alls } = subredditOf(state, subredditName);

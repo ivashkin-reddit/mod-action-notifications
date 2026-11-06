@@ -125,5 +125,7 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 - The app's account can read mod notes, and Devvit's `getModNotes` does not reject notes made by mod actions (its mapping asserts fields that Reddit may leave empty).
 - A `wikirevise` action fires for an edit to `config/automoderator`, and the page's latest revision is readable when it does.
 - `getConversation` marks admins (`isAdmin`) among a conversation's authors.
+- Whether the `ModMail` event's `conversationId` and `messageId` carry the prefixes `ModmailConversation_` and `ModmailMessage_` (the protobuf says not; the app takes them off either way), and whether an admin's message comes with `messageAuthorType` `participant_user`.
+- Whether `getConversations` lists the most recently updated conversations first, so a full folder leaves out the longest waits.
 - Report events carry the item's report count, and reasons arrive as the rule's or Reddit's wording.
 - `PostUpdate` and `CommentUpdate` fire for edits by authors, with the edited item's ID.

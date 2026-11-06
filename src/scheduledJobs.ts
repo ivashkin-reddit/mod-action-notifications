@@ -3,8 +3,10 @@ import {
     alertsConfigured,
     configOf,
     healthReports,
+    modmailPorts,
     monitorJobPorts,
     monitorThresholds,
+    monitorWanted,
     outboxOf,
 } from "./composition.js";
 import type { AppContext } from "./composition.js";
@@ -17,6 +19,7 @@ import {
     setUpSummary,
     yesterdayOf,
 } from "./health/index.js";
+import { checkWaitingModmail } from "./modmail/index.js";
 import {
     checkModqueue,
     createRedisMonitorStore,
@@ -39,13 +42,13 @@ import {
  */
 
 /**
- * Sets up the scheduled jobs: the monitor's while any of its thresholds is above 0, logging which, then the daily
+ * Sets up the scheduled jobs: the monitor's while any of its thresholds or the modmail wait is above 0, logging which, then the daily
  * summary's, always, as it reads its setting when it runs. Returns the monitor's setup; a summary job that cannot
  * be scheduled is logged, and the next setup schedules it.
  */
 export async function setUpScheduledJobs(context: AppContext): Promise<MonitoringSetup> {
     const config = await configOf(context);
-    const setup = await setupMonitoring(monitorThresholds(config), monitorJobPorts(context));
+    const setup = await setupMonitoring(monitorWanted(config), monitorJobPorts(context));
     console.info(
         setup.enabled
             ? "[setup] The modqueue monitor is on"
@@ -60,6 +63,10 @@ export async function setUpScheduledJobs(context: AppContext): Promise<Monitorin
     return setup;
 }
 
+/**
+ * One run of the monitor job: the modqueue's checks, then modmail waiting for a reply. Each reports its own failure
+ * to the health log, so modmail that cannot be read leaves the modqueue's alerts, and its health, alone.
+ */
 export async function runModqueueMonitor(context: AppContext): Promise<void> {
     const config = await configOf(context);
     if (!alertsConfigured(config)) {
@@ -71,6 +78,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
         alerts: createSlackModqueueAlerts(outboxOf(context, config).send, config.alertChannel),
         health: healthReports(context),
     });
+    await checkWaitingModmail(config.modmailWaitHours, Date.now(), modmailPorts(context, config));
 }
 
 /**

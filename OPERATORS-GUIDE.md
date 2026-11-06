@@ -7,23 +7,26 @@ This guide is for the people who deploy Mod Action Notifications, configure it f
 The app is a Devvit app. Reddit runs it, and it acts only when Reddit calls it:
 
 ```text
-Mod action, post deleted ─┐
-                          ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
-Every 15 minutes ─────────┘                                         ▲
-Post or comment deleted ─► its text leaves queued alerts ───────────┘
-Mod tools menu ─► Test Slack Connection, Simulate Mod Action ─────────────────────► Slack app
+Mod action, report, modmail, post deleted ─┐
+                                           ├─► checks and context ─► alert ─► Slack outbox (Redis) ─► Slack app
+Every 15 minutes, daily, weekly ───────────┘                                         ▲
+Post or comment deleted ─► its text leaves queued alerts ────────────────────────────┘
+Mod tools menu ─► Test Slack Connection, Simulate Mod Action ──────────────────────────────────────► Slack app
 ```
 
-| Reddit calls it for                              | It does                                                                                         |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| A mod action (`ModAction` trigger)               | Records the action's context, and sends an alert if your settings ask for one.                  |
-| A deleted post (`PostDelete` trigger)            | Takes the post out of queued alerts, then alerts if a user deleted their own high-scoring post. |
-| A deleted comment (`CommentDelete` trigger)      | Takes the comment out of queued alerts.                                                         |
-| The `modqueueMonitor` job, every 15 minutes      | Checks the modqueue, unmoderated and reports listings against your thresholds.                  |
-| The `slackOutbox` job, scheduled as needed       | Delivers alerts still waiting in the queue.                                                     |
-| The `dailySummary` job, at 08:00 UTC each day    | Posts the summary of the day before, when the Daily Summary setting is on.                      |
-| Install and upgrade (`AppInstall`, `AppUpgrade`) | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary job.    |
-| The mod tools menu                               | Runs the four menu actions, for moderators only.                                                |
+| Reddit calls it for                                  | It does                                                                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| A mod action (`ModAction` trigger)                   | Records the action's context, and sends an alert if your settings ask for one.                                                 |
+| A deleted post (`PostDelete` trigger)                | Takes the post out of queued alerts, then alerts if a user deleted their own high-scoring post.                                |
+| A deleted comment (`CommentDelete` trigger)          | Takes the comment out of queued alerts.                                                                                        |
+| A report (`PostReport`, `CommentReport` triggers)    | Alerts on an urgent reason, or on reports piling up.                                                                           |
+| A modmail message (`ModMail` trigger)                | Alerts when a Reddit admin wrote it.                                                                                           |
+| The `modqueueMonitor` job, every 15 minutes          | Checks the modqueue, unmoderated, reports, spam and edited listings, and modmail waiting for a reply, against your thresholds. |
+| The `slackOutbox` job, scheduled as needed           | Delivers alerts still waiting in the queue.                                                                                    |
+| The `dailySummary` job, at 08:00 UTC each day        | Posts the summary of the day before, when the Daily Summary setting is on.                                                     |
+| The `weeklyStatistics` job, at 08:00 UTC each Monday | Posts the team's statistics for the week before, when the Weekly Statistics setting is on.                                     |
+| Install and upgrade (`AppInstall`, `AppUpgrade`)     | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary and statistics jobs.                   |
+| The mod tools menu                                   | Runs the five menu actions, for moderators only.                                                                               |
 
 ## Deploying
 
@@ -108,8 +111,10 @@ The developer sets the Slack bot token, for every installation at once. Moderato
 | Old Reported Content Alert (Hours) (`reportedContentAgeHours`)                                    | a whole number of 0 or more                | Alert when reported content is at least this many hours old.                                                                                                                                                                                          |
 | Spam Queue Size Alert Threshold (`spamQueueThreshold`)                                            | a whole number of 0 or more                | Alert when Reddit's spam queue holds at least this many items.                                                                                                                                                                                        |
 | Edited Queue Size Alert Threshold (`editedQueueThreshold`)                                        | a whole number of 0 or more                | Alert when Reddit's edited queue, of recently edited posts and comments, holds at least this many items.                                                                                                                                              |
+| Modmail Waiting Alert (Hours) (`modmailWaitHours`)                                                | a whole number of 0 or more                | Alert, at most every six hours, when a user has waited this many hours for a reply in the New, In Progress or Appeals folder. Keeps the monitor scheduled.                                                                                            |
 | Urgent Report Reasons (`urgentReportReasons`)                                                     | reasons separated by commas                | A report whose reason contains one, ignoring case, alerts the alert channel at once.                                                                                                                                                                  |
 | Report Pile-Up Alert Threshold (`reportPileUpThreshold`)                                          | a whole number of 0 or more                | A post or comment reaching this many reports alerts once.                                                                                                                                                                                             |
+| Admin Modmail Alerts (`adminModmailAlerts`)                                                       | on or off                                  | A Reddit admin's message in modmail alerts the alert channel at once.                                                                                                                                                                                 |
 | Enable AutoModerator Slack Alerts (`enableAutoModAlerts`)                                         | on or off                                  | Also alert for AutoModerator's actions.                                                                                                                                                                                                               |
 | Post Deletion Alert Threshold (`postDeletionUpvoteThreshold`)                                     | a whole number of 0 or more                | Alert when a user deletes their own post with at least this score.                                                                                                                                                                                    |
 | Daily Summary (`dailySummary`)                                                                    | on or off                                  | Posts a summary of the UTC day before at 08:00 UTC to the notification channel. Off by default.                                                                                                                                                       |
@@ -148,6 +153,12 @@ The `PostReport` and `CommentReport` triggers tell the app of each report, with 
 - **Urgent reasons.** A report whose reason contains one of the Urgent Report Reasons, ignoring case, alerts the alert channel at once: `🚨 Urgent report`, naming the reason as configured, with a link to the item (without a post's title) and its reports so far. A reason a reporter typed is never shown, as it is text a user wrote.
 - **Pile-ups.** A post or comment reaching the Report Pile-Up Alert Threshold alerts once: `📣 Reports piling up`. Posts whose reports moderators chose to ignore are skipped; Devvit doesn't say so of comments.
 - **Once a day.** Each alert is claimed by the item's ID for a day (`reports:urgent:{itemId}`, `reports:pileup:{itemId}`), so a second report of the same item, or an event delivered twice, sends nothing more. A claim that can't be stored still sends.
+
+## Modmail alerts
+
+- **From Reddit's admins.** The `ModMail` trigger tells the app of each modmail message. For a message written as a user, rather than by a moderator writing as one, the app reads its conversation (without marking it read). When the message's author is a Reddit admin, `🛡️ Modmail from a Reddit admin` goes to the alert channel at once, with the admin's username, the conversation's subject (escaped) and a link to it. Each message is claimed for a day (`modmail:admin:{messageId}`), so one delivered twice alerts once; a claim that can't be stored still sends. The event's IDs may carry the prefixes `ModmailConversation_` and `ModmailMessage_`; the app takes them off.
+- **Waiting for a reply.** While Modmail Waiting Alert (Hours) is above 0, each monitor run lists the New, In Progress and Appeals folders, up to 100 conversations each. A user waits when they wrote after a moderator last acted in the conversation; conversations AutoModerator or Reddit generated are left out. When any user has waited the configured hours since they last wrote, `📬 Modmail waiting for a reply` goes to the alert channel: how many conversations, how many of them are ban appeals, and the longest wait, with links to the three folders. It is sent at most every six hours (`modmail:throttle:waiting`). When a folder holds 100 or more, the alert says "at least".
+- **Failures.** A modmail read that fails raises the condition _Modmail cannot be read_ until one succeeds (see [Reading the logs](#reading-the-logs)). It leaves the modqueue's checks, and the monitor's own health, alone.
 
 ## Security watch
 
@@ -216,7 +227,7 @@ These cover only posts deleted by their own author, not removals by moderators o
 
 ### Modqueue monitor
 
-The monitor runs every 15 minutes while any of its thresholds is above 0 and **Setup Modqueue Monitoring** has run. Install and upgrade run setup automatically.
+The monitor runs every 15 minutes while any of its thresholds, or Modmail Waiting Alert (Hours), is above 0 and **Setup Modqueue Monitoring** has run. Each run also checks modmail waiting for a reply (see [Modmail alerts](#modmail-alerts)). Install and upgrade run setup automatically.
 
 - **What it reads.** Each run reads only the listings whose alerts are on: the modqueue, Reddit's unmoderated listing, the reports listing, the spam queue and the edited queue.
 - **The alerts:**
@@ -299,6 +310,8 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `security:automod_edit`                                                     | metadata             | the last edit to AutoModerator's config: when, and by whom                                                                          | 1 day                                                     | 1 key                   |
 | `security:misfire:{editAt}`                                                 | none                 | that a misfire after an edit was alerted                                                                                            | 1 day                                                     | one per edit            |
 | `reports:urgent:{itemId}`, `reports:pileup:{itemId}`                        | metadata             | that an item's urgent report, or pile-up, was alerted                                                                               | 1 day                                                     | one per item            |
+| `modmail:admin:{messageId}`                                                 | metadata             | that an admin's modmail message was alerted                                                                                         | 1 day                                                     | one per message         |
+| `modmail:throttle:waiting`                                                  | none                 | that the waiting-modmail alert was sent                                                                                             | 6 hours                                                   | one                     |
 | `health:notice:{condition}`                                                 | none                 | that moderators were sent a notice of the condition within the day                                                                  | 1 day                                                     | 1 per condition         |
 | `health:noticed`                                                            | none                 | the conditions moderators were sent a notice of, so their end is sent                                                               | 7 days from the last                                      | 7 conditions            |
 | `health:reminder:{condition}`                                               | none                 | that a condition was logged within the day                                                                                          | 1 day                                                     | 1 per condition         |
@@ -326,17 +339,17 @@ Reddit shows the four menu actions only to moderators, but Devvit runs a menu ac
 
 Moderators can't read the app's logs, so this is where they see how it's doing. It shows a form of read-only lines:
 
-| Line                 | Says                                                                                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| App version          | The version installed.                                                                                                                         |
-| Current problems     | Each health condition in force (see [Reading the logs](#reading-the-logs)), with what the app saw and for how long, and what to do; or `None`. |
-| Alerts waiting       | How many alerts wait for Slack, and how long the oldest has waited.                                                                            |
-| Last alert delivered | When Slack last took an alert, or `None in the last week`.                                                                                     |
-| Slack app            | `Set up`, or what is missing: the bot token or the notification channel. Without both, no alerts are sent.                                     |
-| Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds are 0; or `Unknown`.     |
-| Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                           |
-| Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.       |
-| Today (UTC)          | Mod actions heard of, alerts delivered, dropped and redacted, and monitor runs and failures, since midnight UTC.                               |
+| Line                 | Says                                                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App version          | The version installed.                                                                                                                                               |
+| Current problems     | Each health condition in force (see [Reading the logs](#reading-the-logs)), with what the app saw and for how long, and what to do; or `None`.                       |
+| Alerts waiting       | How many alerts wait for Slack, and how long the oldest has waited.                                                                                                  |
+| Last alert delivered | When Slack last took an alert, or `None in the last week`.                                                                                                           |
+| Slack app            | `Set up`, or what is missing: the bot token or the notification channel. Without both, no alerts are sent.                                                           |
+| Modqueue monitor     | `On, scheduled (cron …)`; `On, but not scheduled` (run **Setup Modqueue Monitoring**); `Off`, when all its thresholds and Modmail Waiting Alert are 0; or `Unknown`. |
+| Last monitor run     | When the monitor last ran, and whether it succeeded.                                                                                                                 |
+| Last events          | When the app last heard of a mod action, a deleted post and a deleted comment. Nothing for a week suggests Reddit isn't calling the app.                             |
+| Today (UTC)          | Mod actions heard of, alerts delivered, dropped and redacted, and monitor runs and failures, since midnight UTC.                                                     |
 
 A line reads `Unknown: Redis could not be read` when Redis fails; the rest still show.
 
@@ -395,6 +408,7 @@ Each line starts with its area in brackets: `[health]`, `[setup]`, `[modaction]`
 | Alerts are dropped after waiting a day           | ERROR | a run drops an alert queued over a day ago                                                                                                             | a run empties the queue | at once            |
 | Deleted content is not being taken out of alerts | ERROR | Slack refuses a redaction, or one is dropped unmade (unreadable, a week old, more than 5,000 waiting, or Redis could not remember where an alert went) | a redaction is made     | never              |
 | The modqueue monitor is failing                  | ERROR | a monitor run fails                                                                                                                                    | a monitor run succeeds  | after half an hour |
+| Modmail cannot be read                           | ERROR | reading modmail fails, for an admin's message or the waiting check                                                                                     | a modmail read succeeds | after half an hour |
 
 **Modmail notices.** Slack may be the very thing that is broken, so a condition moderators must act on also goes to the subreddit's modmail, as a notification from the app's account (in modmail's Notifications). The Modmail column says when. A notice gives the problem, what the app saw, what to do and when it started. Each condition is sent at most once a day, so a problem that comes and goes doesn't flood modmail, and again each day it lasts. Its end is sent too, when its start was. A notice modmail can't take (for example if the app's account is banned) is logged as `[health] Could not send moderators a modmail notice:`.
 
@@ -416,6 +430,7 @@ Lines that need attention besides those:
 ## Known limitations
 
 - **Deleted content is taken out of alerts within the channels' retention.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to `slackRetentionDays` days, at most 90 (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it, as it does when the setting matches.
+- **Modmail waits are counted from the user's last message.** Reddit gives the time a user last wrote in a conversation, not when their unanswered messages began, so a user who writes again appears to have waited less. Each folder is read up to 100 conversations, the most Reddit lists at once; beyond that the alert says "at least".
 - **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack until the channels' message retention removes them, and in the ban and mute history until it expires. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends for data about redditors. The free plan can only set the whole workspace to delete messages after 90 days, or keep them for a year. [slack-app/README.md](./slack-app/README.md#deploying-it) has the steps.
 - **Ban and mute history is kept for 90 days**, longer than the 30 days Reddit recommends for data about redditors, so that unbans after longer bans keep their context. It is moderation metadata only (who, on whom, when, how long), and it is kept only while unban or unmute alerts are on. Turning those on later finds no ban or mute taken while they were off.
 - **The monitor reads each listing in full.** Reddit's listings end at around a thousand items, so a run makes at most a few dozen requests.

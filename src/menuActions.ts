@@ -1,5 +1,5 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import { actionNameOf, configOf, modActionPresentation, monitorThresholds, slackSetup } from "./composition.js";
+import { actionNameOf, configOf, modActionPresentation, monitorWanted, slackSetup } from "./composition.js";
 import type { AppContext, SlackSetup } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
 import type { MonitorState, StatusLine } from "./health/index.js";
@@ -10,7 +10,7 @@ import {
     slackChannelFromForm,
 } from "./moderation/index.js";
 import type { SimulateFormValues } from "./moderation/index.js";
-import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
+import { createDevvitMonitorScheduler, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
 import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
@@ -108,7 +108,7 @@ export async function botStatus(context: MenuContext): Promise<{ lines: { label:
         now,
         version: context.appVersion,
         slack: slackSetup(config),
-        monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
+        monitor: monitorState(monitorWanted(config), job),
         problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
         queue: await queueState(context.redis).catch(readFailed),
         lastSeen: await events.lastSeen().catch(readFailed),

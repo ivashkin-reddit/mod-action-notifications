@@ -27,6 +27,7 @@ const NOTICE_AFTER_MS: Readonly<Record<Condition, number | undefined>> = {
     "alerts-expired": 0,
     "redactions-failing": undefined,
     "monitor-failing": LASTING_MS,
+    "modmail-unreadable": LASTING_MS,
 };
 
 /** Whether moderators should be told of a condition in force since `since`, at `now`, both ms since the epoch. */

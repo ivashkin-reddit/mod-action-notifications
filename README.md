@@ -18,6 +18,8 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Urgent reports.** Name the report reasons that can't wait, such as personal information or threatening violence, and a report with one of them alerts you at once, naming the reason as you wrote it, never the reporter's words. You can also be alerted when a post or comment piles up reports.
 
+**Modmail from Reddit's admins.** When a Reddit admin writes to your subreddit's modmail, the app alerts you at once, with the conversation's subject and a link to it. Turn on Modmail Waiting Alert to hear when users have waited too long for a reply, with ban appeals counted apart, at most every six hours.
+
 **Activity spikes.** When one moderator takes five or more actions within a minute, the alert says so.
 
 **Modqueue monitoring.** Every 15 minutes the app checks your queues. It alerts your team when the modqueue grows past a size you set, when content has waited too long without a moderator reviewing it, and when reported content has gone unhandled for too long. Each kind of alert is sent at most once an hour. It can also watch Reddit's spam queue and edited queue.
@@ -28,7 +30,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Team statistics.** **Show Team Stats** shows your team's moderation over the last 7 days: how many actions, and who took them (moderators, AutoModerator, Reddit), the most common, the hours no moderator acted, bans and their lengths, how many moderators acted, and the most-moderated threads. Turn on Weekly Statistics for the same each Monday in Slack. The figures are for the team as a whole: none is any one moderator's.
 
-**Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
+**Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, or the app can't read modmail, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
 **Built for busy days.** Slack accepts about one message a second to a channel. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
 
@@ -61,8 +63,10 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 | Old Reported Content Alert (Hours)    | Alert when reported content is this old and still waiting.                                                                                                                                                                     | 24                              |
 | Spam Queue Size Alert Threshold       | Alert when the spam queue holds at least this many items.                                                                                                                                                                      | 0 (off)                         |
 | Edited Queue Size Alert Threshold     | Alert when the edited queue, of recently edited posts and comments, holds at least this many items.                                                                                                                            | 0 (off)                         |
+| Modmail Waiting Alert (Hours)         | Alert, at most every six hours, when a user has waited this many hours for a reply in modmail. Ban appeals are counted apart.                                                                                                  | 0 (off)                         |
 | Urgent Report Reasons                 | Report reasons that alert you at once, separated by commas, e.g. personal information, threatening violence.                                                                                                                   | none                            |
 | Report Pile-Up Alert Threshold        | Alert once when a post or comment reaches this many reports.                                                                                                                                                                   | 0 (off)                         |
+| Admin Modmail Alerts                  | Alert at once when a Reddit admin writes to your subreddit's modmail.                                                                                                                                                          | on                              |
 | Enable AutoModerator Slack Alerts     | Also send alerts for AutoModerator's actions.                                                                                                                                                                                  | off                             |
 | Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                                                             | 100                             |
 | Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working.                                | off                             |

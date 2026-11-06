@@ -9,6 +9,7 @@
       "onCommentDelete",
       "onCommentReport",
       "onModAction",
+      "onModMail",
       "onPostDelete",
       "onPostReport"
     ]

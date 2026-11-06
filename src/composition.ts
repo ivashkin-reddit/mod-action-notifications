@@ -10,7 +10,14 @@ import {
 import type { Condition, ConditionPorts, HealthEvent, NoticeReddit } from "./health/index.js";
 import { actionName } from "./moderation/index.js";
 import type { ModActionPresentation } from "./moderation/index.js";
-import { createDevvitMonitorScheduler, createRedisMonitorStore } from "./modqueue/index.js";
+import {
+    createRedditModmail,
+    createRedisModmailClaims,
+    createSlackModmailAlerts,
+    isWaitingAlertOn,
+} from "./modmail/index.js";
+import type { ModmailHealth, ModmailPorts, ModmailReddit } from "./modmail/index.js";
+import { createDevvitMonitorScheduler, createRedisMonitorStore, isMonitoringEnabled } from "./modqueue/index.js";
 import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
@@ -62,7 +69,8 @@ export type AppContext = Readonly<{
             | "getWikiPage"
         >
     > &
-        NoticeReddit;
+        NoticeReddit &
+        ModmailReddit;
     scheduler: Readonly<Pick<TriggerContext["scheduler"], "runJob" | "cancelJob" | "listJobs">>;
     /** Identifies the installation: one app process can serve several. */
     subredditId: string;
@@ -123,8 +131,13 @@ export function monitorThresholds(config: AppConfig): MonitorThresholds {
     };
 }
 
-/** The installation's health log, where the outbox and the monitor report lasting problems. */
-export function healthReports(context: AppContext): DeliveryHealth & MonitorHealth {
+/** Whether the monitor job runs: while any of the modqueue's thresholds, or the modmail wait, is on. */
+export function monitorWanted(config: AppConfig): boolean {
+    return isMonitoringEnabled(monitorThresholds(config)) || isWaitingAlertOn(config.modmailWaitHours);
+}
+
+/** The installation's health log, where the outbox, the monitor and the modmail checks report lasting problems. */
+export function healthReports(context: AppContext): DeliveryHealth & MonitorHealth & ModmailHealth {
     const conditions = conditionPorts(context);
     return {
         raise: async (condition: Condition, detail: string): Promise<void> => {
@@ -148,6 +161,16 @@ export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
         scheduler: context.scheduler,
         health: healthReports(context),
     });
+}
+
+/** The installation's modmail, its alert claims, and where its alerts and problems go. */
+export function modmailPorts(context: AppContext, config: AppConfig): ModmailPorts {
+    return {
+        reader: createRedditModmail(context.reddit, context.subredditName),
+        claims: createRedisModmailClaims(context.redis),
+        alerts: createSlackModmailAlerts(outboxOf(context, config).send, config.alertChannel),
+        health: healthReports(context),
+    };
 }
 
 /** How statistics name an action type, e.g. "Post Removed", as alerts do. */

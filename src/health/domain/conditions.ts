@@ -10,7 +10,8 @@ export type Condition =
     | "outbox-full"
     | "alerts-expired"
     | "redactions-failing"
-    | "monitor-failing";
+    | "monitor-failing"
+    | "modmail-unreadable";
 
 const CONDITION_NAMES: readonly string[] = [
     "token-missing",
@@ -21,6 +22,7 @@ const CONDITION_NAMES: readonly string[] = [
     "alerts-expired",
     "redactions-failing",
     "monitor-failing",
+    "modmail-unreadable",
 ];
 
 /** Whether the text names a condition: what Redis holds may come from another version. */
@@ -108,6 +110,13 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         started: (detail: string): string =>
             `The modqueue monitor is failing (${detail}), so no modqueue alerts are sent until it recovers.`,
         resolved: "The modqueue monitor is working again.",
+    },
+    "modmail-unreadable": {
+        title: "Modmail cannot be read",
+        level: "error",
+        started: (detail: string): string =>
+            `The app cannot read modmail (${detail}), so modmail from Reddit's admins and modmail waiting for a reply are not alerted.`,
+        resolved: "The app can read modmail again.",
     },
 };
 

@@ -8,6 +8,7 @@ import {
     DEFAULT_BAN_HISTORY_DAYS,
     DEFAULT_DORMANT_MODERATOR_DAYS,
     DEFAULT_EDITED_QUEUE_THRESHOLD,
+    DEFAULT_MODMAIL_WAIT_HOURS,
     DEFAULT_REPORT_PILE_UP_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
     MAX_SLACK_RETENTION_DAYS,
@@ -46,10 +47,14 @@ export interface AppConfig {
     readonly spamQueueThreshold: number;
     /** 0 turns the edited queue alert off. */
     readonly editedQueueThreshold: number;
+    /** Hours a user waits for a reply in modmail before it alerts; 0 turns the alert off. */
+    readonly modmailWaitHours: number;
     /** Report reasons that alert at once, as moderators wrote them, from the comma-separated setting. */
     readonly urgentReportReasons: readonly string[];
     /** 0 turns the report pile-up alert off. */
     readonly reportPileUpThreshold: number;
+    /** Whether a Reddit admin's modmail alerts at once. */
+    readonly adminModmailAlerts: boolean;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
@@ -82,8 +87,10 @@ const DEFAULT_CONFIG: AppConfig = {
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     spamQueueThreshold: DEFAULT_SPAM_QUEUE_THRESHOLD,
     editedQueueThreshold: DEFAULT_EDITED_QUEUE_THRESHOLD,
+    modmailWaitHours: DEFAULT_MODMAIL_WAIT_HOURS,
     urgentReportReasons: [],
     reportPileUpThreshold: DEFAULT_REPORT_PILE_UP_THRESHOLD,
+    adminModmailAlerts: true,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
@@ -179,11 +186,13 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
             await settings.get("editedQueueThreshold"),
             DEFAULT_EDITED_QUEUE_THRESHOLD,
         ),
+        modmailWaitHours: nonNegativeInteger(await settings.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
         urgentReportReasons: commaList(await settings.get("urgentReportReasons")),
         reportPileUpThreshold: nonNegativeInteger(
             await settings.get("reportPileUpThreshold"),
             DEFAULT_REPORT_PILE_UP_THRESHOLD,
         ),
+        adminModmailAlerts: booleanOr(await settings.get("adminModmailAlerts"), true),
         enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
         dailySummary: booleanOr(await settings.get("dailySummary"), false),
         weeklyStatistics: booleanOr(await settings.get("weeklyStatistics"), false),
