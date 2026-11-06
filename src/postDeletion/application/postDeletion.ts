@@ -40,7 +40,6 @@ async function alertIfHighScore(
     }
     await ports.alerts.highScorePostDeleted({
         post,
-        authorName: deletion.authorName,
         subredditName: deletion.subredditName ?? post.subredditName,
         deletedAt: (deletion.deletedAt ?? new Date()).toISOString(),
         reason: deletion.reason,

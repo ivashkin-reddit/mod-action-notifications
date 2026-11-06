@@ -12,7 +12,6 @@ export type PostDeleteEvent = Readonly<{
     source: number;
     deletedAt?: Date | undefined;
     reason: number;
-    author?: Readonly<{ name: string }> | undefined;
     subreddit?: Readonly<{ name: string }> | undefined;
 }>;
 
@@ -23,7 +22,6 @@ export function postDeletionFromTriggerEvent(event: PostDeleteEvent): PostDeleti
         deletedByUser: event.source === EVENT_SOURCE_USER,
         deletedAt: event.deletedAt,
         reason: DELETION_REASONS[event.reason] ?? "Unknown",
-        authorName: event.author?.name ?? "",
         subredditName: event.subreddit?.name,
     };
 }

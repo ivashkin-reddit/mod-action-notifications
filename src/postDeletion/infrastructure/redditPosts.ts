@@ -18,7 +18,6 @@ export function createRedditPostLookup(reddit: PostReddit): PostLookup {
             const post = await reddit.getPostById(postId);
             return {
                 score: post.score,
-                title: post.title,
                 permalink: post.permalink,
                 subredditName: post.subredditName,
             };

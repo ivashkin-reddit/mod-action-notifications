@@ -28,7 +28,7 @@ The developer, u/ivashkin, is responsible for the app and for this policy. The s
 | Mod action alerts          | Each mod action in the subreddit: its type and time, the moderator, the user acted on, and the post or comment (title, link, and up to 200 characters of its text). For a ban, its length, details and mod note. | To tell the mod team about the action.                   |
 | Ban lengths                | The subreddit's 10 most recent bans in the mod log, when a ban doesn't say how long it lasts.                                                                                                                    | To show how long the ban lasts.                          |
 | Unknown moderators         | The subreddit's mod list, at most once every five minutes.                                                                                                                                                       | To flag an action by an account that isn't a moderator.  |
-| Deleted posts              | A post deleted by its own author: its title, author, score, Reddit's deletion reason, and link.                                                                                                                  | To flag a popular post deleted by its author.            |
+| Deleted posts              | A post deleted by its own author: its score, Reddit's deletion reason, and a link without its title.                                                                                                             | To flag a popular post deleted by its author.            |
 | Deleted posts and comments | The ID of each post or comment deleted in the subreddit.                                                                                                                                                         | To take deleted content out of alerts not yet sent.      |
 | Modqueue monitor           | The modqueue, unmoderated and reports listings: how many items wait, for how long, and links to the oldest.                                                                                                      | To warn the mod team when content waits too long.        |
 | Menu actions               | The permissions of the person who opens one.                                                                                                                                                                     | To refuse anyone who isn't a moderator of the subreddit. |
@@ -41,7 +41,7 @@ It reads nothing else: no modmail, private messages or chats, no user profiles o
 
 Alerts can contain:
 
-- usernames: of the moderator who acted, of the user acted on, and of the author of a deleted post;
+- usernames: of the moderator who acted, and of the user acted on;
 - post titles, links, and up to 200 characters of a removed post's or comment's text;
 - for a ban or mute, its length and details, and the mod note if the Include Mod Note setting is on; for an unban or unmute, who issued the ban or mute it lifts, when, and its length;
 - for modqueue alerts, counts, and links to the oldest items waiting;
@@ -91,7 +91,7 @@ Uninstalling the app removes its records and settings. Alerts already in Slack a
 
 ## Deletions
 
-- **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. In alerts already in Slack, it replaces each alert that quotes the content, sent within the last 90 days, with the same alert without the title and text, by editing it; where the workspace does not allow the edit, it deletes the alert. Alerts older than that, or sent before the app could do this, keep the content until Slack's retention removes them, or the moderators delete them. The alert about a deleted post names the post, as reporting that deletion is its purpose.
+- **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. In alerts already in Slack, it replaces each alert that quotes the content, sent within the last 90 days, with the same alert without the title and text, by editing it; where the workspace does not allow the edit, it deletes the alert. Alerts older than that, or sent before the app could do this, keep the content until Slack's retention removes them, or the moderators delete them. The alert about a deleted post links to it without its title, and does not name its author.
 - **A deleted Reddit account.** Reddit does not tell apps when an account is deleted. A deleted account's username stays in the ban and mute history until that expires, and in alerts already in Slack.
 
 ## Choices

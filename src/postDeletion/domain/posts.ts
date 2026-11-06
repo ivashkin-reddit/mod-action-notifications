@@ -1,7 +1,11 @@
-/** A post as Reddit shows it when it is deleted: a deleted post keeps its title, link and score. */
+/**
+ * What the alert needs of a post as Reddit shows it when it is deleted: a deleted post keeps its link and score.
+ * Its title and author are not read: Devvit's rules ask apps to delete a deleted post's content, and the alert
+ * goes to Slack.
+ */
 export interface DeletedPost {
     readonly score: number;
-    readonly title: string;
+    /** With the post's title in it, as Reddit gives it; the alert links to the post without it. */
     readonly permalink: string;
     readonly subredditName: string;
 }
@@ -15,8 +19,6 @@ export interface PostDeletion {
     readonly deletedAt: Date | undefined;
     /** Reddit's deletion reason, named. */
     readonly reason: string;
-    /** The author's username, from the event: the deleted post no longer shows it. '' when the event names none. */
-    readonly authorName: string;
     readonly subredditName: string | undefined;
 }
 

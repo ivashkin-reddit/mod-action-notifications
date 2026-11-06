@@ -20,7 +20,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Modqueue monitoring.** Every 15 minutes the app checks your queues. It alerts your team when the modqueue grows past a size you set, when content has waited too long without a moderator reviewing it, and when reported content has gone unhandled for too long. Each kind of alert is sent at most once an hour.
 
-**Deleted high-score posts.** When a user deletes their own post after it scored highly, a common way to hide content from moderators, the app tells you the post's title, author and score.
+**Deleted high-score posts.** When a user deletes their own post after it scored highly, a common way to hide content from moderators, the app tells you its score and links to it. The alert leaves out the post's title and author, as Reddit asks apps to delete a deleted post's content.
 
 **Daily summary.** Turn on the Daily Summary setting for a morning post of the day before's numbers, and any problems.
 
@@ -80,7 +80,7 @@ The app reads only what it needs to write an alert, and keeps very little:
 
 Everything it keeps expires on its own. The only service it sends anything to is your Slack workspace.
 
-Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, within 90 days, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. The alert about a deleted post is the exception, as it exists to name the post. Alerts stay in Slack under your workspace's message retention: setting the alert channels to keep messages for 90 days means no alert outlives the app's ability to edit it.
+Alerts quote Reddit content, such as titles and short excerpts of removed posts and comments. If a post or comment is deleted on Reddit before its alert reaches Slack, the alert goes without the quote and the title, with a link that still opens the content. If the content is deleted after its alert reached Slack, within 90 days, the app edits the alert in Slack to the same version; where your workspace doesn't allow edits that late, it deletes the alert instead. Alerts stay in Slack under your workspace's message retention: setting the alert channels to keep messages for 90 days means no alert outlives the app's ability to edit it.
 
 The [Privacy Policy](./PRIVACY-POLICY.md) and [Terms & Conditions](./TERMS-AND-CONDITIONS.md) have the details.
 

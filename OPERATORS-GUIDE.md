@@ -167,7 +167,7 @@ Text from Reddit is escaped, so text such as `<!channel>` in a post shows as wri
 These cover only posts deleted by their own author, not removals by moderators or admins.
 
 - **Score.** The app reads the post's score from Reddit at the moment of deletion, because votes fire no event the app could track. It alerts when the score reaches the threshold.
-- **Content.** The alert gives the title, author, score, Reddit's deletion reason and a link, which may no longer work.
+- **Content.** The alert gives the score, Reddit's deletion reason, the subreddit, when it was deleted, and a link to the post without its title (`/r/sub/comments/abc/`), which Reddit still opens. It leaves out the title and author: Devvit's rules ask apps to delete a deleted post's content from external services, and Reddit no longer shows the author. The app doesn't read either.
 - **Channel.** It goes to the alert channel.
 - **Once per post.** The post's ID is claimed for a day, so one deletion sends one alert.
 
@@ -215,7 +215,6 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
     - Queued alerts that quote it switch to their second version at once. If a run is delivering at that moment, it switches them before it finishes, and checks each alert again just before sending it.
     - An alert that arrives after the deletion is stored without the content.
     - This works whether or not Slack is set up, as alerts wait in the queue until it is.
-    - The deleted-post alert is the exception: it exists to name the post it reports.
 - **Content deleted after its alert was sent.** When Slack takes an alert that quotes a post or comment, the app remembers where it went (channel and timestamp) under each post and comment it quotes, with its second version, for 90 days.
     - When Reddit reports one of them deleted, each alert remembered for it gets a **redaction**: an edit (`chat.update`) that puts the second version in its place. Redactions wait in their own queue, and a run makes them once no alert is waiting, at the same pace.
     - Where the workspace's settings don't allow the edit (`edit_window_closed`, `cant_update_message`), the alert is deleted (`chat.delete`) instead. An alert already deleted in Slack (`message_not_found`) needs nothing.
@@ -256,7 +255,7 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 
 **Settings** are stored by Devvit for each installation, apart from the bot token, an encrypted app-wide secret that moderators can't read.
 
-**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Content deleted before an alert is sent leaves it; content deleted within 90 days after is taken out of it in Slack, by an edit or, failing that, by deleting the alert. The deleted-post alert keeps the title of the post it reports. Alerts stay in Slack under your workspace's message retention.
+**Slack.** Alerts quote Reddit content: titles, and excerpts of up to 200 characters of removed posts and comments. Content deleted before an alert is sent leaves it; content deleted within 90 days after is taken out of it in Slack, by an edit or, failing that, by deleting the alert. Alerts stay in Slack under your workspace's message retention.
 
 **Logs.** Devvit keeps the app's logs for 7 days, up to 5,000 entries. They record errors and never quote Reddit content; the one line that names an account is the one reporting an account not on the mod list. The bot token travels only in a request header, so no line names it.
 
@@ -356,7 +355,7 @@ Lines that need attention besides those:
 
 ## Known limitations
 
-- **Deleted content is taken out of alerts for 90 days.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to 90 days (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it. The deleted-post alert names the post it reports, by the owner's choice.
+- **Deleted content is taken out of alerts for 90 days.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to 90 days (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it.
 - **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack, and in the ban and mute history until it expires.
 - **Ban and mute history is kept for 90 days**, longer than the 30 days Reddit recommends for user data, so that unbans after longer bans keep their context.
 - **The monitor reads each listing in full.** Reddit's listings end at around a thousand items, so a run makes at most a few dozen requests.

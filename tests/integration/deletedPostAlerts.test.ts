@@ -34,16 +34,10 @@ describe("a user deleting their own post", (): void => {
                     {
                         color: "#cc0000",
                         fields: [
-                            { title: "📝 Title", value: "Big post", short: false },
-                            { title: "👤 Author", value: "/u/Poster", short: true },
                             { title: "⬆️ Score", value: "150", short: true },
                             { title: "🗑️ Reason", value: "Other", short: true },
                             { title: "📍 Subreddit", value: "/r/testsub", short: true },
-                            {
-                                title: "🔗 Link (may be dead)",
-                                value: "https://reddit.com/r/testsub/comments/big/big_post/",
-                                short: false,
-                            },
+                            { title: "🔗 Link", value: "https://reddit.com/r/testsub/comments/big/", short: false },
                             { title: "⏰ Deleted At", value: "2026-11-04T13:00:00.000Z", short: true },
                         ],
                         footer: "Mod Action Notifications - Post Deletion Monitor",
@@ -77,38 +71,32 @@ describe("a user deleting their own post", (): void => {
         expect(app.slack.requests).toStrictEqual([]);
     });
 
-    it(
-        "names an unknown author, and the post's own subreddit, when the event names neither",
-        TEST_OPTIONS,
-        async (): Promise<void> => {
-            expect.hasAssertions();
-
-            const app = await loadApp(devvit);
-            app.context.reddit.posts = [{ ...bigPost(150), subredditName: "elsewhere" }];
-
-            await app.fire("PostDelete", userDeletion({ author: undefined, subreddit: undefined }));
-
-            const fields = app.slack.messages[0]?.attachments?.[0]?.fields ?? [];
-
-            expect(fields.filter((field): boolean => field.short).map((field): string => field.value)).toStrictEqual([
-                "Unknown",
-                "150",
-                "Other",
-                "/r/elsewhere",
-                "2026-11-04T13:00:00.000Z",
-            ]);
-        },
-    );
-
-    it("escapes Slack's markup characters in the title", TEST_OPTIONS, async (): Promise<void> => {
+    it("names the post's own subreddit when the event names none", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        app.context.reddit.posts = [{ ...bigPost(150), title: "<!here> big & bold" }];
+        app.context.reddit.posts = [{ ...bigPost(150), subredditName: "elsewhere" }];
+
+        await app.fire("PostDelete", userDeletion({ subreddit: undefined }));
+
+        const fields = app.slack.messages[0]?.attachments?.[0]?.fields ?? [];
+
+        expect(fields.find((field): boolean => field.title === "📍 Subreddit")?.value).toBe("/r/elsewhere");
+    });
+
+    // Devvit's rules ask apps to delete a deleted post's content from external services; its ID may stay.
+    it("sends neither the post's title nor its author's name", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.posts = [bigPost(150)];
 
         await app.fire("PostDelete", userDeletion());
 
-        expect(app.slack.messages[0]?.attachments?.[0]?.fields?.[0]?.value).toBe("&lt;!here&gt; big &amp; bold");
+        const sent = JSON.stringify(app.slack.requests);
+
+        expect(sent).not.toMatch(/big.post/iu);
+        expect(sent).not.toContain("Poster");
     });
 
     it.each([

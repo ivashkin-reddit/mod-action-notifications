@@ -161,7 +161,8 @@ describe("content deleted while an age alert listing it waits for Slack", (): vo
 
 // The alert about a deleted post exists to say what was deleted: the owner's decision, in AGENTS.md.
 describe("the alert about a deleted post", (): void => {
-    it("still names the post", TEST_OPTIONS, async (): Promise<void> => {
+    // The deletion takes the post out of other alerts; this one reports it, by its link.
+    it("still goes, linking to the post", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -169,7 +170,7 @@ describe("the alert about a deleted post", (): void => {
 
         await app.fire("PostDelete", userDeletion());
 
-        expect(JSON.stringify(app.slack.messages)).toContain("Big post");
+        expect(JSON.stringify(app.slack.messages)).toContain("https://reddit.com/r/testsub/comments/big/");
     });
 
     it("still goes, logged, when the deletion cannot be noted", TEST_OPTIONS, async (): Promise<void> => {
@@ -186,6 +187,6 @@ describe("the alert about a deleted post", (): void => {
             "[deletions] Could not take a deleted post or comment out of queued alerts:",
             failure,
         );
-        expect(JSON.stringify(app.slack.messages)).toContain("Big post");
+        expect(JSON.stringify(app.slack.messages)).toContain("https://reddit.com/r/testsub/comments/big/");
     });
 });

@@ -7,8 +7,6 @@ export interface PostLookup {
 
 export interface DeletedPostAlert {
     readonly post: DeletedPost;
-    /** '' when unknown. */
-    readonly authorName: string;
     readonly subredditName: string;
     /** ISO 8601. */
     readonly deletedAt: string;
