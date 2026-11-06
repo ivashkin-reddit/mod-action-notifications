@@ -58,7 +58,7 @@ npx devvit install <your-subreddit>
 npx devvit settings set slackBotToken  # the Slack app's bot token
 ```
 
-The bot token comes from the Slack app: [slack-app/README.md](./slack-app/README.md) says how to create it, and how to add it to the alert channels. Then follow the [README's Getting started](./README.md#getting-started) to configure the app.
+The bot token comes from the Slack app: [slack-app/README.md](./slack-app/README.md) says how to create it, and how to add it to the alert channels. Then follow the [README's Getting started](./README.md#getting-started) to configure the app. Before a release, try each feature on a test subreddit as [docs/playtest-runbook.md](./docs/playtest-runbook.md) sets out.
 
 ### Before the first release
 

@@ -8,7 +8,7 @@ Commits are authored and committed as `ivashkin-reddit <ivashkin.r@pm.me>`; push
 
 A change is done when every step in [.github/workflows/test.yml](.github/workflows/test.yml) passes locally.
 
-`npm run playtest` (`devvit playtest`) is the only check against Reddit itself and needs the user's Reddit login: hand that step to the user, naming what to exercise.
+`npm run playtest` (`devvit playtest`) is the only check against Reddit itself and needs the user's Reddit login: hand that step to the user, naming the steps of [docs/playtest-runbook.md](docs/playtest-runbook.md) the change touches. A change to a trigger, a Reddit API call or an alert adds or updates its step there.
 
 ## Documentation
 
