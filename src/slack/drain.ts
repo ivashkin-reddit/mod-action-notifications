@@ -3,7 +3,7 @@ import type { DeletionRedis } from "./deletions.js";
 import type { DeliveryHealth } from "./health.js";
 import type { SentRedis } from "./sent.js";
 import { backoffMs, wait } from "./webApi.js";
-import type { Delivery } from "./webApi.js";
+import type { SlackApi, Delivery } from "./webApi.js";
 
 /**
  * What one drain of the outbox shares between the alerts it posts and the edits it makes: what it works with, its
@@ -23,8 +23,8 @@ export type QueueDependencies = Readonly<{
 
 export type OutboxDependencies = QueueDependencies &
     Readonly<{
-        /** The Slack app's bot token. */
-        token: string;
+        /** How Slack is called: the Slack app's bot token, and the fetch that carries it. */
+        api: SlackApi;
         /** How many days the alert channels keep messages: how long the app remembers where each alert is. */
         retentionDays: number;
     }>;

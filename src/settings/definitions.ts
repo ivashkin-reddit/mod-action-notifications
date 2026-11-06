@@ -231,6 +231,14 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
             "Post the team's statistics for the week before to the notification channel each Monday at 08:00 UTC: actions, who took them, quiet hours, bans, how many moderators acted and the most-moderated threads. No figure names a moderator (off by default)",
         defaultValue: false,
     },
+    {
+        type: "boolean",
+        name: "debugLogging",
+        label: "Debug Logging",
+        helpText:
+            "Log a line for every event the app handles, with its timings and counts, for the app's developer during an incident. Off by default: Devvit keeps only 5,000 log lines",
+        defaultValue: false,
+    },
 ];
 
 /**

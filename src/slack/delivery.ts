@@ -18,4 +18,4 @@ export type { DeliveryCondition, DeliveryHealth } from "./health.js";
 export { createSlackOutbox, forgetContent, type SlackOutbox } from "./outbox.js";
 export { queueState } from "./queue.js";
 export { continuationStarted, OUTBOX_JOB_NAME } from "./schedule.js";
-export { createDirectSender, sendTestMessage } from "./webApi.js";
+export { createDirectSender, sendTestMessage, type SlackApi, type SlackFetch } from "./webApi.js";

@@ -61,6 +61,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
                 { name: "weeklyStatistics", type: "boolean", defaultValue: false },
+                { name: "debugLogging", type: "boolean", defaultValue: false },
             ]);
         },
     );

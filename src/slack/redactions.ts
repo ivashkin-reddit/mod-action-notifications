@@ -126,17 +126,17 @@ async function reportRedaction(health: DeliveryHealth, delivery: Delivery<unknow
  * lease outlasts its time by one request only, so the deletion is left to a later drain.
  */
 async function redact(drain: Drain, { posted, withoutQuotes }: SentAlert): Promise<Delivery | "later"> {
-    const { token } = drain.outbox;
+    const { api } = drain.outbox;
     const edit = await callWithRetries(
         drain,
-        async (): Promise<Delivery> => await updateMessage(token, posted, withoutQuotes),
+        async (): Promise<Delivery> => await updateMessage(api, posted, withoutQuotes),
     );
     if (edit.outcome !== "rejected" || edit.failure.kind !== "response" || !CANNOT_EDIT.includes(edit.failure.error)) {
         return edit;
     }
     return Date.now() >= drain.deadline
         ? "later"
-        : await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(token, posted));
+        : await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(api, posted));
 }
 
 /** Why a waiting redaction is dropped unmade: it cannot be read, or it waited a week; undefined to make it. */

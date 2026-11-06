@@ -82,8 +82,10 @@ const SRC = fileURLToPath(new URL("../../src", import.meta.url));
 const EDGE_FILES = [
     "communityTriggers.ts",
     "composition.ts",
+    "invocations.ts",
     "main.ts",
     "menuActions.ts",
+    "meter.ts",
     "scheduledJobs.ts",
     "slackConnection.ts",
     "triggers.ts",

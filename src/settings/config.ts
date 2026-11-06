@@ -20,6 +20,8 @@ const DECIMAL = 10;
 /** The installation's settings, validated. */
 export interface AppConfig {
     readonly enabledActions: readonly string[];
+    /** Log a completion line for every invocation, not only for failed and slow ones. */
+    readonly debugLogging: boolean;
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
     readonly flagUnknownModerators: boolean;
@@ -73,6 +75,7 @@ type SettingValue = unknown;
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
     enabledActions: [],
+    debugLogging: false,
     excludedModerators: [],
     flagUnknownModerators: true,
     securityAlerts: true,
@@ -185,6 +188,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
     const alertChannel = channelName(await settings.get("alertChannel"));
     return {
         enabledActions: selected(await settings.get("enabledActions")),
+        debugLogging: booleanOr(await settings.get("debugLogging"), false),
         excludedModerators: usernames(await settings.get("excludedModerators")),
         flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
         securityAlerts: booleanOr(await settings.get("securityAlerts"), true),

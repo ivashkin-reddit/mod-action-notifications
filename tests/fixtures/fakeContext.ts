@@ -49,6 +49,7 @@ export interface Settings {
     postDeletionUpvoteThreshold?: unknown;
     dailySummary?: unknown;
     weeklyStatistics?: unknown;
+    debugLogging?: unknown;
 }
 
 /** The app's own setting defaults, with a notification channel. */

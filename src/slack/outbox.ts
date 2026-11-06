@@ -100,10 +100,10 @@ async function rememberQuoting(
 
 /** Posts a message within a drain, reporting what Slack's answer says about Slack. */
 async function post(drain: Drain, message: SlackMessage): Promise<Delivery<Posted>> {
-    const { health, redis, token } = drain.outbox;
+    const { health, redis, api } = drain.outbox;
     const delivery = await callWithRetries(
         drain,
-        async (): Promise<Delivery<Posted>> => await postMessage(token, message),
+        async (): Promise<Delivery<Posted>> => await postMessage(api, message),
     );
     await reportDelivery(health, delivery, await endsRefusal(redis, delivery, message.channel ?? ""));
     return delivery;
@@ -237,7 +237,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself. Sent so, it is not remembered, and keeps its quotes if its content is deleted.
                 console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
-                await createDirectSender(outbox.token)(message);
+                await createDirectSender(outbox.api)(message);
                 return;
             }
             await deliverQueued(outbox).catch((error: unknown): void => {

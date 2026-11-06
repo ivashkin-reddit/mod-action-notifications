@@ -1,5 +1,5 @@
 import type { Form } from "@devvit/public-api";
-import { configOf, healthReports, settingsOf, slackSetup } from "./composition.js";
+import { configOf, healthReports, settingsOf, slackApiOf, slackSetup } from "./composition.js";
 import type { AppContext, SlackSetup } from "./composition.js";
 import type { MenuContext } from "./menuActions.js";
 import type { AppConfig } from "./settings/index.js";
@@ -100,7 +100,11 @@ async function connectWith(token: string, context: MenuContext): Promise<Toast> 
     }
     const connecting = await connectSlack(
         { redis: context.redis, scheduler: context.scheduler, health: healthReports(context) },
-        { token, channels: alertChannels(config), subredditName: await subredditNameOf(context) },
+        {
+            api: { token, fetch: context.fetch },
+            channels: alertChannels(config),
+            subredditName: await subredditNameOf(context),
+        },
     );
     logRefusal(connecting);
     return connectingToast(connecting);
@@ -160,7 +164,7 @@ async function testSlackConnection(context: AppContext): Promise<ConnectionTest>
     if (setup !== "set-up") {
         return setup;
     }
-    return (await sendTestMessage(config.slackBotToken, config.notificationChannel)) ? "delivered" : "failed";
+    return (await sendTestMessage(slackApiOf(context, config), config.notificationChannel)) ? "delivered" : "failed";
 }
 
 /** Sends a test message to Slack, and says how it went. */

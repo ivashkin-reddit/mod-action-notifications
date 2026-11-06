@@ -3,7 +3,7 @@ import type { QueueDependencies } from "./drain.js";
 import { escapeText, inChannel } from "./message.js";
 import { CONTINUE_SOON_MS, scheduleDrain } from "./schedule.js";
 import { checkToken, failureDetail, postDirectly } from "./webApi.js";
-import type { Delivery, Posted } from "./webApi.js";
+import type { Delivery, Posted, SlackApi } from "./webApi.js";
 
 /**
  * The installation's connection to Slack: the bot token of the Slack app its moderators made in their own workspace
@@ -52,16 +52,19 @@ export type Connecting =
     | Readonly<{ outcome: "token-refused"; detail: string }>
     | Readonly<{ outcome: "channel-refused"; channel: string; detail: string }>;
 
-/** A connection to make: the token, the channels alerts go to, and the subreddit whose alerts they are. */
-export type ConnectRequest = Readonly<{ token: string; channels: readonly string[]; subredditName: string }>;
+/**
+ * A connection to make: Slack, called with the token to connect, the channels alerts go to, and the subreddit whose
+ * alerts they are.
+ */
+export type ConnectRequest = Readonly<{ api: SlackApi; channels: readonly string[]; subredditName: string }>;
 
 /** Posts to each channel that alerts will come there; the first channel Slack refused, if any. */
-async function firstRefusal({ token, channels, subredditName }: ConnectRequest): Promise<Connecting | undefined> {
+async function firstRefusal({ api, channels, subredditName }: ConnectRequest): Promise<Connecting | undefined> {
     const deliveries = await Promise.all(
         channels.map(
             async (channel: string): Promise<Delivery<Posted>> =>
                 await postDirectly(
-                    token,
+                    api,
                     inChannel(
                         { text: `🔗 Connected: r/${escapeText(subredditName)}'s alerts come to this channel.` },
                         channel,
@@ -84,18 +87,18 @@ async function firstRefusal({ token, channels, subredditName }: ConnectRequest):
  * then delivers what was queued: no drain delivers while Slack is not connected. Rejects only when Redis fails.
  */
 /** The workspace whose bot token this is, as Slack says; why not, when it is not a bot token Slack takes. */
-async function workspaceOf(token: string): Promise<Readonly<{ team: string }> | Connecting> {
-    if (!token.startsWith(BOT_TOKEN_PREFIX)) {
+async function workspaceOf(api: SlackApi): Promise<Readonly<{ team: string }> | Connecting> {
+    if (!api.token.startsWith(BOT_TOKEN_PREFIX)) {
         return { outcome: "not-a-bot-token" };
     }
-    const checked = await checkToken(token);
+    const checked = await checkToken(api);
     return checked.outcome === "delivered"
         ? checked.answer
         : { outcome: "token-refused", detail: failureDetail(checked.failure) };
 }
 
 export async function connectSlack(queue: QueueDependencies, request: ConnectRequest): Promise<Connecting> {
-    const checked = await workspaceOf(request.token);
+    const checked = await workspaceOf(request.api);
     if ("outcome" in checked) {
         return checked;
     }
@@ -103,7 +106,7 @@ export async function connectSlack(queue: QueueDependencies, request: ConnectReq
     if (refused !== undefined) {
         return refused;
     }
-    const connection: SlackConnection = { token: request.token, team: checked.team };
+    const connection: SlackConnection = { token: request.api.token, team: checked.team };
     await queue.redis.set(CONNECTION_KEY, JSON.stringify(connection));
     await scheduleDrain(queue, CONTINUE_SOON_MS);
     return { outcome: "connected", team: connection.team };

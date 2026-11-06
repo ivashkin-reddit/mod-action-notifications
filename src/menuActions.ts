@@ -5,10 +5,11 @@ import {
     modActionPresentation,
     monitorWanted,
     settingsOf,
+    slackApiOf,
     slackSetup,
     withConnection,
 } from "./composition.js";
-import type { AppContext } from "./composition.js";
+import type { AppContext, PlatformContext } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
 import type { MonitorState, SlackStatus, StatusLine } from "./health/index.js";
 import {
@@ -43,6 +44,11 @@ export type InvokerContext = Readonly<{
 
 /** The Devvit APIs a menu item or form handler calls. */
 export type MenuContext = AppContext &
+    InvokerContext &
+    Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
+
+/** What Devvit gives a menu item or form handler: what MenuContext is made from, for each invocation. */
+export type PlatformMenuContext = PlatformContext &
     InvokerContext &
     Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
 
@@ -236,7 +242,7 @@ async function sendSimulatedModAction(
         simulationRequestFromForm(values),
         context.subredditName,
         // A moderator waits on the result, so the simulation goes straight to Slack, to the channel the form names.
-        createSlackSimulationAlerts(createDirectSender(config.slackBotToken), {
+        createSlackSimulationAlerts(createDirectSender(slackApiOf(context, config)), {
             ...presentation,
             notificationChannel: channel === "" ? presentation.notificationChannel : channel,
         }),

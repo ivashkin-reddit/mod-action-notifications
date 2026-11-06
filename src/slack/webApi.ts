@@ -1,6 +1,20 @@
 import { inChannel } from "./message.js";
 import type { DirectSlackSender, SlackMessage } from "./message.js";
 
+/** A request to Slack's Web API, as callSlack makes it. */
+type SlackRequest = Readonly<{ method: "POST"; headers: Readonly<Record<string, string>>; body: string }>;
+
+/** The parts of an HTTP response the app reads. */
+export type SlackHttpResponse = Readonly<
+    Pick<Response, "ok" | "status" | "text"> & { headers: Readonly<{ get: (name: string) => string | null }> }
+>;
+
+/** The fetch Slack is called with: the global one, or one that counts calls for an invocation's completion line. */
+export type SlackFetch = (url: string, init: SlackRequest) => Promise<SlackHttpResponse>;
+
+/** What a call to Slack's Web API is made with: the Slack app's bot token, and the fetch that carries it. */
+export type SlackApi = Readonly<{ token: string; fetch: SlackFetch }>;
+
 /** Slack's Web API, on the one host the app may fetch (devvit.json permissions.http.domains). */
 const API_URL = "https://slack.com/api/";
 const MS_PER_SECOND = 1000;
@@ -66,7 +80,7 @@ function retryAfterMs(header: string | null): number | undefined {
 }
 
 /** The parts of Slack's response the app reads. */
-type SlackResponse = Readonly<Pick<Response, "ok" | "status" | "text">>;
+type SlackResponse = Readonly<Pick<SlackHttpResponse, "ok" | "status" | "text">>;
 
 /** Slack's answer: the fields of the JSON object it always answers with, or none for any other body. */
 async function answerOf(response: SlackResponse): Promise<Answer | undefined> {
@@ -116,7 +130,7 @@ type SlackMethod = "auth.test" | "chat.postMessage" | "chat.update" | "chat.dele
  * Calls a Web API method once, with the Slack app's bot token. The token goes in the authorization header, never in
  * a URL, so no error names it. Never rejects.
  */
-async function callSlack(token: string, method: SlackMethod, body: unknown): Promise<Delivery> {
+async function callSlack({ token, fetch }: SlackApi, method: SlackMethod, body: unknown): Promise<Delivery> {
     try {
         const response = await fetch(`${API_URL}${method}`, {
             method: "POST",
@@ -144,8 +158,8 @@ function textIn(answer: Readonly<Pick<Answer, "get">>, field: string): string {
 }
 
 /** Posts the message to its channel once; where Slack put it, when it took it ('' for what its answer left out). */
-export async function postMessage(token: string, message: SlackMessage): Promise<Delivery<Posted>> {
-    const delivery = await callSlack(token, "chat.postMessage", message);
+export async function postMessage(api: SlackApi, message: SlackMessage): Promise<Delivery<Posted>> {
+    const delivery = await callSlack(api, "chat.postMessage", message);
     return delivery.outcome === "delivered"
         ? {
               outcome: "delivered",
@@ -158,8 +172,8 @@ export async function postMessage(token: string, message: SlackMessage): Promise
  * Puts `message` in place of the app's message at `posted`, once: its text and attachments, which replace all the
  * old ones, as an empty list removes them (docs.slack.dev, chat.update).
  */
-export async function updateMessage(token: string, posted: Posted, message: SlackMessage): Promise<Delivery> {
-    return await callSlack(token, "chat.update", {
+export async function updateMessage(api: SlackApi, posted: Posted, message: SlackMessage): Promise<Delivery> {
+    return await callSlack(api, "chat.update", {
         channel: posted.channel,
         ts: posted.ts,
         text: message.text,
@@ -168,16 +182,16 @@ export async function updateMessage(token: string, posted: Posted, message: Slac
 }
 
 /** Asks Slack, once, whose the token is; the name of its workspace, when Slack takes it. */
-async function authTest(token: string): Promise<Delivery<Readonly<{ team: string }>>> {
-    const delivery = await callSlack(token, "auth.test", {});
+async function authTest(api: SlackApi): Promise<Delivery<Readonly<{ team: string }>>> {
+    const delivery = await callSlack(api, "auth.test", {});
     return delivery.outcome === "delivered"
         ? { outcome: "delivered", answer: { team: textIn(delivery.answer, "team") } }
         : delivery;
 }
 
 /** Deletes the app's message at `posted`, once. */
-export async function deleteMessage(token: string, posted: Posted): Promise<Delivery> {
-    return await callSlack(token, "chat.delete", { channel: posted.channel, ts: posted.ts });
+export async function deleteMessage(api: SlackApi, posted: Posted): Promise<Delivery> {
+    return await callSlack(api, "chat.delete", { channel: posted.channel, ts: posted.ts });
 }
 
 /** At most this much of an error code goes into a log line: one from something other than Slack could be anything. */
@@ -221,18 +235,18 @@ async function withDirectRetries<T>(call: () => Promise<Delivery<T>>, retryCount
 }
 
 /** Posts the message for a moderator waiting on it, retrying as withDirectRetries does. Never rejects. */
-export async function postDirectly(token: string, message: SlackMessage): Promise<Delivery<Posted>> {
-    return await withDirectRetries(async (): Promise<Delivery<Posted>> => await postMessage(token, message));
+export async function postDirectly(api: SlackApi, message: SlackMessage): Promise<Delivery<Posted>> {
+    return await withDirectRetries(async (): Promise<Delivery<Posted>> => await postMessage(api, message));
 }
 
 /** Asks Slack whose the token is, for a moderator waiting on it, retrying as withDirectRetries does. */
-export async function checkToken(token: string): Promise<Delivery<Readonly<{ team: string }>>> {
-    return await withDirectRetries(async (): Promise<Delivery<Readonly<{ team: string }>>> => await authTest(token));
+export async function checkToken(api: SlackApi): Promise<Delivery<Readonly<{ team: string }>>> {
+    return await withDirectRetries(async (): Promise<Delivery<Readonly<{ team: string }>>> => await authTest(api));
 }
 
 /** Posts the message as postDirectly does; true when Slack accepted it, the failure logged when not. */
-async function postToSlack(token: string, message: SlackMessage): Promise<boolean> {
-    const delivery = await postDirectly(token, message);
+async function postToSlack(api: SlackApi, message: SlackMessage): Promise<boolean> {
+    const delivery = await postDirectly(api, message);
     if (delivery.outcome !== "delivered") {
         logFailure(delivery.failure);
         return false;
@@ -244,14 +258,14 @@ async function postToSlack(token: string, message: SlackMessage): Promise<boolea
  * A sender that posts straight to Slack with the bot token, retrying as postToSlack does: for a moderator waiting on
  * the result. Alerts go through the outbox instead.
  */
-export function createDirectSender(token: string): DirectSlackSender {
-    return async (message: SlackMessage): Promise<boolean> => await postToSlack(token, message);
+export function createDirectSender(api: SlackApi): DirectSlackSender {
+    return async (message: SlackMessage): Promise<boolean> => await postToSlack(api, message);
 }
 
 /** Sends a test message to the channel, a channel ID or name; true when Slack accepted it. */
-export async function sendTestMessage(token: string, channel: string): Promise<boolean> {
+export async function sendTestMessage(api: SlackApi, channel: string): Promise<boolean> {
     return await postToSlack(
-        token,
+        api,
         inChannel(
             {
                 text: "🧪 Test message from Mod Action Notifications",

@@ -22,7 +22,11 @@ export type FakeHealth = Readonly<{
 export type OutboxFakes = Readonly<
     {
         dependencies: Readonly<
-            { token: string; retentionDays: number; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">
+            {
+                api: Readonly<{ token: string; fetch: FakeSlack["fetch"] }>;
+                retentionDays: number;
+                health: FakeHealth;
+            } & Pick<FakeContext, "redis" | "scheduler">
         >;
         slack: FakeSlack;
         health: FakeHealth;
@@ -48,7 +52,7 @@ export function outboxFakes(): OutboxFakes {
     };
     return {
         dependencies: {
-            token: BOT_TOKEN,
+            api: { token: BOT_TOKEN, fetch: slack.fetch },
             retentionDays: RETENTION_DAYS,
             redis: context.redis,
             scheduler: context.scheduler,

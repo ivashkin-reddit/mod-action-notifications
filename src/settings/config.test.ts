@@ -17,6 +17,7 @@ describe("reading the settings", (): void => {
 
         await expect(configFrom({})).resolves.toStrictEqual({
             enabledActions: [],
+            debugLogging: false,
             excludedModerators: [],
             flagUnknownModerators: true,
             securityAlerts: true,

@@ -8,6 +8,7 @@ import {
     raiseCondition,
 } from "./health/index.js";
 import type { Condition, ConditionPorts, HealthEvent, NoticeReddit } from "./health/index.js";
+import type { Invocation } from "./meter.js";
 import { actionName } from "./moderation/index.js";
 import type { ModActionPresentation } from "./moderation/index.js";
 import {
@@ -22,7 +23,7 @@ import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modque
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { createSlackOutbox, readConnection } from "./slack/delivery.js";
-import type { DeliveryHealth, SlackConnection, SlackOutbox } from "./slack/delivery.js";
+import type { DeliveryHealth, SlackApi, SlackConnection, SlackFetch, SlackOutbox } from "./slack/delivery.js";
 
 /**
  * The composition root's shared wiring: the settings, Slack's setup, the health log and the outbox, built from a
@@ -31,7 +32,7 @@ import type { DeliveryHealth, SlackConnection, SlackOutbox } from "./slack/deliv
  */
 
 /** The Devvit APIs the app calls. Trigger, scheduler, menu and form contexts all satisfy this. */
-export type AppContext = Readonly<{
+export type PlatformContext = Readonly<{
     settings: Readonly<Pick<TriggerContext["settings"], "get">>;
     redis: Readonly<
         Pick<
@@ -82,12 +83,20 @@ export type AppContext = Readonly<{
     subredditName?: string | undefined;
 }>;
 
+/**
+ * What a handler works with: Devvit's APIs, each call counted for the invocation's completion line, the fetch Slack is
+ * called with, likewise counted, and the invocation itself. main.ts makes one for each invocation (invocations.ts).
+ */
+export type AppContext = PlatformContext & Readonly<{ fetch: SlackFetch; invocation: Invocation }>;
+
 // Each installation's last settings read successfully, for as long as the app process lives: it can serve several.
 const loadConfig = createConfigLoader();
 
 /** The installation's settings, as last read successfully. */
 export async function settingsOf(context: AppContext): Promise<AppConfig> {
-    return await loadConfig(context.settings, context.subredditId);
+    const config = await loadConfig(context.settings, context.subredditId);
+    context.invocation.noteDebug(config.debugLogging);
+    return config;
 }
 
 /**
@@ -104,6 +113,11 @@ export function withConnection(config: AppConfig, connection: SlackConnection | 
 /** The installation's settings, and the Slack connection its moderators made. Rejects when Redis fails. */
 export async function configOf(context: AppContext): Promise<Installation> {
     return withConnection(await settingsOf(context), await readConnection(context.redis));
+}
+
+/** How the installation calls Slack: with the bot token connected, through the invocation's fetch. */
+export function slackApiOf(context: AppContext, config: Installation): SlackApi {
+    return { token: config.slackBotToken, fetch: context.fetch };
 }
 
 /** Whether Slack is set up: what is missing, if anything, for alerts to be sent. */
@@ -174,13 +188,20 @@ export function healthReports(context: AppContext): DeliveryHealth & MonitorHeal
 
 /** The installation's Slack outbox, through which every alert goes. */
 export function outboxOf(context: AppContext, config: Installation): SlackOutbox {
-    return createSlackOutbox({
-        token: config.slackBotToken,
+    const outbox = createSlackOutbox({
+        api: slackApiOf(context, config),
         retentionDays: config.slackRetentionDays,
         redis: context.redis,
         scheduler: context.scheduler,
         health: healthReports(context),
     });
+    return {
+        ...outbox,
+        send: async (...alert: Readonly<Parameters<SlackOutbox["send"]>>): Promise<void> => {
+            context.invocation.noteAlert();
+            await outbox.send(...alert);
+        },
+    };
 }
 
 /** The installation's modmail, its alert claims, and where its alerts and problems go. */
