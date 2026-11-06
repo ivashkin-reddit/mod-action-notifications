@@ -220,7 +220,7 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
     - Where the workspace's settings don't allow the edit (`edit_window_closed`, `cant_update_message`), the alert is deleted (`chat.delete`) instead. An alert already deleted in Slack (`message_not_found`) needs nothing.
     - Content deleted while its alert is on its way to Slack is redacted as soon as Slack has the alert.
     - Redactions count toward the day's `redacted`. One Slack refuses is dropped and reported as a health condition; one Slack can't take for now waits for a later run, as alerts do.
-    - At most 50,000 posts and comments are remembered; past that, the oldest are forgotten first, so Redis stays well inside the 100 MB an unpublished app has. Set the alert channels' message retention to 90 days so that no alert outlives the record of where it is.
+    - At most 50,000 posts and comments are remembered; past that, the oldest are forgotten first, so Redis stays well inside the 100 MB an unpublished app has. Alert channels keep messages for 90 days at most, as [slack-app/README.md](./slack-app/README.md#deploying-it) sets them up, so that no alert outlives the record of where it is.
     - Alerts sent before this version, and alerts **Test Slack Connection** or **Simulate Mod Action** send, aren't remembered.
 
 **Direct sends.** **Test Slack Connection** and **Simulate Mod Action** skip the queue, because a moderator is waiting for the answer. They retry after 1, 2 and 4 seconds before reporting failure.
@@ -356,7 +356,7 @@ Lines that need attention besides those:
 ## Known limitations
 
 - **Deleted content is taken out of alerts for 90 days.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to 90 days (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it.
-- **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack, and in the ban and mute history until it expires.
+- **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack until the channels' message retention removes them, and in the ban and mute history until it expires. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends for data about redditors. The free plan can only set the whole workspace to delete messages after 90 days, or keep them for a year. [slack-app/README.md](./slack-app/README.md#deploying-it) has the steps.
 - **Ban and mute history is kept for 90 days**, longer than the 30 days Reddit recommends for user data, so that unbans after longer bans keep their context.
 - **The monitor reads each listing in full.** Reddit's listings end at around a thousand items, so a run makes at most a few dozen requests.
 - **Handler time limits.** Devvit doesn't document a time limit for Blocks handlers. The outbox keeps each run to about 10 seconds plus one request, and recovers a run that's cut off.

@@ -92,7 +92,7 @@ Uninstalling the app removes its records and settings. Alerts already in Slack a
 ## Deletions
 
 - **A post or comment deleted on Reddit.** When Reddit reports the deletion, the app takes the content's title and text out of every alert still waiting to be sent, and leaves them out of any alert sent later. Such an alert keeps a link without the title. The app keeps only the content's ID, for a day. In alerts already in Slack, it replaces each alert that quotes the content, sent within the last 90 days, with the same alert without the title and text, by editing it; where the workspace does not allow the edit, it deletes the alert. Alerts older than that, or sent before the app could do this, keep the content until Slack's retention removes them, or the moderators delete them. The alert about a deleted post links to it without its title, and does not name its author.
-- **A deleted Reddit account.** Reddit does not tell apps when an account is deleted. A deleted account's username stays in the ban and mute history until that expires, and in alerts already in Slack.
+- **A deleted Reddit account.** Reddit does not tell apps when an account is deleted. A deleted account's username stays in the ban and mute history until that expires, and in alerts already in Slack until the workspace's message retention removes them. The terms ask moderators to keep alerts for no more than 90 days, and for 30 where their Slack plan allows it.
 
 ## Choices
 
