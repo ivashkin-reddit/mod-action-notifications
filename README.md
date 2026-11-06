@@ -75,6 +75,7 @@ You'll need moderator permissions on the subreddit and a Slack workspace where y
 | Post Deletion Alert Threshold         | Alert when a user deletes their own post with at least this score.                                                                                                                                                             | 100                             |
 | Daily Summary                         | Each morning at 08:00 UTC, post a summary of the day before to the notification channel: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working.                                | off                             |
 | Weekly Statistics                     | Each Monday at 08:00 UTC, post the team's statistics for the week before to the notification channel. No figure names a moderator.                                                                                             | off                             |
+| Debug Logging                         | Log a line for every event the app handles, with its timings, for the app's developer during a problem. Turn it on only when asked: the app's logs hold 5,000 lines.                                                           | Off                             |
 
 Setting a threshold to 0 turns that alert off.
 

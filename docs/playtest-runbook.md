@@ -129,7 +129,19 @@ Then:
 - [ ] **Do:** open **Connect Slack** once more. **Expect:** the token field is empty: the app never shows the token.
 - **Settles:** `auth.test` and posting work through Devvit's fetch, Slack's error codes reach the moderator, and the token is kept and used per installation.
 
-### 14. Logs
+### 14. Completion lines, and the app's own actions
+
+- [ ] **Do:** as **Mod A**, turn on **Debug Logging** in the app's settings. Remove a comment, report another as **User**, edit it as **User**, then delete it as **User**.
+- [ ] **Expect:** one `[invocation] {…}` line in the logs for each (`ModAction`, `CommentReport`, `CommentUpdate`, `CommentDelete`), with `outcome` `ok`, a `target` that is the comment's ID, and `settings` `{"n": 1, …}` or `{"n": 0, …}`. No username or comment text in any of them.
+- [ ] **Do:** turn **Debug Logging** off, and repeat one action. **Expect:** no line for it.
+- [ ] **Expect**, from the upload at the start (an upgrade): in the alerts channel, a security alert for `dev_platform_app_changed` or `dev_platform_app_installed`. Note whether it says "unknown moderator", and which account it names.
+- [ ] **Expect**, if the app sent a modmail notice during the session (in modmail's Notifications): whether a `ModMail` `[invocation]` line followed it, and whether step 10's waiting alert counted its conversation.
+- **Settles:**
+    - The completion lines reach Devvit's log stream, and `settings.getAll()` answers in a Blocks app as the tests assume.
+    - Which account Reddit names for the app's own installs and upgrades. If it is the app's account, not on the mod list, each upgrade sends a false "unknown moderator" alert, and the app should ignore its own account (`context.appAccountId`).
+    - Whether the app's own modmail notices come back to it, as a ModMail event or a conversation waiting for a reply.
+
+### 15. Logs
 
 - [ ] **Expect:** no `ERROR` lines in the logs for the session. A `WARN` line from the table in [OPERATORS-GUIDE.md](../OPERATORS-GUIDE.md#reading-the-logs) points to the step that failed.
 
