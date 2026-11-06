@@ -25,6 +25,8 @@ export type OutboxDependencies = QueueDependencies &
     Readonly<{
         /** The Slack app's bot token. */
         token: string;
+        /** How many days the alert channels keep messages: how long the app remembers where each alert is. */
+        retentionDays: number;
     }>;
 
 /** One drain: what it works with, and when it stops starting calls to Slack, in ms since the epoch. */

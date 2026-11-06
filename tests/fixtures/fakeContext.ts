@@ -31,6 +31,7 @@ export interface Settings {
     includeModNote?: unknown;
     notificationChannel?: unknown;
     alertChannel?: unknown;
+    slackRetentionDays?: unknown;
     modqueueThreshold?: unknown;
     unmoderagedAgeHours?: unknown;
     reportedContentAgeHours?: unknown;

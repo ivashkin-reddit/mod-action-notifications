@@ -164,6 +164,7 @@ export function healthReports(context: AppContext): DeliveryHealth & MonitorHeal
 export function outboxOf(context: AppContext, config: AppConfig): SlackOutbox {
     return createSlackOutbox({
         token: config.slackBotToken,
+        retentionDays: config.slackRetentionDays,
         redis: context.redis,
         scheduler: context.scheduler,
         health: healthReports(context),

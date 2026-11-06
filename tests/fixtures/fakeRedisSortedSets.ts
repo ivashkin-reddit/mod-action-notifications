@@ -15,12 +15,11 @@ export interface SortedSetCommands {
     /** How many members the sorted set has; 0 when there is none. */
     readonly zCard: Mock<(key: string) => Promise<number>>;
     /**
-     * ZRANGE by score (members scored from `start` to `stop`) or by rank (negative ranks count from the end),
-     * lowest first: the forms the app uses. Any other form rejects rather than answer differently from Redis.
+     * ZRANGE by score (members scored from `start` to `stop`, at most `limit.count` from `limit.offset`) or by rank
+     * (negative ranks count from the end), lowest first: the forms the app uses. Any other form rejects rather than
+     * answer differently from Redis.
      */
-    readonly zRange: Mock<
-        (key: string, start: number, stop: number, options?: Readonly<{ by: string }>) => Promise<ZMember[]>
-    >;
+    readonly zRange: Mock<(key: string, start: number, stop: number, options?: RangeOptions) => Promise<ZMember[]>>;
 }
 
 /** A sorted set's members, lowest score first (ties by member), as Redis orders them. */
@@ -50,18 +49,37 @@ function rankIn(rank: number, size: number): number {
  * ZRANGE by score (members scored from `start` to `stop`) or by rank (negative ranks count from the end), lowest
  * first. Any other form throws rather than answer differently from Redis.
  */
+/** ZRANGE's LIMIT, which Redis takes only with BYSCORE or BYLEX. */
+type RangeLimit = Readonly<{ offset: number; count: number }>;
+type RangeOptions = Readonly<{ by: string; limit?: RangeLimit }>;
+
 function rangeOf(
     scores: Scores,
-    { start, stop, by }: Readonly<{ start: number; stop: number; by: string | undefined }>,
+    {
+        start,
+        stop,
+        by,
+        limit,
+    }: Readonly<{ start: number; stop: number; by: string | undefined; limit: RangeLimit | undefined }>,
 ): ZMember[] {
     const members = ranked(scores);
     if (by === "score") {
-        return members.filter(({ score }: ZMember): boolean => score >= start && score <= stop);
+        const inRange = members.filter(({ score }: ZMember): boolean => score >= start && score <= stop);
+        return limit === undefined ? inRange : inRange.slice(limit.offset, limit.offset + limit.count);
     }
     if (by !== "rank") {
         throw new Error(`the fake ZRANGE supports by score and by rank, not ${String(by)}`);
     }
     return members.slice(rankIn(start, members.length), rankIn(stop, members.length) + 1);
+}
+
+function zRangeCommand(keyspace: Keyspace): SortedSetCommands["zRange"] {
+    return vi.fn(
+        async (key: string, start: number, stop: number, options?: RangeOptions): Promise<ZMember[]> =>
+            await Promise.resolve(
+                rangeOf(scoresAt(keyspace, key), { start, stop, by: options?.by, limit: options?.limit }),
+            ),
+    );
 }
 
 export function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
@@ -103,9 +121,6 @@ export function sortedSetCommands(keyspace: Keyspace): SortedSetCommands {
         zCard: vi.fn(
             async (key: string): Promise<number> => await Promise.resolve(Object.keys(scoresAt(keyspace, key)).length),
         ),
-        zRange: vi.fn(
-            async (key: string, start: number, stop: number, options?: Readonly<{ by: string }>): Promise<ZMember[]> =>
-                await Promise.resolve(rangeOf(scoresAt(keyspace, key), { start, stop, by: options?.by })),
-        ),
+        zRange: zRangeCommand(keyspace),
     };
 }

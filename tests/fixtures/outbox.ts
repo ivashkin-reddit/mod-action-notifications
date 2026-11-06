@@ -8,6 +8,9 @@ import type { ScheduledJob } from "./fakeScheduler.js";
 import { createFakeSlack } from "./fakeSlack.js";
 import type { FakeSlack, SlackRequest } from "./fakeSlack.js";
 
+/** How many days the alert channels keep messages: the most, and the default. */
+const RETENTION_DAYS = 90;
+
 /** The conditions the outbox reports, recorded: each call names the condition, and for a raise, its detail. */
 export type FakeHealth = Readonly<{
     raise: Mock<(condition: string, detail: string) => Promise<void>>;
@@ -18,7 +21,9 @@ export type FakeHealth = Readonly<{
 /** What the Slack outbox's unit tests build it from, and the fakes behind it. */
 export type OutboxFakes = Readonly<
     {
-        dependencies: Readonly<{ token: string; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">>;
+        dependencies: Readonly<
+            { token: string; retentionDays: number; health: FakeHealth } & Pick<FakeContext, "redis" | "scheduler">
+        >;
         slack: FakeSlack;
         health: FakeHealth;
     } & Pick<FakeContext, "redis" | "scheduler">
@@ -42,7 +47,13 @@ export function outboxFakes(): OutboxFakes {
         }),
     };
     return {
-        dependencies: { token: BOT_TOKEN, redis: context.redis, scheduler: context.scheduler, health },
+        dependencies: {
+            token: BOT_TOKEN,
+            retentionDays: RETENTION_DAYS,
+            redis: context.redis,
+            scheduler: context.scheduler,
+            health,
+        },
         redis: context.redis,
         scheduler: context.scheduler,
         slack,

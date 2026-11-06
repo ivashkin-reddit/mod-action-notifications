@@ -4,6 +4,8 @@ import {
     DEFAULT_UNMODERATED_AGE_HOURS,
     DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
+    DEFAULT_SLACK_RETENTION_DAYS,
+    MAX_SLACK_RETENTION_DAYS,
 } from "./definitions.js";
 
 const DECIMAL = 10;
@@ -21,6 +23,8 @@ export interface AppConfig {
     readonly notificationChannel: string;
     /** A channel ID or name without its leading #: the alert channel, else the notification channel, else ''. */
     readonly alertChannel: string;
+    /** How many days the alert channels keep messages, 1 to 90: how long the app remembers where its alerts are. */
+    readonly slackRetentionDays: number;
     /** 0 turns the queue-size alert off. */
     readonly modqueueThreshold: number;
     /** 0 turns the unmoderated-age alert off. */
@@ -48,6 +52,7 @@ const DEFAULT_CONFIG: AppConfig = {
     includeModNote: true,
     notificationChannel: "",
     alertChannel: "",
+    slackRetentionDays: DEFAULT_SLACK_RETENTION_DAYS,
     modqueueThreshold: DEFAULT_MODQUEUE_THRESHOLD,
     unmoderatedAgeHours: DEFAULT_UNMODERATED_AGE_HOURS,
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
@@ -75,6 +80,11 @@ function nonNegativeInteger(value: SettingValue, fallback: number): number {
     }
     const parsed = Number.parseInt(value, DECIMAL);
     return Number.isNaN(parsed) ? fallback : Math.max(0, parsed);
+}
+
+/** Days from 1 to 90, read as a whole number; the default for anything else. */
+function retentionDays(value: SettingValue): number {
+    return Math.min(MAX_SLACK_RETENTION_DAYS, Math.max(1, nonNegativeInteger(value, DEFAULT_SLACK_RETENTION_DAYS)));
 }
 
 function booleanOr(value: SettingValue, fallback: boolean): boolean {
@@ -109,6 +119,7 @@ async function readConfig(settings: SettingsReader): Promise<AppConfig> {
         notificationChannel,
         // The setting's help text: "uses main channel if empty".
         alertChannel: alertChannel === "" ? notificationChannel : alertChannel,
+        slackRetentionDays: retentionDays(await settings.get("slackRetentionDays")),
         modqueueThreshold: nonNegativeInteger(await settings.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
         unmoderatedAgeHours: nonNegativeInteger(
             await settings.get("unmoderagedAgeHours"),

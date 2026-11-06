@@ -84,7 +84,7 @@ async function rememberQuoting(
     }
     const posted = delivery.answer;
     try {
-        await rememberSent(outbox.redis, posted, quoting);
+        await rememberSent(outbox, posted, quoting);
         if (await anyDeleted(outbox.redis, quoting.contentIds)) {
             await queueRedactions(outbox.redis, [{ posted, withoutQuotes: quoting.withoutQuotes }]);
         }

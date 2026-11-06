@@ -217,6 +217,18 @@ describe("an alert in Slack quoting a comment then deleted on Reddit", (): void 
 
 // Stored data: renaming these keys would lose what installations hold.
 describe("an alert in Slack quoting Reddit content", (): void => {
+    // Kept no longer than Slack keeps the alert itself.
+    it("is remembered for as many days as the channels keep messages", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { slackRetentionDays: 30 });
+
+        await app.fire("ModAction", removedComment);
+
+        expect(app.context.redis.ttlSeconds("slack_outbox_sent:t1_c")).toBe(30 * DAY_SECONDS);
+        expect(app.context.redis.ttlSeconds("slack_outbox_sent")).toBe(30 * DAY_SECONDS);
+    });
+
     it(
         "is remembered for 90 days under each post and comment it quotes, with its version without quotes",
         TEST_OPTIONS,

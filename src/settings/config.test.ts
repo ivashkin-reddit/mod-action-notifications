@@ -23,6 +23,7 @@ describe("reading the settings", (): void => {
             includeModNote: true,
             notificationChannel: "",
             alertChannel: "",
+            slackRetentionDays: 90,
             modqueueThreshold: 50,
             unmoderatedAgeHours: 24,
             reportedContentAgeHours: 24,
@@ -50,6 +51,24 @@ describe("reading the settings", (): void => {
 
             await expect(configFrom({ modqueueThreshold: value })).resolves.toMatchObject({
                 modqueueThreshold: threshold,
+            });
+        },
+    );
+
+    it.each([
+        ["a whole number of days", 30, 30],
+        ["numeric text", "30", 30],
+        ["more than 90 days, as 90", 120, 90],
+        ["0, as 1 day", 0, 1],
+        ["text that is no number, as the default of 90", "lots", 90],
+    ])(
+        "reads the Slack message retention given as %s",
+        TEST_OPTIONS,
+        async (_label: string, value: unknown, days: number): Promise<void> => {
+            expect.hasAssertions();
+
+            await expect(configFrom({ slackRetentionDays: value })).resolves.toMatchObject({
+                slackRetentionDays: days,
             });
         },
     );

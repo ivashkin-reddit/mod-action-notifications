@@ -44,6 +44,7 @@ describe("what the app registers with Devvit", (): void => {
                 { name: "includeModNote", type: "boolean", defaultValue: true },
                 { name: "notificationChannel", type: "string", defaultValue: undefined },
                 { name: "alertChannel", type: "string", defaultValue: undefined },
+                { name: "slackRetentionDays", type: "number", defaultValue: 90 },
                 { name: "modqueueThreshold", type: "number", defaultValue: 50 },
                 { name: "unmoderagedAgeHours", type: "number", defaultValue: 24 },
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },

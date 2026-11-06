@@ -6,10 +6,15 @@ export const DEFAULT_MODQUEUE_THRESHOLD = 50;
 export const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
+/** The free Slack plan's only retention short of a year. */
+export const DEFAULT_SLACK_RETENTION_DAYS = 90;
+/** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
+export const MAX_SLACK_RETENTION_DAYS = 90;
 /** A Slack bot token starts so; a user token (xoxp-) would post as the person who made it. */
 const BOT_TOKEN_PREFIX = "xoxb-";
 const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
+const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
 
 /** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
 function botTokenProblem(text: string): string | undefined {
@@ -19,6 +24,13 @@ function botTokenProblem(text: string): string | undefined {
 /** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
 function wholeNumberProblem(value: number | undefined): string | undefined {
     return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
+}
+
+/** Why the value cannot be the channels' retention, or undefined when it can: unset (the default) or 1 to 90 days. */
+function retentionProblem(value: number | undefined): string | undefined {
+    return value === undefined || (Number.isInteger(value) && value >= 1 && value <= MAX_SLACK_RETENTION_DAYS)
+        ? undefined
+        : RETENTION_PROBLEM;
 }
 
 /**
@@ -65,6 +77,16 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
         label: "Alert Channel",
         helpText:
             "The Slack channel for security, modqueue and deleted-post alerts: its ID or name, as for the notification channel (optional; uses the notification channel if empty)",
+    },
+    {
+        type: "number",
+        name: "slackRetentionDays",
+        label: "Slack Message Retention (Days)",
+        helpText:
+            "How many days the alert channels keep messages, as set in Slack (1 to 90). For that long the app remembers where each alert quoting a post or comment is, to take the content out if it is deleted on Reddit. Set it to match the channels",
+        defaultValue: DEFAULT_SLACK_RETENTION_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            retentionProblem(value),
     },
     {
         type: "number",

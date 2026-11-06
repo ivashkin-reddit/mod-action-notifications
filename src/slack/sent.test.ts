@@ -8,13 +8,15 @@ const REMEMBERED_KEY = "slack_outbox_sent";
 const DAY = 86_400_000;
 const POSTED = { channel: "C0123MODS", ts: "1793793600.000001" };
 const QUOTING = { contentIds: ["t1_a"], withoutQuotes: { text: "removed t1_a" } };
+/** How many days the alert channels keep messages, unless a test says otherwise. */
+const RETENTION_DAYS = 90;
 
 describe("the alerts remembered in Slack", (): void => {
     it("are taken once, then forgotten", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const { redis } = outboxFakes();
-        await rememberSent(redis, POSTED, QUOTING);
+        await rememberSent({ redis, retentionDays: RETENTION_DAYS }, POSTED, QUOTING);
 
         await expect(takeSent(redis, "t1_a")).resolves.toStrictEqual([
             { posted: POSTED, withoutQuotes: { text: "removed t1_a" } },
@@ -27,7 +29,10 @@ describe("the alerts remembered in Slack", (): void => {
         expect.hasAssertions();
 
         const { redis } = outboxFakes();
-        await rememberSent(redis, POSTED, { ...QUOTING, contentIds: ["t1_a", "t3_b"] });
+        await rememberSent({ redis, retentionDays: RETENTION_DAYS }, POSTED, {
+            ...QUOTING,
+            contentIds: ["t1_a", "t3_b"],
+        });
 
         await expect(takeSent(redis, "t3_b")).resolves.toHaveLength(1);
         await expect(takeSent(redis, "t1_a")).resolves.toHaveLength(1);
@@ -39,11 +44,58 @@ describe("the alerts remembered in Slack", (): void => {
         const { redis } = outboxFakes();
         await redis.zAdd(REMEMBERED_KEY, { member: "t1_old", score: NOW.getTime() - 90 * DAY - 1 });
 
-        await rememberSent(redis, POSTED, QUOTING);
+        await rememberSent({ redis, retentionDays: RETENTION_DAYS }, POSTED, QUOTING);
 
         await expect(redis.zRange(REMEMBERED_KEY, 0, -1, { by: "rank" })).resolves.toStrictEqual([
             { member: "t1_a", score: NOW.getTime() },
         ]);
+    });
+
+    // A moderator can shorten the retention: what was remembered for longer goes, alerts and all.
+    it(
+        "forget, with their alerts, those last quoted before the channels' retention",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { redis } = outboxFakes();
+            await redis.zAdd(REMEMBERED_KEY, { member: "t1_old", score: NOW.getTime() - 30 * DAY - 1 });
+            await redis.hSet("slack_outbox_sent:t1_old", {
+                [`${POSTED.channel} 1.000001`]: JSON.stringify({ text: "x" }),
+            });
+
+            await rememberSent({ redis, retentionDays: 30 }, POSTED, QUOTING);
+
+            await expect(redis.zRange(REMEMBERED_KEY, 0, -1, { by: "rank" })).resolves.toStrictEqual([
+                { member: "t1_a", score: NOW.getTime() },
+            ]);
+            await expect(takeSent(redis, "t1_old")).resolves.toStrictEqual([]);
+        },
+    );
+
+    // Shortening the retention can leave many past it: each alert sent forgets a bounded batch of them.
+    it("forget at most 1,000 past the channels' retention at a time", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { redis } = outboxFakes();
+        await redis.zAdd(
+            REMEMBERED_KEY,
+            ...Array.from(
+                { length: 1001 },
+                (_unused: unknown, index: number): Readonly<{ member: string; score: number }> => ({
+                    member: `t1_old${String(index)}`,
+                    score: NOW.getTime() - 30 * DAY - 1 - index,
+                }),
+            ),
+        );
+
+        await rememberSent({ redis, retentionDays: 30 }, POSTED, QUOTING);
+
+        await expect(redis.zCard(REMEMBERED_KEY)).resolves.toBe(2);
+
+        await rememberSent({ redis, retentionDays: 30 }, POSTED, QUOTING);
+
+        await expect(redis.zCard(REMEMBERED_KEY)).resolves.toBe(1);
     });
 
     // At under a kilobyte each, 50,000 keep an installation well inside the 100 MB of Redis an unpublished app has.
@@ -63,7 +115,7 @@ describe("the alerts remembered in Slack", (): void => {
         );
         await redis.hSet("slack_outbox_sent:t1_0", { [`${POSTED.channel} 1.000001`]: JSON.stringify({ text: "x" }) });
 
-        await rememberSent(redis, POSTED, QUOTING);
+        await rememberSent({ redis, retentionDays: RETENTION_DAYS }, POSTED, QUOTING);
 
         await expect(redis.zCard(REMEMBERED_KEY)).resolves.toBe(50_000);
         await expect(redis.zScore(REMEMBERED_KEY, "t1_0")).resolves.toBeUndefined();

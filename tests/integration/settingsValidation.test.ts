@@ -11,6 +11,7 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 const TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
 const NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
+const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
 const THRESHOLDS = [
     ["modqueueThreshold"],
     ["unmoderagedAgeHours"],
@@ -52,6 +53,31 @@ describe("setting the Slack bot token", (): void => {
         const app = await loadApp(devvit);
 
         expect(validation(app, "slackBotToken", value)).toBe(TOKEN_PROBLEM);
+    });
+});
+
+// The app remembers where its alerts are for as long as Slack keeps them, and can edit them for at most 90 days.
+describe("saving the Slack message retention", (): void => {
+    it("accepts a whole number of days from 1 to 90", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        expect(
+            [undefined, 1, 30, 90].map((value: number | undefined): unknown =>
+                validation(app, "slackRetentionDays", value),
+            ),
+        ).toStrictEqual([undefined, undefined, undefined, undefined]);
+    });
+
+    it("refuses any other number", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+
+        expect(
+            [0, 91, 30.5, -1].map((value: number): unknown => validation(app, "slackRetentionDays", value)),
+        ).toStrictEqual(Array.from({ length: 4 }, (): string => RETENTION_PROBLEM));
     });
 });
 
