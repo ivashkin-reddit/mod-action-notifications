@@ -211,7 +211,8 @@ export type CommentDeleteEvent = Readonly<{ commentId: string }>;
 
 /**
  * Reddit deleted a post or comment: its text leaves alerts still waiting for Slack, stays out of any queued later,
- * and is taken out of the alerts already in Slack that quote it, whether or not Slack is set up. Logs rather than rejects, so a trigger goes on to its other work.
+ * and is taken out of the alerts already in Slack that quote it, whether or not Slack is set up. Logs rather than
+ * rejects, so a trigger goes on to its other work.
  */
 async function forgetDeletedContent(contentId: string, context: AppContext): Promise<void> {
     try {
@@ -237,8 +238,8 @@ async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext):
 }
 
 /**
- * A post was deleted: its text leaves queued alerts, then a user's own deletion of a high-score post is alerted.
- * The alert about a deleted post names the post, by the owner's decision (AGENTS.md).
+ * A post was deleted: its text leaves queued alerts, then a user's own deletion of a high-score post is alerted, by
+ * a link to it without its title or author.
  */
 export async function onPostDelete(event: PostDeleteEvent, context: AppContext): Promise<void> {
     await noteEvent(createRedisEventStore(context.redis), "post-delete", 1);

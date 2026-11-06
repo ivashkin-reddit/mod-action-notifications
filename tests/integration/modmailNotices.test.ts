@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import { createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
-import type { ModNotification, Settings } from "../fixtures/fakeContext.js";
+import type { Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import type { ModNotification } from "../fixtures/fakeReddit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),

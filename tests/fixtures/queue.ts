@@ -1,5 +1,5 @@
 import { NOW } from "./app.js";
-import type { QueueItem } from "./fakeContext.js";
+import type { QueueItem } from "./fakeReddit.js";
 
 const MS_PER_HOUR = 3_600_000;
 
