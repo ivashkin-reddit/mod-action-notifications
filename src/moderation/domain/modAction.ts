@@ -11,11 +11,10 @@ export interface ModActionTarget {
     readonly commentId: string | undefined;
 }
 
-/** For an unban or unmute: the ban or mute it lifts. */
+/** For an unban or unmute: the ban or mute it lifts, as its record keeps it: who imposed it, when, and its details. */
 export interface RelatedAction {
     readonly moderatorName: string | undefined;
     readonly occurredAt: Date | undefined;
-    readonly description: string | undefined;
     readonly details: string | undefined;
 }
 

@@ -78,13 +78,26 @@ describe("notifying moderators of a mod action", (): void => {
         );
     });
 
+    it("neither reads nor records bans while unban alerts are off", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const ports = workingPorts([]);
+
+        await notifyModAction(modAction({ type: "banuser" }), { ...CONFIG, enabledActions: ["banuser"] }, ports);
+        await notifyModAction(modAction({ type: "unbanuser" }), { ...CONFIG, enabledActions: ["banuser"] }, ports);
+
+        expect(ports.records.recordDiscipline).not.toHaveBeenCalled();
+        expect(ports.records.disciplineEvents).not.toHaveBeenCalled();
+    });
+
     it("counts and records an action it does not report", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const ports = workingPorts([]);
         const ban = modAction({ type: "banuser" });
 
-        await notifyModAction(ban, { ...CONFIG, enabledActions: [] }, ports);
+        // Ban alerts are off; unban alerts, which read the record, are on.
+        await notifyModAction(ban, { ...CONFIG, enabledActions: ["unbanuser"] }, ports);
 
         expect(ports.reports).toStrictEqual([]);
         expect(ports.records.recordDiscipline).toHaveBeenCalledExactlyOnceWith(
@@ -93,7 +106,6 @@ describe("notifying moderators of a mod action", (): void => {
                 change: "imposed",
                 at: NOW.getTime(),
                 moderatorName: "ModA",
-                description: undefined,
                 details: undefined,
             },
         );
@@ -219,7 +231,6 @@ describe("an unban", (): void => {
         expect(ports.reports[1]?.modAction.relatedAction).toStrictEqual({
             moderatorName: "ModA",
             occurredAt: new Date(NOW.getTime() - HOUR),
-            description: undefined,
             details: "7 days",
         });
     });

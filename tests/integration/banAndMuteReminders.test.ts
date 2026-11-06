@@ -104,7 +104,6 @@ describe("an unban or unmute", (): void => {
                         change: "imposed",
                         at: NOW.getTime(),
                         moderatorName: "ModA",
-                        description: "",
                         details: null,
                     }),
                     score: NOW.getTime(),

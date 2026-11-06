@@ -10,13 +10,15 @@ export interface DisciplineSubject {
     readonly username: string;
 }
 
-/** A ban or mute imposed, or lifted. */
+/**
+ * A ban or mute imposed, or lifted: moderation metadata, the fields the mod log shows for it. Who took the action,
+ * when, and its details (for a ban, its length). Never the mod note: that is text a moderator wrote, not metadata.
+ */
 export interface DisciplineEvent {
     readonly change: "imposed" | "lifted";
     /** When the action was taken, in ms since the epoch. */
     readonly at: number;
     readonly moderatorName: string | undefined;
-    readonly description: string | undefined;
     readonly details: string | undefined;
 }
 
@@ -46,6 +48,17 @@ export function disciplineStep(actionType: string): DisciplineStep | undefined {
     }
 }
 
+/** The action that lifts each kind: an unban lifts a ban, an unmute a mute. */
+const LIFTED_BY: Readonly<Record<DisciplineKind, string>> = { ban: "unbanuser", mute: "unmuteuser" };
+
+/**
+ * Whether bans or mutes, and their liftings, are recorded: only while alerts for their lifting are on, as only
+ * those alerts read the record. Turning them on later finds no ban or mute taken while they were off.
+ */
+export function isRecorded(kind: DisciplineKind, enabledActions: readonly string[]): boolean {
+    return enabledActions.includes(LIFTED_BY[kind]);
+}
+
 /** Whose ban or mute the action concerns; undefined when it names no subreddit or no user. */
 export function disciplineSubject(kind: DisciplineKind, modAction: ModAction): DisciplineSubject | undefined {
     const username = modAction.target?.author;
@@ -60,7 +73,6 @@ export function disciplineEventOf(modAction: ModAction, change: DisciplineEvent[
         change,
         at: modAction.occurredAt.getTime(),
         moderatorName: modAction.moderatorName,
-        description: modAction.description,
         details: modAction.details,
     };
 }
@@ -87,7 +99,6 @@ export function liftedBy(events: readonly DisciplineEvent[], at: number): Relate
         ? {
               moderatorName: latest.moderatorName,
               occurredAt: new Date(latest.at),
-              description: latest.description,
               details: latest.details,
           }
         : undefined;

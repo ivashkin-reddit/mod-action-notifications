@@ -62,15 +62,12 @@ function legacyDisciplineKey({ kind, subredditName, username }: DisciplineSubjec
     return `mod_actions:discipline:${kind}:${keyPart(subredditName)}:${keyPart(username)}`;
 }
 
-/** The member an event is stored as: its fields as JSON, so the same event recorded twice is one member. */
-function memberOf({ change, at, moderatorName, description, details }: DisciplineEvent): string {
-    return JSON.stringify({
-        change,
-        at,
-        moderatorName: moderatorName ?? null,
-        description: description ?? null,
-        details: details ?? null,
-    });
+/**
+ * The member an event is stored as: its fields as JSON, so the same event recorded twice is one member. Members an
+ * earlier version stored also hold the mod note; it is not read, and leaves with them, within 90 days.
+ */
+function memberOf({ change, at, moderatorName, details }: DisciplineEvent): string {
+    return JSON.stringify({ change, at, moderatorName: moderatorName ?? null, details: details ?? null });
 }
 
 /** Stored JSON as an object; undefined for anything else. */
@@ -102,12 +99,14 @@ function eventOf(member: string): DisciplineEvent | undefined {
         change,
         at,
         moderatorName: text(stored?.["moderatorName"]),
-        description: text(stored?.["description"]),
         details: text(stored?.["details"]),
     };
 }
 
-/** A ban or mute an earlier version stored, as an imposition; undefined when it has no time to place it by. */
+/**
+ * A ban or mute an earlier version stored, as an imposition, without the mod note it held; undefined when it has no
+ * time to place it by.
+ */
 function legacyEventOf(raw: string): DisciplineEvent | undefined {
     const stored = storedObject(raw);
     const timestamp = stored?.["timestamp"];
@@ -118,7 +117,6 @@ function legacyEventOf(raw: string): DisciplineEvent | undefined {
         change: "imposed",
         at: timestamp,
         moderatorName: text(stored?.["moderatorName"]),
-        description: text(stored?.["description"]),
         details: text(stored?.["details"]),
     };
 }

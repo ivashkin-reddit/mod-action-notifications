@@ -2,7 +2,7 @@ import { ACTIVITY_WINDOW_MS, activityOf, activitySpike } from "../domain/activit
 import { isReported } from "../domain/alerting.js";
 import type { AlertRules } from "../domain/alerting.js";
 import { hasBanDurationMetadata, matchBanLogEntry, withBanLogEntry } from "../domain/banDuration.js";
-import { disciplineEventOf, disciplineStep, disciplineSubject, liftedBy } from "../domain/discipline.js";
+import { disciplineEventOf, disciplineStep, disciplineSubject, isRecorded, liftedBy } from "../domain/discipline.js";
 import type { DisciplineEvent } from "../domain/discipline.js";
 import { actionTypeOf, isBlank, isRedditAccount } from "../domain/modAction.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
@@ -34,14 +34,18 @@ async function withBanFromModLog(modAction: ModAction, lookups: ModerationLookup
 }
 
 /**
- * Records a ban or mute, or its lifting, and attaches to an unban or unmute the ban or mute it lifts. Bans and their
- * unbans can arrive in either order, so the lifted one is found by when each was taken. Storage failures only cost
- * the reminder.
+ * Records a ban or mute, or its lifting, and attaches to an unban or unmute the ban or mute it lifts: only while
+ * alerts for their lifting are on, as nothing else reads the record. Bans and their unbans can arrive in either
+ * order, so the lifted one is found by when each was taken. Storage failures only cost the reminder.
  */
-async function withDiscipline(modAction: ModAction, records: ModerationRecords): Promise<ModAction> {
+async function withDiscipline(
+    modAction: ModAction,
+    enabledActions: readonly string[],
+    records: ModerationRecords,
+): Promise<ModAction> {
     const step = disciplineStep(actionTypeOf(modAction));
     const subject = step === undefined ? undefined : disciplineSubject(step.kind, modAction);
-    if (step === undefined || subject === undefined) {
+    if (step === undefined || subject === undefined || !isRecorded(step.kind, enabledActions)) {
         return modAction;
     }
     const event = disciplineEventOf(modAction, step.change);
@@ -139,9 +143,9 @@ async function isFirstDelivery(modAction: ModAction, records: ModerationRecords)
 
 /**
  * Tells moderators about a mod action. Every action, sent or not, is first completed from the mod log (a ban
- * without a length), remembered or matched against what it lifts (bans and mutes), and counted toward its
- * moderator's activity (except AutoModerator's and Reddit's). Only an action that is reported has its moderator
- * checked against the mod list, and an action delivered again is reported once.
+ * without a length), remembered or matched against what it lifts (bans and mutes, while alerts for their lifting
+ * are on), and counted toward its moderator's activity (except AutoModerator's and Reddit's). Only an action that is
+ * reported has its moderator checked against the mod list, and an action delivered again is reported once.
  */
 export async function notifyModAction(
     action: ModAction,
@@ -149,7 +153,7 @@ export async function notifyModAction(
     ports: ModerationPorts,
 ): Promise<void> {
     const modAction = await withActivity(
-        await withDiscipline(await withBanFromModLog(action, ports.lookups), ports.records),
+        await withDiscipline(await withBanFromModLog(action, ports.lookups), config.enabledActions, ports.records),
         ports.records,
     );
     if (!isReported(modAction, config)) {

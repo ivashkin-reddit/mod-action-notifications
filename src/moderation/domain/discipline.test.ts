@@ -14,7 +14,7 @@ function event(
     hoursFromNow: number,
     moderatorName = change === "imposed" ? "AliceMod" : "BobMod",
 ): DisciplineEvent {
-    return { change, at: AT + hoursFromNow * HOUR, moderatorName, description: undefined, details: undefined };
+    return { change, at: AT + hoursFromNow * HOUR, moderatorName, details: undefined };
 }
 
 describe("a discipline step", (): void => {
@@ -59,7 +59,7 @@ describe("whose discipline an action concerns", (): void => {
 });
 
 describe("the event an action records", (): void => {
-    it("is when it was taken, by whom, and why", TEST_OPTIONS, (): void => {
+    it("is when it was taken, by whom, and its details, without the mod note", TEST_OPTIONS, (): void => {
         expect.hasAssertions();
 
         const ban = modAction({ type: "banuser", description: "Trolling", details: "7 days" });
@@ -68,7 +68,6 @@ describe("the event an action records", (): void => {
             change: "imposed",
             at: AT,
             moderatorName: "ModA",
-            description: "Trolling",
             details: "7 days",
         });
     });
@@ -81,7 +80,6 @@ describe("the ban an unban lifts", (): void => {
         expect(liftedBy([event("imposed", -2)], AT)).toStrictEqual({
             moderatorName: "AliceMod",
             occurredAt: new Date(AT - 2 * HOUR),
-            description: undefined,
             details: undefined,
         });
     });
