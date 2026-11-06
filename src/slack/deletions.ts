@@ -46,10 +46,6 @@ export async function enqueueQuoting(
         : await enqueue(redis, message, quoting);
 }
 
-function quotesAny(queued: QueuedQuoting, contentIds: readonly string[]): boolean {
-    return queued.quoting.contentIds.some((contentId: string): boolean => contentIds.includes(contentId));
-}
-
 /** Whether a queued message quotes this post or comment. */
 export async function queueQuotes(redis: DeletionRedis, contentId: string): Promise<boolean> {
     return (await quotingMessages(redis)).some((queued: QueuedQuoting): boolean =>
@@ -62,18 +58,13 @@ export async function queueQuotes(redis: DeletionRedis, contentId: string): Prom
  * queue's lease calls it, so no drain is part way through sending one of them.
  */
 export async function removeDeletedQuotes(redis: DeletionRedis): Promise<void> {
-    const quoting = await quotingMessages(redis);
-    if (quoting.length === 0) {
-        return;
-    }
-    const deleted = (await redis.zRange(DELETED_KEY, 0, -1, { by: "rank" })).map(
-        ({ member }: Readonly<{ member: string }>): string => member,
-    );
+    // Each queued message's own content is looked up: the deletions are every post and comment deleted in a day, which
+    // on a busy subreddit run to thousands, while the queue holds at most 500 messages.
     await Promise.all(
-        quoting
-            .filter((queued: QueuedQuoting): boolean => quotesAny(queued, deleted))
-            .map(async (queued: QueuedQuoting): Promise<void> => {
+        (await quotingMessages(redis)).map(async (queued: QueuedQuoting): Promise<void> => {
+            if (await anyDeleted(redis, queued.quoting.contentIds)) {
                 await replaceWithoutQuotes(redis, queued);
-            }),
+            }
+        }),
     );
 }

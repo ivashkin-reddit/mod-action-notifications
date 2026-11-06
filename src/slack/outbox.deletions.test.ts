@@ -132,6 +132,40 @@ describe("content deleted on Reddit", (): void => {
         expect(texts(slack.messages)).toStrictEqual(["first", "first", "first", "first"]);
     });
 
+    // A day's deletions on a busy subreddit run to thousands, every post and comment deleted: a drain looks up only what
+    // the alerts left in its queue quote.
+    it(
+        "is looked up by what queued alerts quote, however many deletions there were",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { dependencies, outbox, redis, slack } = fakeOutbox();
+            await redis.zAdd(
+                DELETED_KEY,
+                ...Array.from(
+                    { length: 5000 },
+                    (_unused: unknown, index: number): { member: string; score: number } => ({
+                        member: `t1_old${String(index)}`,
+                        score: NOW.getTime() - index,
+                    }),
+                ),
+            );
+            await redis.zAdd(QUEUE_KEY, queued("first", 2), queuedQuoting("t1_a", 1));
+            slack.respond(...ONE_DRAIN_OF_FAILURES);
+            const draining = outbox.deliverQueued();
+            await vi.advanceTimersByTimeAsync(500);
+
+            await forgetContent(dependencies, "t1_a");
+            await drive(draining);
+
+            expect(stored(redis)).not.toContain("said");
+            expect(
+                redis.zRange.mock.calls.filter(([key]: readonly unknown[]): boolean => key === DELETED_KEY),
+            ).toStrictEqual([]);
+        },
+    );
+
     it("is not quoted by an alert a drain under way reaches after", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
