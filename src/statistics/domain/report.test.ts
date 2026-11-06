@@ -6,7 +6,7 @@ const TEST_OPTIONS = { timeout: 1000 };
 const FULL_DAY = 24;
 
 function counts(fields: Readonly<Partial<DayCounts>> = {}): DayCounts {
-    return { actions: {}, hours: {}, bans: {}, moderators: [], threads: [], ...fields };
+    return { actions: {}, hours: {}, bans: {}, moderators: [], threads: [], outcomes: {}, ...fields };
 }
 
 describe("the team's report", (): void => {

@@ -30,7 +30,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Daily summary.** Turn on the Daily Summary setting for a morning post of the day before's numbers, and any problems.
 
-**Team statistics.** **Show Team Stats** shows your team's moderation over the last 7 days: how many actions, and who took them (moderators, AutoModerator, Reddit), the most common, the hours no moderator acted, bans and their lengths, how many moderators acted, and the most-moderated threads. Turn on Weekly Statistics for the same each Monday in Slack. The figures are for the team as a whole: none is any one moderator's.
+**Team statistics.** **Show Team Stats** shows your team's moderation over the last 7 days: how many actions, and who took them (moderators, AutoModerator, Reddit), the most common, the hours no moderator acted, bans and their lengths, how many moderators acted, and the most-moderated threads. Turn on Weekly Statistics for the same each Monday in Slack. They also show how the team responds: how long reported and AutoModerator-filtered posts and comments wait for a moderator, how they end (removed or approved, so AutoModerator's false positives show), how often moderators reverse Reddit's removals or each other's, and how long users wait for a reply in modmail. The figures are for the team as a whole: none is any one moderator's.
 
 **Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, or the app can't read modmail, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
@@ -103,7 +103,7 @@ The app reads only what it needs to write an alert. Apart from alerts waiting to
 - **IDs of deleted posts and comments** (metadata), so alerts still waiting to be sent leave their text out: a day.
 - **Where each alert quoting a post or comment went in Slack** (metadata), with the alert as it would read without the quote, so the quote can be taken out if the content is deleted: as long as your channels keep messages, set in **Slack Message Retention**, at most 90 days.
 - **When each moderator last acted** (metadata), to spot a moderator acting after a long silence: 400 days, and forgotten when they leave the team.
-- **Team statistics** (metadata): counts of the team's actions by day, kind and hour, bans by length, removals per thread, and how many moderators acted, by a short hash of each name rather than the name: 15 days.
+- **Team statistics** (metadata): counts of the team's actions by day, kind and hour, bans by length, removals per thread, and how many moderators acted, by a short hash of each name rather than the name: 15 days. To time responses, it also notes which posts and comments wait for a moderator and which modmail conversations await a reply, and since when (a week at most), and who removed a post or comment, as Reddit or a moderator's hash (two days).
 - **Approvals** (metadata), to spot an edit after one: which moderator approved which post or comment, and when. Kept for as many days as **Edits After Approval Alert** says, 7 by default and at most 30.
 - **Short-lived records** that pace alerts, prevent duplicates and note problems the app is having: a minute to a week.
 

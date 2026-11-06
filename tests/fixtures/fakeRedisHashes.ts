@@ -16,6 +16,8 @@ export interface HashCommands {
     readonly hIncrBy: Mock<(key: string, field: string, value: number) => Promise<number>>;
     /** Removes the fields and returns how many the hash had. */
     readonly hDel: Mock<(key: string, fields: readonly string[]) => Promise<number>>;
+    /** How many fields the hash has; 0 when there is none. */
+    readonly hLen: Mock<(key: string) => Promise<number>>;
 }
 
 /** The hash's fields, through a Map: a field named like an Object property ("constructor") is not in the hash. */
@@ -25,6 +27,7 @@ function fieldMap(keyspace: Keyspace, key: string): Map<string, string> {
 
 export function hashCommands(keyspace: Keyspace): HashCommands {
     return {
+        hLen: vi.fn(async (key: string): Promise<number> => await Promise.resolve(fieldMap(keyspace, key).size)),
         hSetNX: vi.fn(async (key: string, field: string, value: string): Promise<number> => {
             const fields = fieldMap(keyspace, key);
             if (fields.has(field)) {

@@ -14,20 +14,21 @@ Post or comment deleted ─► its text leaves queued alerts ──────�
 Mod tools menu ─► Test Slack Connection, Simulate Mod Action ────────────────────────────────────────► Slack app
 ```
 
-| Reddit calls it for                                  | It does                                                                                                                        |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| A mod action (`ModAction` trigger)                   | Records the action's context, and sends an alert if your settings ask for one.                                                 |
-| A deleted post (`PostDelete` trigger)                | Takes the post out of queued alerts, then alerts if a user deleted their own high-scoring post.                                |
-| A deleted comment (`CommentDelete` trigger)          | Takes the comment out of queued alerts.                                                                                        |
-| A report (`PostReport`, `CommentReport` triggers)    | Alerts on an urgent reason, or on reports piling up.                                                                           |
-| A modmail message (`ModMail` trigger)                | Alerts when a Reddit admin wrote it.                                                                                           |
-| An edit (`PostUpdate`, `CommentUpdate` triggers)     | Alerts when an author edits a post or comment a moderator approved lately.                                                     |
-| The `modqueueMonitor` job, every 15 minutes          | Checks the modqueue, unmoderated, reports, spam and edited listings, and modmail waiting for a reply, against your thresholds. |
-| The `slackOutbox` job, scheduled as needed           | Delivers alerts still waiting in the queue.                                                                                    |
-| The `dailySummary` job, at 08:00 UTC each day        | Posts the summary of the day before, when the Daily Summary setting is on.                                                     |
-| The `weeklyStatistics` job, at 08:00 UTC each Monday | Posts the team's statistics for the week before, when the Weekly Statistics setting is on.                                     |
-| Install and upgrade (`AppInstall`, `AppUpgrade`)     | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary and statistics jobs.                   |
-| The mod tools menu                                   | Runs the five menu actions, for moderators only.                                                                               |
+| Reddit calls it for                                                                                         | It does                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| A mod action (`ModAction` trigger)                                                                          | Records the action's context, and sends an alert if your settings ask for one.                                                 |
+| A deleted post (`PostDelete` trigger)                                                                       | Takes the post out of queued alerts, then alerts if a user deleted their own high-scoring post.                                |
+| A deleted comment (`CommentDelete` trigger)                                                                 | Takes the comment out of queued alerts.                                                                                        |
+| A report (`PostReport`, `CommentReport` triggers)                                                           | Notes the item as waiting for a moderator, then alerts on an urgent reason, or on reports piling up.                           |
+| A modmail message (`ModMail` trigger)                                                                       | Counts it toward the team's reply times, then alerts when a Reddit admin wrote it.                                             |
+| AutoModerator holding an item for review (`AutomoderatorFilterPost`, `AutomoderatorFilterComment` triggers) | Notes the item as waiting for a moderator.                                                                                     |
+| An edit (`PostUpdate`, `CommentUpdate` triggers)                                                            | Alerts when an author edits a post or comment a moderator approved lately.                                                     |
+| The `modqueueMonitor` job, every 15 minutes                                                                 | Checks the modqueue, unmoderated, reports, spam and edited listings, and modmail waiting for a reply, against your thresholds. |
+| The `slackOutbox` job, scheduled as needed                                                                  | Delivers alerts still waiting in the queue.                                                                                    |
+| The `dailySummary` job, at 08:00 UTC each day                                                               | Posts the summary of the day before, when the Daily Summary setting is on.                                                     |
+| The `weeklyStatistics` job, at 08:00 UTC each Monday                                                        | Posts the team's statistics for the week before, when the Weekly Statistics setting is on.                                     |
+| Install and upgrade (`AppInstall`, `AppUpgrade`)                                                            | Schedules or cancels the modqueue monitor to match your settings, and keeps the summary and statistics jobs.                   |
+| The mod tools menu                                                                                          | Runs the five menu actions, for moderators only.                                                                               |
 
 ## Deploying
 
@@ -191,6 +192,15 @@ The app counts every mod action it hears of, whether or not Slack is set up and 
 
 "Hours without a moderator action" counts each UTC hour of the period, today's up to and including the current one, in which no moderator acted. "Most-moderated threads" links to posts by ID, without their titles.
 
+**How the team responds.** Both reports also give, from `stats:outcomes:{day}`:
+
+- **Time to act on the queue.** A post or comment starts waiting at its first report, or when AutoModerator holds it for review (the `AutomoderatorFilterPost` and `AutomoderatorFilterComment` triggers): `stats:awaiting` keeps its ID, since when, and which, the first entry winning (`HSETNX`). It stops at the first removal, spam removal or approval by anyone; a moderator's is counted, on the day they acted, in a range (within 15 minutes, an hour, 4, 12 or 24 hours, or longer), and the report gives the range the median falls in. The handler whose `HDEL` removes the entry counts it, so two moderators acting at once count it once.
+- **Reported items** and **Filtered by AutoModerator.** How many of each kind moderators removed and approved, with their shares. Approvals of filtered items are AutoModerator's false positives. They are not broken down by rule: a rule's reason can quote what it matched, which would put content into the statistics.
+- **Removals reversed.** Every removal by Reddit or a moderator is noted for two days in `stats:removed:{day}` (the item's ID, and `reddit` or the moderator's hash). A moderator's approval of one of those, from the same day or the day before, counts as reversing Reddit's removal, or another moderator's; approving their own removal counts as neither.
+- **Modmail replies.** A user's message starts a wait in `stats:modmail_waiting` (the conversation's ID, and since when), unless one has already started; the first moderator reply after it ends the wait and counts it in a range, as for the queue. Messages AutoModerator or Reddit generated start none.
+
+Items and conversations that wait over a week are forgotten when the `weeklyStatistics` job runs, whatever the setting, and the oldest when more than 10,000 wait.
+
 ## Alerts in detail
 
 ### Mod action alerts
@@ -311,6 +321,10 @@ Slack takes about one message a second to a channel. Every alert therefore goes 
 | `stats:threads:{day}`                                                       | metadata             | removals on each post, by ID                                                                                                        | 15 days                                                   | 100 posts a day         |
 | `stats:counted:{actionId}`                                                  | metadata             | that an action was counted                                                                                                          | 1 day                                                     | one per action          |
 | `stats:digest:{from}`                                                       | none                 | that a week's statistics were sent                                                                                                  | 8 days                                                    | 1 a week                |
+| `stats:outcomes:{day}`                                                      | metadata             | the day's response times by range, how reported and filtered items ended, reversals, and modmail reply times by range               | 15 days                                                   | ~25 fields a day        |
+| `stats:awaiting`                                                            | metadata             | the posts and comments waiting for a moderator: ID, since when, and whether reported or filtered                                    | a week, pruned weekly                                     | 10,000 items            |
+| `stats:modmail_waiting`                                                     | metadata             | the conversations whose user awaits a reply: ID, and since when                                                                     | a week, pruned weekly                                     | 10,000 conversations    |
+| `stats:removed:{day}`                                                       | metadata             | the posts and comments removed that day, with `reddit` or the remover's hash                                                        | 2 days                                                    | one per removal         |
 | `security:last_action`                                                      | metadata             | when each moderator last acted, by lower-cased username                                                                             | 400 days from the last                                    | one field per moderator |
 | `security:woke:{moderator}`                                                 | metadata             | that a moderator's waking was alerted                                                                                               | 1 day                                                     | one per moderator       |
 | `security:automod_removals:{hour}`                                          | none                 | AutoModerator's removals by minute of the hour                                                                                      | 2 days                                                    | 60 fields               |
@@ -435,6 +449,10 @@ Lines that need attention besides those:
 | `[security] Could not watch a mod action:`                  | Redis failed during the security watch; the alert for the action itself was not affected.                                       |
 | `[approvededits] Could not remember an approval …`          | Redis failed as a moderator approved something; an edit after that approval won't be alerted.                                   |
 | `[approvededits] Could not check an edit …`                 | Redis failed reading an approval; the edit was not alerted.                                                                     |
+| `[statistics] Could not count a mod action:`                | Redis failed while counting an action; the team's statistics miss it.                                                           |
+| `[statistics] Could not note an item waiting …`             | Redis failed on a report or AutoModerator filter; the item's response time isn't counted.                                       |
+| `[statistics] Could not count a modmail message:`           | Redis failed on a modmail message; its reply time may be missed.                                                                |
+| `[statistics] Could not forget what waited over a week:`    | Redis failed during the weekly job; the next run tries again.                                                                   |
 | `[modaction] Could not read the user's mod notes …`         | Reddit couldn't return the banned user's mod notes, or gave no name for the subreddit. The ban was alerted without its history. |
 | `[health] Could not record a condition:`                    | Redis failed while noting a problem; the work went on, and the problem may be logged again.                                     |
 
@@ -442,6 +460,7 @@ Lines that need attention besides those:
 
 - **Deleted content is taken out of alerts within the channels' retention.** Devvit's rules ask apps to delete content of deleted posts and comments from external services. The app does, in alerts not yet sent and in alerts Slack has held for up to `slackRetentionDays` days, at most 90 (or, with heavy traffic, until 50,000 newer posts and comments have been quoted). An alert older than that keeps its quotes, unless the channel's retention has removed it, as it does when the setting matches.
 - **Modmail waits are counted from the user's last message.** Reddit gives the time a user last wrote in a conversation, not when their unanswered messages began, so a user who writes again appears to have waited less. Each folder is read up to 100 conversations, the most Reddit lists at once; beyond that the alert says "at least".
+- **Response times start at what the app saw.** Items reported or filtered before the app was installed, or while it was not running, aren't timed; neither are items waiting over a week. The modmail reply time runs from a user's first message since a moderator last replied.
 - **Deleted accounts.** Reddit doesn't tell apps when an account is deleted, so usernames stay in alerts in Slack until the channels' message retention removes them, and in the ban and mute history until it expires. On a paid Slack plan, set the alert channels to delete messages after 30 days, as Reddit recommends for data about redditors. The free plan can only set the whole workspace to delete messages after 90 days, or keep them for a year. [slack-app/README.md](./slack-app/README.md#deploying-it) has the steps.
 - **Ban and mute history is kept for 90 days**, longer than the 30 days Reddit recommends for data about redditors, so that unbans after longer bans keep their context. It is moderation metadata only (who, on whom, when, how long), and it is kept only while unban or unmute alerts are on. Turning those on later finds no ban or mute taken while they were off.
 - **The monitor reads each listing in full.** Reddit's listings end at around a thousand items, so a run makes at most a few dozen requests.

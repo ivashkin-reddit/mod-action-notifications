@@ -38,7 +38,7 @@ import {
 import type { WatchedAction, WatchedActor } from "./security/index.js";
 import type { AppConfig } from "./settings/index.js";
 import { forgetContent } from "./slack/delivery.js";
-import { countModAction, createRedisStatisticsStore } from "./statistics/index.js";
+import { countModAction, createRedisStatisticsStore, createRedisWaitingStore } from "./statistics/index.js";
 import type { ActorKind, CountedAction } from "./statistics/index.js";
 
 /**
@@ -75,6 +75,12 @@ function postDeletionConfig(config: AppConfig): PostDeletionConfig {
     return { upvoteThreshold: config.postDeletionUpvoteThreshold };
 }
 
+/** The post or comment an action was on: the comment, for a comment; undefined for an action on a user. */
+function itemIdOf(action: ModAction): string | undefined {
+    const commentId = action.target?.commentId;
+    return commentId === undefined || commentId === "" ? action.target?.postId : commentId;
+}
+
 function actorKindOf(action: ModAction): ActorKind {
     if (isRedditAccount(action.moderatorName)) {
         return "reddit";
@@ -92,13 +98,17 @@ function countedActionOf(action: ModAction): CountedAction {
         occurredAt: action.occurredAt,
         postId: action.target?.postId,
         banDays: action.banDuration,
+        itemId: itemIdOf(action),
     };
 }
 
 /** Counts the action toward the team's statistics; logs rather than rejects, as the alert matters more. */
 async function countForStatistics(action: ModAction, context: AppContext): Promise<void> {
     try {
-        await countModAction(countedActionOf(action), createRedisStatisticsStore(context.redis));
+        await countModAction(countedActionOf(action), {
+            store: createRedisStatisticsStore(context.redis),
+            waiting: createRedisWaitingStore(context.redis),
+        });
     } catch (error) {
         console.warn("[statistics] Could not count a mod action:", error);
     }
@@ -154,14 +164,13 @@ function approverOf(action: ModAction): Approver {
     return action.isAutoModerator ? "automoderator" : "moderator";
 }
 
-/** The action as edits after approval read it: the item it was on is the comment, for a comment, else the post. */
+/** The action as edits after approval read it. */
 function approvalActionOf(action: ModAction): ApprovalAction {
-    const commentId = action.target?.commentId;
     return {
         type: action.type,
         actor: approverOf(action),
         moderatorName: action.moderatorName,
-        itemId: commentId === undefined || commentId === "" ? action.target?.postId : commentId,
+        itemId: itemIdOf(action),
         occurredAt: action.occurredAt,
     };
 }

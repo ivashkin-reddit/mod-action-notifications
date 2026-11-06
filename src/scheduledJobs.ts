@@ -31,7 +31,9 @@ import type { ModerationQueues, MonitoringSetup } from "./modqueue/index.js";
 import {
     createDevvitDigestScheduler,
     createRedisStatisticsStore,
+    createRedisWaitingStore,
     createSlackDigest,
+    pruneWaiting,
     sendWeeklyDigest,
     setUpDigest,
 } from "./statistics/index.js";
@@ -105,10 +107,14 @@ export async function sendSummary(context: AppContext): Promise<void> {
 }
 
 /**
- * Sends the team's statistics for the week before, the scheduled job, when the setting is on and Slack is set up.
- * Logs, and resolves, when Redis fails.
+ * The weekly statistics job: forgets what has waited for a moderator over a week, whatever the setting, then sends
+ * the team's statistics for the week before when the setting is on and Slack is set up. Logs, and resolves, when
+ * Redis fails.
  */
 export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
+    await pruneWaiting(createRedisWaitingStore(context.redis), Date.now()).catch((error: unknown): void => {
+        console.warn("[statistics] Could not forget what waited over a week:", error);
+    });
     const config = await configOf(context);
     if (!config.weeklyStatistics || !alertsConfigured(config)) {
         return;

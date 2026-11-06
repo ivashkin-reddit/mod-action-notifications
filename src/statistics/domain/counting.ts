@@ -15,6 +15,8 @@ export interface CountedAction {
     readonly postId: string | undefined;
     /** For a ban: its length in days, 0 when permanent; undefined when unknown. */
     readonly banDays: number | undefined;
+    /** The post or comment the action was on: the comment, for a comment; undefined for an action on a user. */
+    readonly itemId: string | undefined;
 }
 
 /** What one action adds to its UTC day's counts. Holds no username. */

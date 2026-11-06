@@ -104,9 +104,9 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 ### F12. Team statistics: response times and outcomes
 
 - **Time to act:** from a post's or comment's first report, or its AutoModerator filter, to a moderator removing or approving it, in buckets (15 minutes, 1, 4, 12 and 24 hours, longer), with the median read from them.
-- **Outcomes:** the share of reported items removed and approved; for each AutoModerator rule, how many of its filtered items moderators approved (its false positives); how often moderators reverse Reddit's own removals; how often one moderator reverses another (a team count).
+- **Outcomes:** the share of reported items removed and approved; how many of AutoModerator's filtered items moderators approved (its false positives; as built, not per rule, as a rule's reason can quote the content it matched); how often moderators reverse Reddit's own removals; how often one moderator reverses another (a team count).
 - **Modmail first response:** from a user's first message to a moderator's first reply.
-- **Reads:** report events, `AutomoderatorFilterPost` and `AutomoderatorFilterComment` events, mod actions, modmail events. **Keeps:** `stats:awaiting` (item ID to when it entered the queue, 7 days, at most 10,000), `stats:awaiting_rule` (item ID to AutoModerator's rule reason), `stats:reddit_removed` and `stats:human_removed` (item IDs, with a hash of the remover for the latter, 1 day), `stats:modmail_waiting` (conversation ID to time, 7 days), and daily hashes of bucket counts and outcomes (15 days).
+- **Reads:** report events, `AutomoderatorFilterPost` and `AutomoderatorFilterComment` events, mod actions, modmail events. **Keeps:** `stats:awaiting` (item ID to when it started waiting and whether reported or filtered, first entry wins; a week, at most 10,000), `stats:modmail_waiting` (conversation ID to when a user started waiting; a week, at most 10,000), `stats:removed:{day}` (item ID to `reddit` or the remover's hash, 2 days), and `stats:outcomes:{day}` (counts by range and outcome, 15 days).
 - Shown in the weekly digest and Show Team Stats.
 
 ## Defaults to confirm with the owner
@@ -128,4 +128,5 @@ Each feature lists what it reads, what it keeps, and its settings. Channel: **al
 - Whether the `ModMail` event's `conversationId` and `messageId` carry the prefixes `ModmailConversation_` and `ModmailMessage_` (the protobuf says not; the app takes them off either way), and whether an admin's message comes with `messageAuthorType` `participant_user`.
 - Whether `getConversations` lists the most recently updated conversations first, so a full folder leaves out the longest waits.
 - Report events carry the item's report count, and reasons arrive as the rule's or Reddit's wording.
+- `AutomoderatorFilterPost` and `AutomoderatorFilterComment` fire when AutoModerator holds an item for review (`action: filter`), with the item's ID.
 - `PostUpdate` and `CommentUpdate` fire for edits by authors, with the edited item's ID, and `previousBody` holds the text before the edit (a post's `selftext`).

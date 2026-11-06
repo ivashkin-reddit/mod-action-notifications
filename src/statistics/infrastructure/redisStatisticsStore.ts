@@ -6,7 +6,7 @@ import type { DayCounts } from "../domain/report.js";
 
 /**
  * The team's statistics in Redis: per UTC day, hashes of counts (`stats:actions:{day}`, `stats:hours:{day}`,
- * `stats:bans:{day}`) and sorted sets (`stats:active:{day}` of moderator hashes, `stats:threads:{day}` of removals by
+ * `stats:bans:{day}`, `stats:outcomes:{day}`) and sorted sets (`stats:active:{day}` of moderator hashes, `stats:threads:{day}` of removals by
  * post), each kept 15 days; `stats:counted:{actionId}`, a day's claim that an action was counted; and
  * `stats:digest:{from}`, eight days' claim that a week's digest was sent. Installations already hold these keys.
  */
@@ -23,7 +23,7 @@ type StatisticsRedis = Readonly<
     >
 >;
 
-function keyOf(kind: "actions" | "hours" | "bans" | "active" | "threads", day: string): string {
+function keyOf(kind: "actions" | "hours" | "bans" | "active" | "threads" | "outcomes", day: string): string {
     return `stats:${kind}:${day}`;
 }
 
@@ -71,12 +71,13 @@ function numbers(fields: Readonly<Record<string, string>>): Readonly<Record<stri
 }
 
 async function readDay(redis: StatisticsRedis, day: string): Promise<DayCounts> {
-    const [actions, hours, bans, active, threads] = await Promise.all([
+    const [actions, hours, bans, active, threads, outcomes] = await Promise.all([
         redis.hGetAll(keyOf("actions", day)),
         redis.hGetAll(keyOf("hours", day)),
         redis.hGetAll(keyOf("bans", day)),
         redis.zRange(keyOf("active", day), 0, -1, { by: "rank" }),
         redis.zRange(keyOf("threads", day), 0, -1, { by: "rank" }),
+        redis.hGetAll(keyOf("outcomes", day)),
     ]);
     return {
         actions: numbers(actions),
@@ -89,6 +90,7 @@ async function readDay(redis: StatisticsRedis, day: string): Promise<DayCounts> 
                 removals: score,
             }),
         ),
+        outcomes: numbers(outcomes),
     };
 }
 
@@ -107,6 +109,9 @@ export function createRedisStatisticsStore(redis: StatisticsRedis): StatisticsSt
             await addRemoval(redis, tally);
         },
         dayCounts: async (day: string): Promise<DayCounts> => await readDay(redis, day),
+        addOutcomes: async (day: string, counts: Readonly<Record<string, number>>): Promise<void> => {
+            await addCounts(redis, keyOf("outcomes", day), counts);
+        },
         claimDigest: async (from: string): Promise<boolean> =>
             (await redis.set(`stats:digest:${from}`, "1", {
                 nx: true,

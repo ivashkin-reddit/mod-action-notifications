@@ -6,6 +6,8 @@
     "triggers": [
       "onAppInstall",
       "onAppUpgrade",
+      "onAutomoderatorFilterComment",
+      "onAutomoderatorFilterPost",
       "onCommentDelete",
       "onCommentReport",
       "onCommentUpdate",

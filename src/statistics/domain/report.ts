@@ -1,3 +1,6 @@
+import { responseReport } from "./responseReport.js";
+import type { ResponseReport } from "./responseReport.js";
+
 /** What was counted on one UTC day. Holds no username. */
 export interface DayCounts {
     /** Actions, by who took them and their type: "{actor}:{type}". */
@@ -10,6 +13,8 @@ export interface DayCounts {
     readonly moderators: readonly string[];
     /** Removals on each post. */
     readonly threads: readonly Readonly<{ postId: string; removals: number }>[];
+    /** How the team responded: "queue:{bucket}", "{source}:{settling}", "reversed:{remover}", "modmail:{bucket}". */
+    readonly outcomes: Readonly<Record<string, number>>;
 }
 
 /** One day's counts, and how many of its hours the report covers: 24 for a day gone by, fewer for today. */
@@ -37,6 +42,8 @@ export interface TeamReport {
     readonly activeModerators: number;
     /** The posts with the most removals, most first. */
     readonly topThreads: readonly Readonly<{ postId: string; removals: number }>[];
+    /** How the team responded to the queue and to modmail, and the removals it reversed. */
+    readonly responses: ResponseReport;
 }
 
 /** How many of the most common types, and of the most-moderated threads, a report gives. */
@@ -134,6 +141,7 @@ export function teamReport(days: readonly ReportDay[]): TeamReport {
             postId,
             removals,
         })),
+        responses: responseReport(sumOf(days.map(({ counts }: ReportDay): Tally => counts.outcomes))),
     };
 }
 

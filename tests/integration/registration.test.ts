@@ -151,6 +151,8 @@ describe("what the app registers with Devvit", (): void => {
         expect(registered).toStrictEqual([
             "onAppInstall",
             "onAppUpgrade",
+            "onAutomoderatorFilterComment",
+            "onAutomoderatorFilterPost",
             "onCommentDelete",
             "onCommentReport",
             "onCommentUpdate",

@@ -1,4 +1,6 @@
 import {
+    AutomoderatorFilterComment,
+    AutomoderatorFilterPost,
     CommentReport,
     CommentUpdate,
     PostReport,
@@ -113,6 +115,42 @@ export function commentEdited(fields: EditFields = {}): CommentUpdate & Readonly
                 id: "t1_c",
                 postId: "t3_abc",
                 body: fields.body ?? "what it says now",
+                permalink: "/r/testsub/comments/abc/hello_world/c/",
+            },
+        }),
+    };
+}
+
+/** AutoModerator holds Author's post t3_abc for review, with its rule's reason. */
+export function postFiltered(): AutomoderatorFilterPost & Readonly<{ type: "AutomoderatorFilterPost" }> {
+    return {
+        type: "AutomoderatorFilterPost",
+        ...AutomoderatorFilterPost.fromPartial({
+            subreddit: { name: SUBREDDIT },
+            reason: "Matched [hello world]",
+            author: "Author",
+            post: {
+                id: "t3_abc",
+                title: "Hello world",
+                permalink: "/r/testsub/comments/abc/hello_world/",
+                authorId: "t2_author",
+            },
+        }),
+    };
+}
+
+/** AutoModerator holds Commenter's comment t1_c for review, as for a post. */
+export function commentFiltered(): AutomoderatorFilterComment & Readonly<{ type: "AutomoderatorFilterComment" }> {
+    return {
+        type: "AutomoderatorFilterComment",
+        ...AutomoderatorFilterComment.fromPartial({
+            subreddit: { name: SUBREDDIT },
+            reason: "Matched [what the comment said]",
+            author: "Commenter",
+            comment: {
+                id: "t1_c",
+                postId: "t3_abc",
+                body: "what the comment said",
                 permalink: "/r/testsub/comments/abc/hello_world/c/",
             },
         }),

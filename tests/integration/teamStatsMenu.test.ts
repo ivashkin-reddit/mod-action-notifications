@@ -50,6 +50,11 @@ describe("the Show Team Stats menu item", (): void => {
                 ["Hours without a moderator action", "156 of 157; the busiest hour was 12:00 UTC"],
                 ["Bans", "1 ban: 1 temporary (averaging 7 days), 0 permanent; 0 unbans"],
                 ["Most-moderated threads", "https://www.reddit.com/comments/abc/ (2 removals)"],
+                ["Time to act on the queue", "none"],
+                ["Reported items", "none"],
+                ["Filtered by AutoModerator", "none"],
+                ["Removals reversed", "0 of Reddit's, 0 of another moderator's"],
+                ["Modmail replies", "none"],
                 ["Today", "3 actions"],
             ],
         ]);

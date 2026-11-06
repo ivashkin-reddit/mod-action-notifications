@@ -22,6 +22,7 @@ function action(fields: Readonly<Partial<CountedAction>> = {}): CountedAction {
         occurredAt: NOW,
         postId: "t3_abc",
         banDays: undefined,
+        itemId: undefined,
         ...fields,
     };
 }

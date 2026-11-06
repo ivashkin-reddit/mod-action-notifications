@@ -54,6 +54,7 @@ export type AppContext = Readonly<{
             | "hSet"
             | "hIncrBy"
             | "hDel"
+            | "hLen"
             | "zCard"
         >
     >;

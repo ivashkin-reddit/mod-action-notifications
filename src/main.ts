@@ -5,7 +5,15 @@
  */
 import { Devvit } from "@devvit/public-api";
 import type { CommentUpdateEvent, PostUpdateEvent } from "./approvedEdits/index.js";
-import { onCommentReport, onCommentUpdate, onModMail, onPostReport, onPostUpdate } from "./communityTriggers.js";
+import {
+    onAutomoderatorFilter,
+    onCommentReport,
+    onCommentUpdate,
+    onModMail,
+    onPostReport,
+    onPostUpdate,
+} from "./communityTriggers.js";
+import type { FilterEvent } from "./communityTriggers.js";
 import type { AppContext } from "./composition.js";
 import { SUMMARY_JOB_NAME } from "./health/index.js";
 import {
@@ -109,6 +117,21 @@ Devvit.addTrigger({
     event: "CommentReport",
     onEvent: async (event: CommentReportEvent, context: AppContext): Promise<void> => {
         await onCommentReport(event, context);
+    },
+});
+
+// AutoModerator held a post or comment for review: the team's response time runs from here.
+Devvit.addTrigger({
+    event: "AutomoderatorFilterPost",
+    onEvent: async (event: FilterEvent, context: AppContext): Promise<void> => {
+        await onAutomoderatorFilter(event, context);
+    },
+});
+
+Devvit.addTrigger({
+    event: "AutomoderatorFilterComment",
+    onEvent: async (event: FilterEvent, context: AppContext): Promise<void> => {
+        await onAutomoderatorFilter(event, context);
     },
 });
 
