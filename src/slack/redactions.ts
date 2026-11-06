@@ -19,6 +19,8 @@ const MAX_AGE_SECONDS = 604_800;
 /** At most this many redactions wait; beyond that the oldest are dropped. */
 const MAX_QUEUED = 5000;
 const MS_PER_SECOND = 1000;
+/** Each request queueing redactions carries at most this much, a fifth of the 5 MB Devvit takes in one request. */
+const REQUEST_BYTES = 1_000_000;
 
 /**
  * Error codes with which Slack refuses to edit a message it would still let the app delete: the workspace's
@@ -35,18 +37,42 @@ export type RedactionRedis = Readonly<
 /** A queued redaction, as stored; `sent` is undefined for a member this app cannot read. */
 export type QueuedRedaction = Readonly<{ member: string; queuedAt: number; sent: SentAlert | undefined }>;
 
-/** Queues a redaction of each alert, and returns how many of the oldest it pushed out of a full queue. */
+type Member = Readonly<{ member: string; score: number }>;
+
+/** A run of members for one request, and how many bytes they carry. */
+type Run = Readonly<{ members: readonly Member[]; bytes: number }>;
+
+/** Adds the member to the last run when it fits in REQUEST_BYTES, else starts a run with it. */
+function addToRuns(runs: readonly Run[], member: Member): readonly Run[] {
+    const bytes = new TextEncoder().encode(member.member).length;
+    const last = runs[runs.length - 1];
+    return last !== undefined && last.bytes + bytes <= REQUEST_BYTES
+        ? [...runs.slice(0, -1), { members: [...last.members, member], bytes: last.bytes + bytes }]
+        : [...runs, { members: [member], bytes }];
+}
+
+/** The members in runs of at most REQUEST_BYTES each, one run to a request; a member larger than that, alone. */
+function inRequests(members: readonly Member[]): (readonly Member[])[] {
+    return members.reduce<readonly Run[]>(addToRuns, []).map(({ members: run }: Run): readonly Member[] => run);
+}
+
+/**
+ * Queues a redaction of each alert, and returns how many of the oldest it pushed out of a full queue. However many
+ * the alerts, each request to Redis carries a run of them that fits.
+ */
 export async function queueRedactions(redis: RedactionRedis, alerts: readonly SentAlert[]): Promise<number> {
     if (alerts.length === 0) {
         return 0;
     }
     const queuedAt = Date.now();
-    await redis.zAdd(
-        REDACTIONS_KEY,
-        ...alerts.map(({ posted, withoutQuotes }: SentAlert): Readonly<{ member: string; score: number }> => ({
-            member: JSON.stringify({ channel: posted.channel, ts: posted.ts, withoutQuotes, queuedAt }),
-            score: queuedAt,
-        })),
+    const members = alerts.map(({ posted, withoutQuotes }: SentAlert): Member => ({
+        member: JSON.stringify({ channel: posted.channel, ts: posted.ts, withoutQuotes, queuedAt }),
+        score: queuedAt,
+    }));
+    await Promise.all(
+        inRequests(members).map(async (run: readonly Member[]): Promise<void> => {
+            await redis.zAdd(REDACTIONS_KEY, ...run);
+        }),
     );
     await redis.expire(REDACTIONS_KEY, MAX_AGE_SECONDS);
     return await redis.zRemRangeByRank(REDACTIONS_KEY, 0, -(MAX_QUEUED + 1));

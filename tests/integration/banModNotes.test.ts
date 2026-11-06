@@ -97,7 +97,17 @@ describe("a ban's mod note", (): void => {
         );
 
         expect(lines(onlyMessage(app.slack.messages))).toContain("• *Mod Note:* Spamming");
-        expect(JSON.stringify(await app.context.redis.hGetAll("slack_outbox_sent:t1_c"))).not.toContain("Spamming");
-        expect(JSON.stringify(await app.context.redis.hGetAll("slack_outbox_sent:t1_c"))).toContain("User Banned");
+
+        const remembered = JSON.stringify(
+            await Promise.all(
+                app.context.redis
+                    .keys()
+                    .filter((key: string): boolean => key.startsWith("slack_outbox_sent_alert:"))
+                    .map(async (key: string): Promise<string | undefined> => await app.context.redis.get(key)),
+            ),
+        );
+
+        expect(remembered).not.toContain("Spamming");
+        expect(remembered).toContain("User Banned");
     });
 });

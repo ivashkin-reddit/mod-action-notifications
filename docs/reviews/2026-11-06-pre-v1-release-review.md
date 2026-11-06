@@ -282,7 +282,7 @@ The verdict is conditional on:
     Watch the logs for ERROR lines, and for any sign of R3.
 
 2. **The owner deciding R2:** accept a shared Slack workspace for the subreddits it will be installed in, or ask for per-installation channel limits.
-3. **The owner accepting R1 for v1**, with the per-alert index scheduled for v1.1, or asking for it now.
+3. ~~**The owner accepting R1 for v1**, with the per-alert index scheduled for v1.1, or asking for it now.~~ The owner asked for it now: fixed, see [section 13](#13-addendum-r1-fixed).
 
 ## 12. Final recommendation
 
@@ -295,3 +295,40 @@ The verdict is conditional on:
 - **Not yet verified:** what only a playtest can show. That is the first condition.
 
 **Not part of this review:** `devvit.json` names the app `ukpolitics-man`. That is its Reddit account and URL slug, deliberately left unchanged; the display name is set in Developer Settings.
+
+## 13. Addendum: R1 fixed
+
+The owner asked for R1 to be fixed before v1 rather than accepted, on the same day.
+
+**Root cause.** Sent-alert records were kept per post or comment: a hash of its alerts, whose expiry every new alert quoting it pushed back. So the record's unit of expiry (a post) was coarser than the unit it described (an alert), and the cap counted posts, not alerts. Two failures followed:
+
+- An old alert in a busy thread was remembered until the retention after the thread's latest alert, past the promised window.
+- A deletion read the whole hash in one request and queued every redaction in one more. For a thread quoted by thousands of alerts, the second request carried more than Redis's 5 MB, so the deletion failed and nothing was redacted.
+
+**Fix.** Each alert is now its own record:
+
+- Its version without quotes is stored under its channel and timestamp (`slack_outbox_sent_alert:{channel}:{ts}`), expiring `slackRetentionDays` after it was sent.
+- Each post or comment it quotes gets an entry (`{contentId} {channel} {ts}`) in two indexes:
+    - one sorted by entry (`slack_outbox_sent_by_content`), so that a post's alerts are one range;
+    - one by when each alert was sent (`slack_outbox_sent_by_time`), which forgets entries in turn and caps them at 100,000.
+- A deletion reads a post's alerts 100 at a time.
+- `queueRedactions` splits its write into requests of at most 1 MB, for every caller.
+- The hash an earlier version kept is still read on a deletion, then deleted. Nothing is added to it, and what is left expires within 90 days.
+
+**Tests.** Each failed before the fix and passes after it:
+
+- `sent.test.ts`, "forget each alert the channels' retention after it was sent, though its post is quoted again";
+- `outbox.redactions.test.ts`, "queues a redaction of each alert, when they are more than one request to Redis can carry". It failed with `zAdd: a request of 6016839 bytes is over Redis's 5 MB limit`.
+
+The fake Redis now enforces Devvit's 5 MB request limit and its 1,000-member cap on ranges by score and by lex, and supports lex ranges, `mGet` and `hScan`.
+
+Six deliberate breaks were each caught by a test:
+
+- an alert that never expires;
+- reading one page only;
+- one request for all redactions;
+- the earlier version's hash read only in part;
+- the alert left in place when its entries are forgotten;
+- the earlier version's hash not read at all.
+
+**What remains.** An entry outlives its alert until the next alert is sent, and every entry goes at most `slackRetentionDays` after the last alert. An entry holds only the post or comment's ID, the channel and the timestamp; the alert's text goes on time. The operators guide and privacy policy say so.

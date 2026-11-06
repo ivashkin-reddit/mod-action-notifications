@@ -37,6 +37,7 @@ export type AppContext = Readonly<{
         Pick<
             TriggerContext["redis"],
             | "get"
+            | "mGet"
             | "set"
             | "del"
             | "incrBy"
@@ -55,6 +56,7 @@ export type AppContext = Readonly<{
             | "hIncrBy"
             | "hDel"
             | "hLen"
+            | "hScan"
             | "zCard"
         >
     >;

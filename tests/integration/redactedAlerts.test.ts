@@ -17,6 +17,11 @@ const DAY_SECONDS = 86_400;
 const SLACK_DOWN = [503, 503, 503, 503] as const;
 /** The timestamp Slack gives the first message the app posts, at NOW: its seconds, and its place. */
 const FIRST_TS = `${String(NOW.getTime() / 1000)}.000001`;
+// Stored data: renaming these keys would lose what installations hold.
+/** Where the first alert's version without quotes is remembered. */
+const FIRST_ALERT_KEY = `slack_outbox_sent_alert:${CHANNEL}:${FIRST_TS}`;
+const BY_CONTENT_KEY = "slack_outbox_sent_by_content";
+const BY_TIME_KEY = "slack_outbox_sent_by_time";
 
 /** ModA removes Commenter's comment t1_c on the post t3_p, whose title is in the comment's link. */
 const removedComment = modActionEvent({
@@ -81,7 +86,8 @@ describe("an alert in Slack quoting a comment then deleted on Reddit", (): void 
         await expect(app.context.redis.hGetAll("health:count:2026-11-04")).resolves.toMatchObject({
             "alert-redacted": "1",
         });
-        expect(app.context.redis.keys()).not.toContain("slack_outbox_sent:t1_c");
+        // Its post's entry stays: should the post be deleted too, the alert is edited again, to the same.
+        expect(app.context.redis.members(BY_CONTENT_KEY)).toStrictEqual([`t3_p ${CHANNEL} ${FIRST_TS}`]);
         expect(app.context.redis.keys()).not.toContain("slack_outbox_redactions");
     });
 
@@ -225,8 +231,9 @@ describe("an alert in Slack quoting Reddit content", (): void => {
 
         await app.fire("ModAction", removedComment);
 
-        expect(app.context.redis.ttlSeconds("slack_outbox_sent:t1_c")).toBe(30 * DAY_SECONDS);
-        expect(app.context.redis.ttlSeconds("slack_outbox_sent")).toBe(30 * DAY_SECONDS);
+        expect(app.context.redis.ttlSeconds(FIRST_ALERT_KEY)).toBe(30 * DAY_SECONDS);
+        expect(app.context.redis.ttlSeconds(BY_CONTENT_KEY)).toBe(30 * DAY_SECONDS);
+        expect(app.context.redis.ttlSeconds(BY_TIME_KEY)).toBe(30 * DAY_SECONDS);
     });
 
     it(
@@ -239,22 +246,45 @@ describe("an alert in Slack quoting Reddit content", (): void => {
             const app = await loadApp(devvit);
             await app.fire("ModAction", removedComment);
 
-            const remembered = await app.context.redis.hGetAll("slack_outbox_sent:t1_c");
-
-            expect(Object.keys(remembered)).toStrictEqual([`${CHANNEL} ${FIRST_TS}`]);
-            expect(JSON.parse(remembered[`${CHANNEL} ${FIRST_TS}`] ?? "")).toStrictEqual({
+            expect(JSON.parse((await app.context.redis.get(FIRST_ALERT_KEY)) ?? "")).toStrictEqual({
                 text,
                 username,
                 icon_emoji: iconEmoji,
                 channel: CHANNEL,
                 attachments,
             });
-            await expect(app.context.redis.hGetAll("slack_outbox_sent:t3_p")).resolves.toStrictEqual(remembered);
-            expect(app.context.redis.ttlSeconds("slack_outbox_sent:t1_c")).toBe(90 * DAY_SECONDS);
-            await expect(app.context.redis.zRange("slack_outbox_sent", 0, -1, { by: "rank" })).resolves.toStrictEqual([
-                { member: "t1_c", score: NOW.getTime() },
-                { member: "t3_p", score: NOW.getTime() },
+            expect(app.context.redis.ttlSeconds(FIRST_ALERT_KEY)).toBe(90 * DAY_SECONDS);
+            expect(app.context.redis.members(BY_CONTENT_KEY)).toStrictEqual([
+                `t1_c ${CHANNEL} ${FIRST_TS}`,
+                `t3_p ${CHANNEL} ${FIRST_TS}`,
+            ]);
+            await expect(app.context.redis.zRange(BY_TIME_KEY, 0, -1, { by: "rank" })).resolves.toStrictEqual([
+                { member: `t1_c ${CHANNEL} ${FIRST_TS}`, score: NOW.getTime() },
+                { member: `t3_p ${CHANNEL} ${FIRST_TS}`, score: NOW.getTime() },
             ]);
         },
     );
+});
+
+// The version before kept a hash of alerts for each post and comment: read until the last expires, in 90 days.
+describe("an alert in Slack that an earlier version remembered", (): void => {
+    it("is edited when the comment it quotes is deleted, and forgotten", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.context.redis.hSet("slack_outbox_sent:t1_c", {
+            [`${CHANNEL} 1793793600.000001`]: JSON.stringify({
+                channel: CHANNEL,
+                text: "removed, without the comment",
+            }),
+        });
+
+        await app.fire("CommentDelete", commentDeleted);
+        await app.runJob("slackOutbox");
+
+        expect(app.slack.updates).toStrictEqual([
+            { channel: CHANNEL, ts: "1793793600.000001", text: "removed, without the comment", attachments: [] },
+        ]);
+        expect(app.context.redis.keys()).not.toContain("slack_outbox_sent:t1_c");
+    });
 });
