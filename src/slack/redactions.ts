@@ -3,6 +3,7 @@ import { callWithRetries, waitAfter } from "./drain.js";
 import type { Drain, DrainEnd } from "./drain.js";
 import type { DeliveryHealth } from "./health.js";
 import { isSlackMessage } from "./queue.js";
+import { CONTINUE_SOON_MS } from "./schedule.js";
 import type { SentAlert } from "./sent.js";
 import { deleteMessage, failureDetail, updateMessage } from "./webApi.js";
 import type { Delivery } from "./webApi.js";
@@ -93,16 +94,23 @@ async function reportRedaction(health: DeliveryHealth, delivery: Delivery<unknow
     );
 }
 
-/** Edits the alert to its version without quotes, or deletes it where Slack lets the app delete it but not edit it. */
-async function redact(drain: Drain, { posted, withoutQuotes }: SentAlert): Promise<Delivery> {
+/**
+ * Edits the alert to its version without quotes, or deletes it where Slack lets the app delete it but not edit it.
+ * "later" when Slack refused the edit after the drain's time was up: a drain starts no request after it, as its
+ * lease outlasts its time by one request only, so the deletion is left to a later drain.
+ */
+async function redact(drain: Drain, { posted, withoutQuotes }: SentAlert): Promise<Delivery | "later"> {
     const { token } = drain.outbox;
     const edit = await callWithRetries(
         drain,
         async (): Promise<Delivery> => await updateMessage(token, posted, withoutQuotes),
     );
-    return edit.outcome === "rejected" && edit.failure.kind === "response" && CANNOT_EDIT.includes(edit.failure.error)
-        ? await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(token, posted))
-        : edit;
+    if (edit.outcome !== "rejected" || edit.failure.kind !== "response" || !CANNOT_EDIT.includes(edit.failure.error)) {
+        return edit;
+    }
+    return Date.now() >= drain.deadline
+        ? "later"
+        : await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(token, posted));
 }
 
 /** Why a waiting redaction is dropped unmade: it cannot be read, or it waited a week; undefined to make it. */
@@ -111,6 +119,16 @@ function whyDrop(queued: QueuedRedaction): string | undefined {
         return "unreadable";
     }
     return Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND ? "waited a week" : undefined;
+}
+
+/** Makes a redaction and reports how it went; a DrainEnd when it must wait for a later drain. */
+async function make(drain: Drain, sent: SentAlert): Promise<DrainEnd | undefined> {
+    const delivery = await redact(drain, sent);
+    if (delivery === "later") {
+        return { until: "later", afterMs: CONTINUE_SOON_MS };
+    }
+    await reportRedaction(drain.outbox.health, delivery);
+    return delivery.outcome === "retry" ? waitAfter(delivery.retryAfterMs) : undefined;
 }
 
 /**
@@ -123,10 +141,9 @@ export async function redactNext(drain: Drain, queued: QueuedRedaction): Promise
     if (why !== undefined) {
         await health.raise("redactions-failing", why);
     } else if (queued.sent !== undefined) {
-        const delivery = await redact(drain, queued.sent);
-        await reportRedaction(health, delivery);
-        if (delivery.outcome === "retry") {
-            return waitAfter(delivery.retryAfterMs);
+        const end = await make(drain, queued.sent);
+        if (end !== undefined) {
+            return end;
         }
     }
     await redis.zRem(REDACTIONS_KEY, [queued.member]);

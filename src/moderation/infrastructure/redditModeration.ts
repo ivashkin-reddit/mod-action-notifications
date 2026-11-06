@@ -89,21 +89,28 @@ function subredditNames(
     };
 }
 
+/** The subreddit's mod list from Reddit, lower-cased, kept in the cache for the next lookups. */
+async function fetchModList(reddit: ModerationReddit, modList: ModList, now: number): Promise<readonly string[]> {
+    const moderators = await (await reddit.getCurrentSubreddit()).getModerators().all();
+    const usernames = moderators.map((moderator: Readonly<Pick<User, "username">>): string =>
+        moderator.username.toLowerCase(),
+    );
+    modList.cache.store(modList.installation, now, usernames);
+    return usernames;
+}
+
 export function createRedditModerationLookups(reddit: ModerationReddit, modList: ModList): ModerationLookups {
     const subredditNameOf = subredditNames(reddit);
     return {
+        // A cached list shows who moderates, but not who doesn't: a moderator who joined since it was fetched is
+        // missing from it, so a name it lacks is looked up in the list as it is now.
         isModerator: async (username: string): Promise<boolean> => {
             const now = Date.now();
-            const cached = modList.cache.fresh(modList.installation, now);
-            if (cached !== undefined) {
-                return cached.includes(username.toLowerCase());
+            const name = username.toLowerCase();
+            if (modList.cache.fresh(modList.installation, now)?.includes(name) === true) {
+                return true;
             }
-            const moderators = await (await reddit.getCurrentSubreddit()).getModerators().all();
-            const usernames = moderators.map((moderator: Readonly<Pick<User, "username">>): string =>
-                moderator.username.toLowerCase(),
-            );
-            modList.cache.store(modList.installation, now, usernames);
-            return usernames.includes(username.toLowerCase());
+            return (await fetchModList(reddit, modList, now)).includes(name);
         },
         recentBans: async (subredditName: string | undefined): Promise<readonly BanLogEntry[]> => {
             const name = await subredditNameOf(subredditName);

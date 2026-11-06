@@ -13,6 +13,7 @@ import type { SimulateFormValues } from "./moderation/index.js";
 import { createDevvitMonitorScheduler, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
+import type { AppConfig } from "./settings/index.js";
 import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
 import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
 import type { ReportLine } from "./statistics/index.js";
@@ -200,14 +201,30 @@ export async function sendTestAlert(context: MenuContext): Promise<void> {
     context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
 }
 
-/** Rejects when Slack is not set up or did not accept the alert. */
-async function sendSimulatedModAction(values: SimulateFormValues, context: AppContext): Promise<void> {
+/**
+ * The channel the form names, without its #: '' for none, so the alert goes where a real one would. Only the
+ * configured channels may be named: the bot token is the app's, and reaches every channel the Slack app is in,
+ * other subreddits' included. Undefined for any other channel.
+ */
+function simulationChannel(values: SimulateFormValues, config: AppConfig): string | undefined {
+    const channel = slackChannelFromForm(values).replace(/^#+/u, "");
+    return channel === "" || [config.notificationChannel, config.alertChannel].includes(channel) ? channel : undefined;
+}
+
+/** Sends the simulation; "channel-refused" when the form names a channel not configured. Rejects when Slack is not set up or did not accept the alert. */
+async function sendSimulatedModAction(
+    values: SimulateFormValues,
+    context: AppContext,
+): Promise<"sent" | "channel-refused"> {
     const config = await configOf(context);
     const setup = slackSetup(config);
     if (setup !== "set-up") {
         throw new Error(`Slack is not set up: ${setup}`);
     }
-    const channel = slackChannelFromForm(values);
+    const channel = simulationChannel(values, config);
+    if (channel === undefined) {
+        return "channel-refused";
+    }
     const presentation = modActionPresentation(config);
     await simulateModAction(
         simulationRequestFromForm(values),
@@ -218,12 +235,20 @@ async function sendSimulatedModAction(values: SimulateFormValues, context: AppCo
             notificationChannel: channel === "" ? presentation.notificationChannel : channel,
         }),
     );
+    return "sent";
 }
 
 /** Sends the simulated action's alert straight to Slack, and says how it went. */
 export async function sendSimulation(values: SimulateFormValues, context: MenuContext): Promise<void> {
     try {
-        await sendSimulatedModAction(values, context);
+        if ((await sendSimulatedModAction(values, context)) === "channel-refused") {
+            console.warn("[menu] Refused a simulated mod action to a channel that is not configured");
+            context.ui.showToast({
+                text: "❌ The channel override must be your Notification Channel or Alert Channel.",
+                appearance: "neutral",
+            });
+            return;
+        }
         context.ui.showToast({ text: "✅ Simulation delivered to Slack!", appearance: "success" });
     } catch (error) {
         console.warn("[menu] Could not send the simulated mod action:", error);

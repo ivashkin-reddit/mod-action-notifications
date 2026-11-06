@@ -257,13 +257,27 @@ export function createSlackModActionAlerts(send: SlackSender, presentation: ModA
     };
 }
 
-/** A simulated action's alert as a moderator's Slack message, sent straight to Slack. */
+type Attachment = NonNullable<SlackMessage["attachments"]>[number];
+
+/** An alert marked as a simulation in its text and footer, so no one takes it for a moderator's real action. */
+function asSimulation(message: SlackMessage): SlackMessage {
+    return {
+        ...message,
+        text: `🧪 Simulation: ${message.text}`,
+        attachments: (message.attachments ?? []).map((attachment: Attachment): Attachment => ({
+            ...attachment,
+            footer: "Mod Action Notifications - Simulation",
+        })),
+    };
+}
+
+/** A simulated action's alert as a moderator's Slack message, marked as a simulation, sent straight to Slack. */
 export function createSlackSimulationAlerts(
     send: DirectSlackSender,
     presentation: ModActionPresentation,
 ): SimulationAlerts {
     return {
         deliver: async (modAction: ModAction): Promise<boolean> =>
-            await send(modActionMessage(modAction, presentation, "moderator")),
+            await send(asSimulation(modActionMessage(modAction, presentation, "moderator"))),
     };
 }

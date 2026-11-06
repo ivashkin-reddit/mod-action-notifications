@@ -9,6 +9,7 @@ import type { ConfigEdit } from "../domain/watch.js";
  * - `security:woke:{moderator}`, a day's claim that their waking was alerted;
  * - `security:automod_removals:{hour}`, AutoModerator's removals by minute of an hour since the epoch, for 2 days;
  * - `security:automod_edit`, the last edit to AutoModerator's config, for a day;
+ * - `security:config_edit:{revisionId}`, a day's claim that an edit to the config was alerted;
  * - `security:misfire:{editAt}`, a day's claim that a misfire after that edit was alerted.
  */
 const LAST_ACTION_KEY = "security:last_action";
@@ -102,6 +103,8 @@ export function createRedisSecurityStore(redis: SecurityRedis): SecurityStore {
             });
         },
         lastConfigEdit: async (): Promise<ConfigEdit | undefined> => editOf(await redis.get(EDIT_KEY)),
+        claimConfigEdit: async (revisionId: string): Promise<boolean> =>
+            await claim(redis, `security:config_edit:${revisionId}`),
         claimMisfire: async (editAt: number): Promise<boolean> =>
             await claim(redis, `security:misfire:${String(editAt)}`),
     };

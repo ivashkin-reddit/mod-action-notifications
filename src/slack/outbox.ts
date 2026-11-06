@@ -6,6 +6,7 @@ import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
 import { oldestRedaction, queueRedactions, redactNext } from "./redactions.js";
+import { endsRefusal } from "./refusals.js";
 import {
     continuationStarted,
     CONTINUE_SOON_MS,
@@ -98,12 +99,12 @@ async function rememberQuoting(
 
 /** Posts a message within a drain, reporting what Slack's answer says about Slack. */
 async function post(drain: Drain, message: SlackMessage): Promise<Delivery<Posted>> {
-    const { health, token } = drain.outbox;
+    const { health, redis, token } = drain.outbox;
     const delivery = await callWithRetries(
         drain,
         async (): Promise<Delivery<Posted>> => await postMessage(token, message),
     );
-    await reportDelivery(health, delivery);
+    await reportDelivery(health, delivery, await endsRefusal(redis, delivery, message.channel ?? ""));
     return delivery;
 }
 
@@ -175,7 +176,10 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
     }
     try {
         if (await anyWaiting(outbox)) {
-            await scheduleRecovery(outbox);
+            // The recovery only covers this drain dying: one the scheduler refuses must not stop the delivery.
+            await scheduleRecovery(outbox).catch((error: unknown): void => {
+                console.warn("[outbox] Could not schedule a recovery drain, so delivering without one:", error);
+            });
         }
         const end = await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
         await removeDeletedQuotes(outbox.redis);

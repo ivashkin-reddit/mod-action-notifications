@@ -65,6 +65,32 @@ describe("an edit to AutoModerator's config", (): void => {
         expect(JSON.stringify(app.slack.requests)).not.toContain("secret-regex");
     });
 
+    it(
+        "is sent once for a revision, however often its wiki edit is delivered, or followed by another page's",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { enabledActions: [], alertChannel: ALERT_CHANNEL });
+            app.context.reddit.wikiRevisions = REVISIONS;
+
+            await app.fire("ModAction", wikiEdit);
+            await app.fire("ModAction", wikiEdit);
+            // ModA edits another wiki page a minute later: the config's latest revision is still theirs.
+            await app.advance(60_000);
+            await app.fire(
+                "ModAction",
+                modActionEvent({ id: "ModAction_2", action: "wikirevise", moderator: { name: "ModA" } }),
+            );
+
+            expect(securityAlerts(app.slack.messages)).toHaveLength(1);
+            // Claimed for a day, a minute ago.
+            expect(app.context.redis.ttlSeconds("security:config_edit:00000000-0000-4000-8000-000000000002")).toBe(
+                86_400 - 60,
+            );
+        },
+    );
+
     it("is noted for the misfire check, for a day", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

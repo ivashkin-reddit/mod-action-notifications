@@ -62,7 +62,8 @@ export const simulateForm: Form = {
             name: "slackChannel",
             label: "Slack Channel Override",
             type: "string",
-            helpText: "Optional channel like #moderators. Uses default channel when blank.",
+            helpText:
+                "Optional: your Notification Channel or Alert Channel. When blank, the alert goes where a real one would.",
         },
     ],
     acceptLabel: "Send Simulation",

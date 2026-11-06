@@ -65,21 +65,24 @@ async function watchModerator(action: WatchedAction, config: SecurityConfig, por
     }
 }
 
-/** The config's change if its latest revision is this action's: why, and lines added and removed; else undefined. */
+/** The config's change if its latest revision is this action's: which, why, and lines added and removed. */
 async function configChange(
     action: WatchedAction,
     wiki: ConfigWiki,
-): Promise<Readonly<{ reason: string; added: number; removed: number }> | undefined> {
+): Promise<Readonly<{ revisionId: string; reason: string; added: number; removed: number }> | undefined> {
     const [latest, previous] = await wiki.latestRevisions(action.subredditName);
     if (latest === undefined || !isEditBy(latest, action)) {
         return undefined;
     }
     const after = await wiki.revisionText(action.subredditName, latest.id);
     const before = previous === undefined ? "" : await wiki.revisionText(action.subredditName, previous.id);
-    return { reason: latest.reason, ...lineChanges(before, after) };
+    return { revisionId: latest.id, reason: latest.reason, ...lineChanges(before, after) };
 }
 
-/** On a wiki edit, checks whether it was to AutoModerator's config; if so, notes it and alerts. */
+/**
+ * On a wiki edit, checks whether it was to AutoModerator's config; if so, notes it and alerts, once for the revision:
+ * a wiki edit delivered again, or the same moderator's edit to another page just after, finds the same revision.
+ */
 async function watchConfig(action: WatchedAction, config: SecurityConfig, ports: SecurityPorts): Promise<void> {
     const name = action.moderatorName ?? "";
     if (!config.securityAlerts || action.type !== "wikirevise" || action.actor !== "moderator" || name === "") {
@@ -89,12 +92,18 @@ async function watchConfig(action: WatchedAction, config: SecurityConfig, ports:
         console.warn("[security] Could not read AutoModerator's config, so a wiki edit was not checked:", error);
         return undefined;
     });
-    if (change === undefined) {
+    if (change === undefined || !(await ports.store.claimConfigEdit(change.revisionId))) {
         return;
     }
     await ports.store.noteConfigEdit({ at: action.occurredAt.getTime(), by: name });
     if (config.alertsReady) {
-        await ports.alerts.configEdited({ moderator: name, ...change, subredditName: action.subredditName });
+        await ports.alerts.configEdited({
+            moderator: name,
+            reason: change.reason,
+            added: change.added,
+            removed: change.removed,
+            subredditName: action.subredditName,
+        });
     }
 }
 

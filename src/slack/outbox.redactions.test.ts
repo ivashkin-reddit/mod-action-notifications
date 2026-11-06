@@ -70,6 +70,24 @@ describe("a drain of the outbox with redactions waiting", (): void => {
     );
 });
 
+describe("a redaction Slack refuses to edit after the drain's time is up", (): void => {
+    // A drain starts no request after its time: the lease outlasts its time by one request, not two.
+    it("leaves the deletion that replaces the edit to a later drain", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { outbox, redis, scheduler, slack } = fakeOutbox();
+        await redis.zAdd(REDACTIONS_KEY, redaction("1.000001"));
+        // Slack takes 15 seconds to refuse the edit: the drain's 10 seconds are then up.
+        slack.respondSlowly(15_000, "edit_window_closed");
+
+        await drive(outbox.deliverQueued());
+
+        expect(slack.requests.map(({ api }): string => api)).toStrictEqual(["chat.update"]);
+        expect(redis.keys()).toContain(REDACTIONS_KEY);
+        expect(scheduler.runJob).toHaveBeenCalledWith(expect.objectContaining({ name: "slackOutbox" }));
+    });
+});
+
 describe("content deleted on Reddit, quoted by alerts in Slack", (): void => {
     it("queues a redaction of each, and schedules a drain to make them", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

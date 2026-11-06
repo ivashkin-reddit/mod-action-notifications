@@ -15,6 +15,8 @@ export interface SecurityStore {
     readonly noteConfigEdit: (edit: ConfigEdit) => Promise<void>;
     /** The last edit to AutoModerator's config noted within the day, if any. */
     readonly lastConfigEdit: () => Promise<ConfigEdit | undefined>;
+    /** Claims the alert for an edit to the config, by its revision: true the first time in a day. */
+    readonly claimConfigEdit: (revisionId: string) => Promise<boolean>;
     /** Claims the misfire alert for the edit at `editAt`: true the first time. */
     readonly claimMisfire: (editAt: number) => Promise<boolean>;
 }

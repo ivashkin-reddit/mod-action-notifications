@@ -41,6 +41,27 @@ describe("the mod list", (): void => {
         expect(app.context.reddit.getCurrentSubreddit).toHaveBeenCalledExactlyOnceWith();
     });
 
+    it(
+        "is asked again for a name the cached list lacks: a moderator who joined since is not flagged",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+            await app.fire("ModAction", removedPost());
+            app.context.reddit.moderators = [...app.context.reddit.moderators, "NewMod"];
+            await app.advance(MINUTE);
+
+            await app.fire("ModAction", removedPost({ id: "ModAction_2", moderator: { name: "NewMod" } }));
+
+            expect(app.slack.messages.map((message): string => message.text)).toStrictEqual([
+                "🗑️ Post Removed",
+                "🗑️ Post Removed",
+            ]);
+            expect(app.context.reddit.getModerators).toHaveBeenCalledTimes(2);
+        },
+    );
+
     // One app process can serve several subreddits, which may share a name across fakes but never a mod list.
     it("is kept for each installation the process serves", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
