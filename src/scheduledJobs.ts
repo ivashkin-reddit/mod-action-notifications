@@ -50,19 +50,23 @@ import {
  */
 export async function setUpScheduledJobs(context: AppContext): Promise<MonitoringSetup> {
     const config = await configOf(context);
-    const setup = await setupMonitoring(monitorWanted(config), monitorJobPorts(context));
-    console.info(
-        setup.enabled
-            ? "[setup] The modqueue monitor is on"
-            : "[setup] The modqueue monitor is off: all its thresholds are 0",
-    );
-    await setUpSummary(createDevvitSummaryScheduler(context.scheduler)).catch((error: unknown): void => {
-        console.warn("[setup] Could not schedule the daily summary:", error);
-    });
-    await setUpDigest(createDevvitDigestScheduler(context.scheduler)).catch((error: unknown): void => {
-        console.warn("[setup] Could not schedule the weekly statistics:", error);
-    });
-    return setup;
+    try {
+        const setup = await setupMonitoring(monitorWanted(config), monitorJobPorts(context));
+        console.info(
+            setup.enabled
+                ? "[setup] The modqueue monitor is on"
+                : "[setup] The modqueue monitor is off: all its thresholds are 0",
+        );
+        return setup;
+    } finally {
+        // Set up whether or not the monitor's setup failed, which the caller logs.
+        await setUpSummary(createDevvitSummaryScheduler(context.scheduler)).catch((error: unknown): void => {
+            console.warn("[setup] Could not schedule the daily summary:", error);
+        });
+        await setUpDigest(createDevvitDigestScheduler(context.scheduler)).catch((error: unknown): void => {
+            console.warn("[setup] Could not schedule the weekly statistics:", error);
+        });
+    }
 }
 
 /**
@@ -132,10 +136,18 @@ export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
     }
 }
 
-/** Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while Slack is not set up. */
+/**
+ * Delivers alerts an earlier drain left queued: the scheduled outbox job. Queued alerts wait while Slack is not set
+ * up. Logs, and resolves, when Redis fails: the alerts wait for the next drain.
+ */
 export async function deliverQueuedAlerts(context: AppContext): Promise<void> {
     const config = await configOf(context);
-    if (alertsConfigured(config)) {
+    if (!alertsConfigured(config)) {
+        return;
+    }
+    try {
         await outboxOf(context, config).deliverQueued();
+    } catch (error) {
+        console.error("[outbox] Could not deliver the queued alerts; they wait for the next drain:", error);
     }
 }

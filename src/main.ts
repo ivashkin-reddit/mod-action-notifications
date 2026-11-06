@@ -167,7 +167,7 @@ Devvit.addSchedulerJob({
     },
 });
 
-// Delivers alerts a drain of the Slack outbox left queued. A failing run rejects, so the scheduler records it.
+// Delivers alerts a drain of the Slack outbox left queued. A run that fails logs it, and resolves.
 Devvit.addSchedulerJob({
     name: OUTBOX_JOB_NAME,
     onRun: async (_event: unknown, context: AppContext): Promise<void> => {
@@ -260,7 +260,10 @@ Devvit.addMenuItem({
     forUserType: "moderator",
     onPress: async (_event: unknown, context: MenuContext): Promise<void> => {
         await forModerators(context, async (): Promise<void> => {
-            context.ui.showForm(teamStatsForm, await teamStats(context));
+            const stats = await teamStats(context);
+            if (stats !== undefined) {
+                context.ui.showForm(teamStatsForm, stats);
+            }
         });
     },
 });

@@ -24,7 +24,7 @@ export {
 export { reportFor } from "./application/teamReport.js";
 export type { ActorKind, CountedAction } from "./domain/counting.js";
 export { DIGEST_JOB_NAME } from "./domain/digest.js";
-export { dayRange } from "./domain/report.js";
+export { dayRange, type TeamReport } from "./domain/report.js";
 export { createDevvitDigestScheduler } from "./infrastructure/devvitDigestScheduler.js";
 export { createRedisStatisticsStore } from "./infrastructure/redisStatisticsStore.js";
 export { createRedisWaitingStore } from "./infrastructure/redisWaitingStore.js";

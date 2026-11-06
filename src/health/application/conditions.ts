@@ -66,15 +66,20 @@ export async function clearCondition(ports: ConditionPorts, condition: Condition
     });
 }
 
-/** Tells moderators of the condition, when it has lasted long enough and they were not told of it within the day. */
+/**
+ * Tells moderators of the condition, when it has lasted long enough and they were not told of it within the day. A
+ * notice modmail could not take lets go of its claim, so the condition's next report tries again.
+ */
 async function noticeIfDue(ports: ConditionPorts, problem: InForce): Promise<void> {
     if (
-        noticeDue(problem.condition, problem.since, Date.now()) &&
-        (await ports.store.claimNotice(problem.condition, NOTICE_PERIOD_SECONDS)) &&
-        (await tell(ports, problem.condition, problemNotice(problem)))
+        !noticeDue(problem.condition, problem.since, Date.now()) ||
+        !(await ports.store.claimNotice(problem.condition, NOTICE_PERIOD_SECONDS))
     ) {
-        await ports.store.recordNotice(problem.condition);
+        return;
     }
+    await ((await tell(ports, problem.condition, problemNotice(problem)))
+        ? ports.store.recordNotice(problem.condition)
+        : ports.store.releaseNotice(problem.condition));
 }
 
 async function start(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {

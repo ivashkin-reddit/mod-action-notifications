@@ -211,6 +211,20 @@ describe("a notice modmail cannot take", (): void => {
         },
     );
 
+    // The notice is claimed for the day as it is sent: one modmail could not take is not claimed.
+    it("is tried again with the next problem when modmail could not take it", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.modMail.createModNotification.mockRejectedValueOnce(new Error("modmail down"));
+        app.slack.respond("not_in_channel", "not_in_channel");
+
+        await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
+        await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
+
+        expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toHaveLength(2);
+    });
+
     it("is logged, and the work it was about goes on", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

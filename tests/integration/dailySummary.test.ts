@@ -136,6 +136,18 @@ describe("the daily summary", (): void => {
         );
     });
 
+    it("is sent on a later run when a run cannot read the day's counts", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { dailySummary: true });
+        app.context.redis.hGetAll.mockRejectedValueOnce(new Error("redis down"));
+
+        await app.runJob("dailySummary");
+        await app.runJob("dailySummary");
+
+        expect(app.slack.requests).toHaveLength(1);
+    });
+
     it("is sent once a day, however often the job runs", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

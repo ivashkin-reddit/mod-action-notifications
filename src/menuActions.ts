@@ -16,7 +16,7 @@ import { setUpScheduledJobs } from "./scheduledJobs.js";
 import type { AppConfig } from "./settings/index.js";
 import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
 import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
-import type { ReportLine } from "./statistics/index.js";
+import type { ReportLine, TeamReport } from "./statistics/index.js";
 
 /**
  * The composition root's menu actions: what each menu item and form does for the moderator who invoked it, and the
@@ -153,15 +153,39 @@ export function readOnlyForm(title: string): (data: Readonly<Record<string, unkn
 /** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
 export const statusForm = readOnlyForm("Bot Status");
 
+/** The team's reports for the last 7 days and for today; undefined, once the moderator is told, when unreadable. */
+async function teamReports(
+    context: MenuContext,
+    now: number,
+): Promise<Readonly<{ week: TeamReport; today: TeamReport }> | undefined> {
+    const store = createRedisStatisticsStore(context.redis);
+    try {
+        return {
+            week: await reportFor(store, dayRange(now, WEEK_DAYS, 0), now),
+            today: await reportFor(store, dayRange(now, 1, 0), now),
+        };
+    } catch (error) {
+        console.warn("[menu] Could not read the team's statistics:", error);
+        context.ui.showToast({
+            text: "❌ Could not read the team's statistics. Try again in a moment.",
+            appearance: "neutral",
+        });
+        return undefined;
+    }
+}
+
 /**
  * The team's statistics for the last 7 days, today included, as lines for a read-only form, with today's actions
- * last. They name no moderator.
+ * last. They name no moderator. Undefined, once the moderator is told, when they cannot be read.
  */
-export async function teamStats(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
-    const store = createRedisStatisticsStore(context.redis);
-    const now = Date.now();
-    const week = await reportFor(store, dayRange(now, WEEK_DAYS, 0), now);
-    const today = await reportFor(store, dayRange(now, 1, 0), now);
+export async function teamStats(
+    context: MenuContext,
+): Promise<{ lines: { label: string; value: string }[] } | undefined> {
+    const reports = await teamReports(context, Date.now());
+    if (reports === undefined) {
+        return undefined;
+    }
+    const { week, today } = reports;
     const lines: readonly ReportLine[] = [
         ...reportLines(week, actionNameOf),
         { label: "Today", value: countOf(today.actions.total, "action") },

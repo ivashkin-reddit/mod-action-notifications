@@ -26,7 +26,7 @@ function reminderKey(condition: Condition): string {
 }
 
 type ConditionRedis = Readonly<
-    Pick<TriggerContext["redis"], "hSetNX" | "hSet" | "hGet" | "hGetAll" | "hDel" | "set" | "expire">
+    Pick<TriggerContext["redis"], "hSetNX" | "hSet" | "hGet" | "hGetAll" | "hDel" | "set" | "del" | "expire">
 >;
 
 /** What the hash holds for a condition; undefined for a value this version cannot read. */
@@ -76,6 +76,9 @@ export function createRedisConditionStore(redis: ConditionRedis): ConditionStore
                 nx: true,
                 expiration: new Date(Date.now() + seconds * MS_PER_SECOND),
             })) !== "",
+        releaseNotice: async (condition: Condition): Promise<void> => {
+            await redis.del(noticeKey(condition));
+        },
         recordNotice: async (condition: Condition): Promise<void> => {
             await redis.hSet(NOTICED_KEY, { [condition]: String(Date.now()) });
             await redis.expire(NOTICED_KEY, CONDITIONS_MEMORY_SECONDS);
