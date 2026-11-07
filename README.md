@@ -22,7 +22,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Edits after approval.** When someone edits a post or comment a moderator approved in the last 7 days, a common way to slip rule-breaking content past review, the app tells you who edited it, who approved it and how long before, with a link. It never shows either version of the text.
 
-**Activity spikes.** When one moderator takes five or more actions within a minute, the alert says so.
+**Activity spikes and removal bursts.** When one moderator takes five or more actions within a minute, the alert says so. If they're removing posts or comments that fast, as when clearing a queue or a brigaded thread, the app stops alerting each removal: it tells you further removals will be summarised, then sends one summary of how many they removed, with a link to the mod log, a minute after they stop. A long run sends running totals every five minutes. Removals by Reddit's admins are summarised the same way.
 
 **Modqueue monitoring.** Every 15 minutes the app checks your queues. It alerts your team when the modqueue grows past a size you set, when content has waited too long without a moderator reviewing it, and when reported content has gone unhandled for too long. Each kind of alert is sent at most once an hour. It can also watch Reddit's spam queue and edited queue.
 
@@ -34,7 +34,7 @@ It runs entirely on Reddit's Developer Platform (Devvit). It has no servers of i
 
 **Problems in modmail.** If alerts stop reaching Slack (a revoked token, a channel the Slack app was removed from, a Slack outage of half an hour or more) or the modqueue monitor keeps failing, or the app can't read modmail, the app tells you in your subreddit's modmail, at most once a day, and again when it's fixed. **Show Bot Status** shows how it's doing at any time.
 
-**Built for busy days.** Slack accepts about one message a second to a channel. During a burst of activity, alerts wait in a queue and are delivered in order at that pace, so none are lost.
+**Built for busy days.** Slack accepts about one message a second to a channel. During a burst of activity, alerts wait in a queue and are delivered at that pace, so none are lost. What goes to your Alert Channel (security alerts, Reddit admins' modmail, urgent reports and the like) is always delivered before routine mod actions waiting with it, even when both settings name the same channel.
 
 ## Getting started
 

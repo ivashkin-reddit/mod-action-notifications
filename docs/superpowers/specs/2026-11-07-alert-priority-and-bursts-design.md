@@ -85,7 +85,7 @@ Each part is built and passes CI on its own. Part 1 comes first.
 - **A burst that held nothing.** If no removal followed the opening one, the burst closes without a summary: the opening alert already said everything.
 - **Reddit's own accounts** burst the same way, with three differences:
     - their opening alert has no spike label;
-    - the burst line and the summary name the account as their alerts already do, not as a `u/` link;
+    - the burst line and the summary name the account in plain text, not as the `u/` profile link a moderator gets: no profile has the name;
     - the summary links to the unfiltered mod log, as a filter for Reddit's accounts can't be checked in a playtest.
 
 ### Which removals join
