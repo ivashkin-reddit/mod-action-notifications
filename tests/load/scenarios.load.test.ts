@@ -12,6 +12,7 @@ import { checkInvariants } from "./invariants.js";
 import type { Check } from "./invariants.js";
 import { seed } from "./seed.js";
 import type { Volume } from "./seed.js";
+import { fireSecurityAlerts, oneModeratorRemoving, waitsOf } from "./urgent.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -295,17 +296,71 @@ describe("the load scenarios", (): void => {
                 REALISTIC_SHAPE,
                 21,
             );
+            // Three security alerts, for the Alert Channel, fired as the storm goes on: how long each waits for Slack.
+            const urgent = fireSecurityAlerts(harness.deliver, [15_000, 30_000, 45_000]);
             const result = await drive(
                 harness,
                 generator,
                 profile({ name: "storm", ratePerMinute: 200, durationMs: MINUTE, concurrency: 32 }),
                 seededRandom(22),
             );
+            const fired = await urgent;
             const checks = await checkInvariants(harness);
-            record("storm", { result, checks });
+            record("storm", {
+                result,
+                checks,
+                messagesPosted: harness.posts().length,
+                alertWaitsMs: waitsOf(harness.posts(), fired),
+            });
             await harness.close();
 
             expect(holds(checks)).toBe(true);
+        },
+    );
+
+    it.runIf(selected("nuke"))(
+        "nuke: one moderator removes 600 comments in three minutes, as in clearing a brigaded thread",
+        { timeout: SCENARIO_MS },
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const harness = await fresh(1);
+            const generator = oneModeratorRemoving(
+                createEventStream(
+                    {
+                        ...STEADY_MIX,
+                        commentEdit: 0,
+                        commentDelete: 0,
+                        commentReport: 0,
+                        commentFiltered: 0,
+                        postEdit: 0,
+                        postDelete: 0,
+                        postReport: 0,
+                        modmail: 0,
+                    },
+                    REALISTIC_SHAPE,
+                    31,
+                ),
+            );
+            // Three security alerts, for the Alert Channel, fired as the removals go on.
+            const urgent = fireSecurityAlerts(harness.deliver, [30_000, 90_000, 150_000]);
+            const result = await drive(
+                harness,
+                generator,
+                profile({ name: "nuke", ratePerMinute: 200, durationMs: 3 * MINUTE, concurrency: 32 }),
+                seededRandom(32),
+            );
+            const fired = await urgent;
+            const checks = await checkInvariants(harness);
+            record("nuke", {
+                result,
+                checks,
+                messagesPosted: harness.posts().length,
+                alertWaitsMs: waitsOf(harness.posts(), fired),
+            });
+            await harness.close();
+
+            expect(result.events).toBeGreaterThan(0);
         },
     );
 

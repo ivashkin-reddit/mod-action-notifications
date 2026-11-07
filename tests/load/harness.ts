@@ -85,17 +85,22 @@ export function loadSettings(overrides: Readonly<Settings> = {}): Settings {
     };
 }
 
+/** A message Slack took: its request body, and when. */
+export type Post = Readonly<{ body: string; at: number }>;
+
 export type Harness = Readonly<{
     registrations: Registrations;
     /** Delivers a trigger event to its handler, as Devvit would; resolves when the handler settles. */
     deliver: (type: string, event: unknown) => Promise<void>;
-    /** Runs a scheduler job's handler, as the scheduler would. */
-    runJob: (name: string) => Promise<void>;
+    /** Runs a scheduler job's handler, as the scheduler would, with the data it was scheduled with. */
+    runJob: (name: string, data?: unknown) => Promise<void>;
     /** Runs the one-off jobs now due, as the scheduler would: how many ran. */
     runDueJobs: () => Promise<number>;
     lines: () => readonly CompletionLine[];
     /** The messages Slack took, as their request bodies. */
     posted: () => readonly string[];
+    /** The messages Slack took, as their request bodies, with when Slack took each, in ms since the epoch. */
+    posts: () => readonly Post[];
     clearLines: () => void;
     slack: FakeSlack;
     reddit: FakeReddit;
@@ -199,8 +204,8 @@ export async function createHarness(
     const scheduler = createFakeScheduler();
     const slack = createFakeSlack();
     let lines: CompletionLine[] = [];
-    /** The messages Slack took, as their request bodies: failed attempts, retried, are not among them. */
-    const posted: string[] = [];
+    /** The messages Slack took, as their request bodies, and when: failed attempts, retried, are not among them. */
+    const posts: Post[] = [];
     const collect = (line: unknown): void => {
         const completion = parsed(line);
         if (completion !== undefined) {
@@ -226,7 +231,7 @@ export async function createHarness(
                 "ok" in answer &&
                 answer.ok === true
             ) {
-                posted.push(typeof init?.body === "string" ? init.body : "");
+                posts.push({ body: typeof init?.body === "string" ? init.body : "", at: Date.now() });
             }
             return response;
         },
@@ -254,8 +259,8 @@ export async function createHarness(
         }
         return handler;
     };
-    const runJob = async (name: string): Promise<void> => {
-        await handlerOf(registrations.schedulerJobs, name)({ name }, contextFor());
+    const runJob = async (name: string, data?: unknown): Promise<void> => {
+        await handlerOf(registrations.schedulerJobs, name)({ name, data }, contextFor());
     };
     return {
         registrations,
@@ -270,14 +275,15 @@ export async function createHarness(
             );
             scheduler.jobs = scheduler.jobs.filter((job: ScheduledJob): boolean => !due.includes(job));
             await Promise.all(
-                due.map(async ({ name }: ScheduledJob): Promise<void> => {
-                    await runJob(name).catch((): void => undefined);
+                due.map(async ({ name, data }: ScheduledJob): Promise<void> => {
+                    await runJob(name, data).catch((): void => undefined);
                 }),
             );
             return due.length;
         },
         lines: (): readonly CompletionLine[] => lines,
-        posted: (): readonly string[] => posted,
+        posted: (): readonly string[] => posts.map(({ body }: Post): string => body),
+        posts: (): readonly Post[] => posts,
         clearLines: (): void => {
             lines = [];
         },
