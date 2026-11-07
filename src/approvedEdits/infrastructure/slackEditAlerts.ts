@@ -1,4 +1,4 @@
-import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
+import { escapeText, withoutTitle } from "../../slack/index.js";
 import type { SlackSender } from "../../slack/index.js";
 import type { EditAlerts } from "../application/ports.js";
 import { hoursBetween } from "../domain/approvedEdits.js";
@@ -27,7 +27,7 @@ function contentLines({ kind, permalink }: ContentUpdate): readonly string[] {
  * An edit after approval as a Slack message for the alert channel: who edited, who approved and how long before, and
  * a link without the post's title. Neither version of the text is quoted.
  */
-export function createSlackEditAlerts(send: SlackSender, alertChannel: string): EditAlerts {
+export function createSlackEditAlerts(send: SlackSender): EditAlerts {
     return {
         edited: async ({
             update,
@@ -52,7 +52,7 @@ export function createSlackEditAlerts(send: SlackSender, alertChannel: string): 
                     },
                 ],
             };
-            await send(inChannel(alert, alertChannel));
+            await send(alert);
         },
     };
 }

@@ -1,4 +1,4 @@
-import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
+import { escapeText, withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type {
     AgedContentAlert,
@@ -124,19 +124,19 @@ function withoutTitles(alert: AgedContentAlert): AgedContentAlert {
 }
 
 /**
- * Modqueue alerts as Slack messages, sent to the alert channel when one is set. An age alert names the content it
+ * Modqueue alerts as Slack messages for the alert channel, handed to `send`. An age alert names the content it
  * links to, with its version without the posts' titles, to be sent instead if any of it is deleted before it goes.
  */
-export function createSlackModqueueAlerts(send: SlackSender, alertChannel: string): ModqueueAlerts {
+export function createSlackModqueueAlerts(send: SlackSender): ModqueueAlerts {
     const sendAgedContent = async (style: AgedContentStyle, alert: AgedContentAlert): Promise<void> => {
-        await send(inChannel(agedContentMessage(style, alert), alertChannel), {
+        await send(agedContentMessage(style, alert), {
             contentIds: linkedContent(alert.oldest),
-            withoutQuotes: inChannel(agedContentMessage(style, withoutTitles(alert)), alertChannel),
+            withoutQuotes: agedContentMessage(style, withoutTitles(alert)),
         });
     };
     return {
         queueTooLong: async (alert: QueueTooLongAlert): Promise<void> => {
-            await send(inChannel(queueTooLongMessage(alert), alertChannel));
+            await send(queueTooLongMessage(alert));
         },
         waitingTooLong: async (alert: AgedContentAlert): Promise<void> => {
             await sendAgedContent(UNMODERATED_STYLE, alert);
@@ -145,7 +145,7 @@ export function createSlackModqueueAlerts(send: SlackSender, alertChannel: strin
             await sendAgedContent(REPORTED_STYLE, alert);
         },
         monitorFailing: async (alert: MonitorFailingAlert): Promise<void> => {
-            await send(inChannel(monitorFailingMessage(alert), alertChannel));
+            await send(monitorFailingMessage(alert));
         },
     };
 }

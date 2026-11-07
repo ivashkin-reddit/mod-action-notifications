@@ -53,8 +53,8 @@ describe("a modmail notice of a condition", (): void => {
         expect.hasAssertions();
 
         expect(resolvedNotice("outbox-full")).toStrictEqual({
-            subject: "Mod Action Notifications: resolved: The alert queue is full",
-            body: "The alert queue has emptied: no more alerts are dropped for want of room.",
+            subject: "Mod Action Notifications: resolved: A Slack queue is full",
+            body: "The Slack queues have emptied: no more alerts are dropped for want of room.",
         });
     });
 });

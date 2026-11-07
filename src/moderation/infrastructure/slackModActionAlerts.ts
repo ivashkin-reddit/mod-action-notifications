@@ -1,5 +1,5 @@
-import { escapeText, inChannel, quote, withoutTitle } from "../../slack/index.js";
-import type { DirectSlackSender, SlackMessage, SlackSender } from "../../slack/index.js";
+import { escapeText, quote, withoutTitle } from "../../slack/index.js";
+import type { DirectSlackSender, SlackDestinations, SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
 import { isSecurityAction } from "../domain/alerting.js";
 import { banDurationText } from "../domain/banDuration.js";
@@ -11,10 +11,6 @@ import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
 
 export interface ModActionPresentation {
     readonly includeModNote: boolean;
-    /** A channel ID, or a channel name without #. */
-    readonly notificationChannel: string;
-    /** A channel ID, or a channel name without #, for security alerts. */
-    readonly alertChannel: string;
     /** Send security actions as security alerts, to the alert channel. */
     readonly securityAlerts: boolean;
 }
@@ -207,8 +203,12 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
             },
         ],
     };
-    const toAlertChannel = unknownModerator || isSecurityAlert(modAction, actor, presentation);
-    return inChannel(message, toAlertChannel ? presentation.alertChannel : presentation.notificationChannel);
+    return message;
+}
+
+/** Whether the action's alert goes to the Alert Channel: an unknown moderator's action, or a security alert. */
+function isUrgent(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): boolean {
+    return actor === "unknown-moderator" || isSecurityAlert(modAction, actor, presentation);
 }
 
 /** The Reddit content an action's alert quotes: the comment's or post's text, and the post's title in its link. */
@@ -236,12 +236,17 @@ function withoutContent(modAction: ModAction): ModAction {
 }
 
 /**
- * Mod-action alerts as Slack messages, handed to `send`, which queues them. An alert on a post or comment says so,
- * with its version without the content, to be sent instead if the content is deleted before the alert goes.
+ * Mod-action alerts as Slack messages, handed to the sender for where each goes, which queues it: an unknown
+ * moderator's action or a security alert to `alerts`, the rest to `notifications`. An alert on a post or comment
+ * says so, with its version without the content, to be sent instead if the content is deleted before the alert goes.
  */
-export function createSlackModActionAlerts(send: SlackSender, presentation: ModActionPresentation): ModActionAlerts {
+export function createSlackModActionAlerts(
+    destinations: SlackDestinations<SlackSender>,
+    presentation: ModActionPresentation,
+): ModActionAlerts {
     return {
         report: async (modAction: ModAction, actor: Actor): Promise<void> => {
+            const send = isUrgent(modAction, presentation, actor) ? destinations.alerts : destinations.notifications;
             const message = modActionMessage(modAction, presentation, actor);
             const contentIds = quotedContent(modAction.target);
             await (contentIds.length === 0
@@ -270,11 +275,15 @@ function asSimulation(message: SlackMessage): SlackMessage {
 
 /** A simulated action's alert as a moderator's Slack message, marked as a simulation, sent straight to Slack. */
 export function createSlackSimulationAlerts(
-    send: DirectSlackSender,
+    destinations: SlackDestinations<DirectSlackSender>,
     presentation: ModActionPresentation,
 ): SimulationAlerts {
     return {
-        deliver: async (modAction: ModAction): Promise<boolean> =>
-            await send(asSimulation(modActionMessage(modAction, presentation, "moderator"))),
+        deliver: async (modAction: ModAction): Promise<boolean> => {
+            const send = isUrgent(modAction, presentation, "moderator")
+                ? destinations.alerts
+                : destinations.notifications;
+            return await send(asSimulation(modActionMessage(modAction, presentation, "moderator")));
+        },
     };
 }

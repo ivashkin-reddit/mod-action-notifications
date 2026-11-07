@@ -16,7 +16,10 @@ function input(fields: Readonly<Partial<StatusInput>> = {}): StatusInput {
         slack: { setup: "set-up", workspace: "Mod Team" },
         monitor: { enabled: true, job: "scheduled", cron: "*/15 * * * *" },
         problems: [],
-        queue: { waiting: 0, oldestQueuedAt: undefined },
+        queue: {
+            alerts: { waiting: 0, oldestQueuedAt: undefined },
+            notifications: { waiting: 0, oldestQueuedAt: undefined },
+        },
         lastSeen: {},
         today: {},
         ...fields,
@@ -126,7 +129,24 @@ describe("the status", (): void => {
     it("counts alerts waiting even when the oldest's age cannot be read", TEST_OPTIONS, (): void => {
         expect.hasAssertions();
 
-        expect(line(input({ queue: { waiting: 3, oldestQueuedAt: undefined } }), "Alerts waiting")).toBe("3");
+        const queue = {
+            alerts: { waiting: 3, oldestQueuedAt: undefined },
+            notifications: { waiting: 0, oldestQueuedAt: undefined },
+        };
+
+        expect(line(input({ queue }), "Alerts waiting")).toBe("3");
+    });
+
+    it("shows the alert and notification queues apart", TEST_OPTIONS, (): void => {
+        expect.hasAssertions();
+
+        const queue = {
+            alerts: { waiting: 0, oldestQueuedAt: undefined },
+            notifications: { waiting: 140, oldestQueuedAt: NOW - 120_000 },
+        };
+
+        expect(line(input({ queue }), "Alerts waiting")).toBe("None");
+        expect(line(input({ queue }), "Notifications waiting")).toBe("140, the oldest for 2 minutes");
     });
 
     it("says what it could not read from Redis", TEST_OPTIONS, (): void => {
@@ -141,6 +161,7 @@ describe("the status", (): void => {
         ).toStrictEqual([
             "Current problems",
             "Alerts waiting",
+            "Notifications waiting",
             "Last alert delivered",
             "Last monitor run",
             "Last events",

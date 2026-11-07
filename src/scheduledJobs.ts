@@ -8,6 +8,7 @@ import {
     monitorThresholds,
     monitorWanted,
     outboxOf,
+    slackSendersOf,
 } from "./composition.js";
 import type { AppContext } from "./composition.js";
 import {
@@ -82,7 +83,7 @@ export async function runModqueueMonitor(context: AppContext): Promise<void> {
     await checkModqueue(monitorThresholds(config), {
         openQueues: async (): Promise<ModerationQueues> => await openRedditQueues(context.reddit),
         store: createRedisMonitorStore(context.redis),
-        alerts: createSlackModqueueAlerts(outboxOf(context, config).send, config.alertChannel),
+        alerts: createSlackModqueueAlerts(slackSendersOf(context, config).alerts),
         health: healthReports(context),
     });
     await checkWaitingModmail(config.modmailWaitHours, Date.now(), modmailPorts(context, config));
@@ -102,7 +103,7 @@ export async function sendSummary(context: AppContext): Promise<void> {
             {
                 events: createRedisEventStore(context.redis),
                 conditions: createRedisConditionStore(context.redis),
-                send: createSlackSummary(outboxOf(context, config).send, config.notificationChannel),
+                send: createSlackSummary(slackSendersOf(context, config).notifications),
             },
             yesterdayOf(Date.now()),
         );
@@ -128,7 +129,7 @@ export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
         await sendWeeklyDigest(
             {
                 store: createRedisStatisticsStore(context.redis),
-                send: createSlackDigest(outboxOf(context, config).send, config.notificationChannel, actionNameOf),
+                send: createSlackDigest(slackSendersOf(context, config).notifications, actionNameOf),
             },
             Date.now(),
         );

@@ -85,17 +85,18 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         resolved: "Slack is taking alerts again.",
     },
     "outbox-full": {
-        title: "The alert queue is full",
+        title: "A Slack queue is full",
         level: "error",
-        started: (): string =>
-            "The alert queue is full: 500 alerts are waiting, so the oldest are dropped as new ones come.",
-        resolved: "The alert queue has emptied: no more alerts are dropped for want of room.",
+        // `detail` names the queue: the alert queue, for the Alert Channel, or the notification queue.
+        started: (detail: string): string =>
+            `The ${detail} for Slack is full: 500 messages are waiting in it, so its oldest are dropped as new ones come.`,
+        resolved: "The Slack queues have emptied: no more alerts are dropped for want of room.",
     },
     "alerts-expired": {
         title: "Alerts are being dropped after a day",
         level: "error",
         started: (): string => "Alerts are being dropped after waiting a day without reaching Slack.",
-        resolved: "The alert queue has emptied: no more alerts are dropped for their age.",
+        resolved: "The Slack queues have emptied: no more alerts are dropped for their age.",
     },
     "redactions-failing": {
         title: "Deleted content is not being taken out of alerts",

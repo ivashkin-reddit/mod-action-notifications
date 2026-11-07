@@ -22,8 +22,9 @@ import { createDevvitMonitorScheduler, createRedisMonitorStore, isMonitoringEnab
 import type { MonitorHealth, MonitorJobPorts, MonitorThresholds } from "./modqueue/index.js";
 import { createConfigLoader } from "./settings/index.js";
 import type { AppConfig } from "./settings/index.js";
-import { createSlackOutbox, readConnection } from "./slack/delivery.js";
+import { createSlackOutbox, readConnection, toChannel } from "./slack/delivery.js";
 import type { DeliveryHealth, SlackApi, SlackConnection, SlackFetch, SlackOutbox } from "./slack/delivery.js";
+import type { SlackDestinations, SlackSender } from "./slack/index.js";
 
 /**
  * The composition root's shared wiring: the settings, Slack's setup, the health log and the outbox, built from a
@@ -186,21 +187,34 @@ export function healthReports(context: AppContext): DeliveryHealth & MonitorHeal
     };
 }
 
-/** The installation's Slack outbox, through which every alert goes. */
+/** The installation's Slack outbox, through which every alert goes: for the scheduled drain, and the senders. */
 export function outboxOf(context: AppContext, config: Installation): SlackOutbox {
-    const outbox = createSlackOutbox({
+    return createSlackOutbox({
         api: slackApiOf(context, config),
         retentionDays: config.slackRetentionDays,
         redis: context.redis,
         scheduler: context.scheduler,
         health: healthReports(context),
     });
+}
+
+/** A sender that counts each alert toward the invocation, then hands it on. */
+function counted(context: AppContext, send: SlackSender): SlackSender {
+    return async (...alert: Readonly<Parameters<SlackSender>>): Promise<void> => {
+        context.invocation.noteAlert();
+        await send(...alert);
+    };
+}
+
+/**
+ * Where the installation's alerts go: the Alert Channel, through the alert queue, which is delivered first; and the
+ * Notification Channel, through the notification queue. Each sender puts the message in its channel.
+ */
+export function slackSendersOf(context: AppContext, config: Installation): SlackDestinations<SlackSender> {
+    const outbox = outboxOf(context, config);
     return {
-        ...outbox,
-        send: async (...alert: Readonly<Parameters<SlackOutbox["send"]>>): Promise<void> => {
-            context.invocation.noteAlert();
-            await outbox.send(...alert);
-        },
+        alerts: counted(context, toChannel(config.alertChannel, outbox.alerts)),
+        notifications: counted(context, toChannel(config.notificationChannel, outbox.notifications)),
     };
 }
 
@@ -209,7 +223,7 @@ export function modmailPorts(context: AppContext, config: Installation): Modmail
     return {
         reader: createRedditModmail(context.reddit, context.subredditName),
         claims: createRedisModmailClaims(context.redis),
-        alerts: createSlackModmailAlerts(outboxOf(context, config).send, config.alertChannel),
+        alerts: createSlackModmailAlerts(slackSendersOf(context, config).alerts),
         health: healthReports(context),
     };
 }
@@ -222,8 +236,6 @@ export function actionNameOf(type: string): string {
 export function modActionPresentation(config: AppConfig): ModActionPresentation {
     return {
         includeModNote: config.includeModNote,
-        notificationChannel: config.notificationChannel,
-        alertChannel: config.alertChannel,
         securityAlerts: config.securityAlerts,
     };
 }

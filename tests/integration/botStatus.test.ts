@@ -161,7 +161,7 @@ describe("the problems Show Bot Status shows", (): void => {
     });
 
     it(
-        "include alerts waiting for Slack, and how long the oldest has waited",
+        "include what waits for Slack in each queue, and how long the oldest has waited",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -171,7 +171,10 @@ describe("the problems Show Bot Status shows", (): void => {
             await app.fire("ModAction", removedPost());
             await app.advance(2 * HOUR);
 
-            await expect(status(app)).resolves.toMatchObject({ "Alerts waiting": "1, the oldest for 2 hours" });
+            await expect(status(app)).resolves.toMatchObject({
+                "Alerts waiting": "None",
+                "Notifications waiting": "1, the oldest for 2 hours",
+            });
         },
     );
 

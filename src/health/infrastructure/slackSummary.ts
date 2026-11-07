@@ -1,4 +1,3 @@
-import { inChannel } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { DailySummary } from "../domain/summary.js";
 
@@ -25,8 +24,8 @@ function summaryMessage({ day, lines }: DailySummary): SlackMessage {
 }
 
 /** The daily summary as a Slack message to the notification channel, handed to `send`, which queues it. */
-export function createSlackSummary(send: SlackSender, channel: string): (summary: DailySummary) => Promise<void> {
+export function createSlackSummary(send: SlackSender): (summary: DailySummary) => Promise<void> {
     return async (summary: DailySummary): Promise<void> => {
-        await send(inChannel(summaryMessage(summary), channel));
+        await send(summaryMessage(summary));
     };
 }

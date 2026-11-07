@@ -1,4 +1,3 @@
-import { inChannel } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { WeeklyDigest } from "../domain/digest.js";
 import { countOf, reportLines } from "./reportLines.js";
@@ -28,13 +27,9 @@ function digestMessage({ from, to, report, weekBeforeTotal }: WeeklyDigest, name
     };
 }
 
-/** The weekly digest as a Slack message, handed to `send`, which queues it, for `channel`. */
-export function createSlackDigest(
-    send: SlackSender,
-    channel: string,
-    nameOf: ActionNamer,
-): (digest: WeeklyDigest) => Promise<void> {
+/** The weekly digest as a Slack message for the notification channel, handed to `send`, which queues it. */
+export function createSlackDigest(send: SlackSender, nameOf: ActionNamer): (digest: WeeklyDigest) => Promise<void> {
     return async (digest: WeeklyDigest): Promise<void> => {
-        await send(inChannel(digestMessage(digest, nameOf), channel));
+        await send(digestMessage(digest, nameOf));
     };
 }

@@ -24,7 +24,7 @@ describe("the conditions a drain reports", (): void => {
         const { health, outbox, slack } = fakeOutbox();
         slack.respond("not_in_channel");
 
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.notifications({ text: "hello" }));
 
         expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "not_in_channel"]]);
     });
@@ -36,7 +36,7 @@ describe("the conditions a drain reports", (): void => {
         const { health, outbox, slack } = fakeOutbox();
         slack.respond({ status: 404, body: "<html>Not Found</html>" });
 
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.notifications({ text: "hello" }));
 
         expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "HTTP 404"]]);
     });
@@ -47,7 +47,7 @@ describe("the conditions a drain reports", (): void => {
         const { health, outbox, slack } = fakeOutbox();
         slack.respond({ status: 400, body: JSON.stringify({ ok: false, error: `${"x".repeat(100)}and more` }) });
 
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.notifications({ text: "hello" }));
 
         expect(health.raise.mock.calls).toStrictEqual([["slack-refusing", "x".repeat(100)]]);
     });
@@ -67,7 +67,7 @@ describe("the conditions a drain reports", (): void => {
             const { health, outbox, slack } = fakeOutbox();
             slack.respond(...outcomes, ...outcomes, ...outcomes, ...outcomes);
 
-            await drive(outbox.send({ text: "hello" }));
+            await drive(outbox.notifications({ text: "hello" }));
 
             expect(health.raise.mock.calls).toStrictEqual([["slack-unreachable", detail]]);
         },
@@ -82,9 +82,9 @@ describe("the conditions a drain reports", (): void => {
         }
         slack.respond(503, 503, 503, 503);
 
-        await drive(outbox.send({ text: "one too many" }));
+        await drive(outbox.notifications({ text: "one too many" }));
 
-        expect(health.raise.mock.calls[0]).toStrictEqual(["outbox-full", ""]);
+        expect(health.raise.mock.calls[0]).toStrictEqual(["outbox-full", "notification queue"]);
         expect(health.note.mock.calls[0]).toStrictEqual(["alert-dropped", 1]);
     });
 
@@ -110,12 +110,12 @@ describe("the conditions a drain reports", (): void => {
             const { health, outbox, slack } = fakeOutbox();
             slack.respond("not_in_channel");
 
-            await drive(outbox.send({ text: "refused", channel: "C0ALERTS" }));
-            await drive(outbox.send({ text: "taken elsewhere", channel: "C0MODS" }));
+            await drive(outbox.notifications({ text: "refused", channel: "C0ALERTS" }));
+            await drive(outbox.notifications({ text: "taken elsewhere", channel: "C0MODS" }));
 
             expect(health.clear.mock.calls).not.toContainEqual(["slack-refusing"]);
 
-            await drive(outbox.send({ text: "taken there", channel: "C0ALERTS" }));
+            await drive(outbox.notifications({ text: "taken there", channel: "C0ALERTS" }));
 
             expect(health.clear.mock.calls).toContainEqual(["slack-refusing"]);
         },
@@ -129,7 +129,7 @@ describe("the conditions a drain reports", (): void => {
 
             const { health, outbox } = fakeOutbox();
 
-            await drive(outbox.send({ text: "hello" }));
+            await drive(outbox.notifications({ text: "hello" }));
 
             expect(health.raise).not.toHaveBeenCalled();
             expect(health.clear.mock.calls).toStrictEqual([

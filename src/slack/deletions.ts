@@ -1,7 +1,6 @@
 import type { TriggerContext } from "@devvit/public-api";
-import type { Quoting, SlackMessage } from "./message.js";
 import { enqueue, MAX_AGE_SECONDS, quotingMessages, replaceWithoutQuotes } from "./queue.js";
-import type { QueuedQuoting, QueueRedis } from "./queue.js";
+import type { Outgoing, QueuedQuoting, QueueRedis } from "./queue.js";
 
 const MS_PER_SECOND = 1000;
 
@@ -39,17 +38,14 @@ export async function anyDeleted(redis: DeletionRedis, contentIds: readonly stri
 }
 
 /**
- * Queues the message, without its quotes when content it quotes is already deleted, so they are never stored; returns
- * how many of the oldest messages it pushed out of a full queue.
+ * Queues the message in its queue, without its quotes when content it quotes is already deleted, so they are never
+ * stored; returns how many of that queue's oldest messages it pushed out.
  */
-export async function enqueueQuoting(
-    redis: DeletionRedis,
-    message: SlackMessage,
-    quoting: Quoting | undefined,
-): Promise<number> {
+export async function enqueueQuoting(redis: DeletionRedis, outgoing: Outgoing): Promise<number> {
+    const { queue, quoting } = outgoing;
     return quoting !== undefined && (await anyDeleted(redis, quoting.contentIds))
-        ? await enqueue(redis, quoting.withoutQuotes, undefined)
-        : await enqueue(redis, message, quoting);
+        ? await enqueue(redis, { queue, message: quoting.withoutQuotes, quoting: undefined })
+        : await enqueue(redis, outgoing);
 }
 
 /** Whether a queued message quotes this post or comment. */

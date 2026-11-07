@@ -3,7 +3,7 @@ import { loadApp, NOW } from "../fixtures/app.js";
 import type { App } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
-import type { ZMember } from "../fixtures/fakeRedis.js";
+import type { FakeRedis, ZMember } from "../fixtures/fakeRedis.js";
 import type { ScheduledJob } from "../fixtures/fakeScheduler.js";
 import type { SlackRequest } from "../fixtures/fakeSlack.js";
 
@@ -204,7 +204,7 @@ describe("the Slack outbox", (): void => {
         await app.fire("ModAction", removal(0));
 
         expect(console.error).toHaveBeenCalledWith(
-            "[health] The alert queue is full: 500 alerts are waiting, so the oldest are dropped as new ones come.",
+            "[health] The notification queue for Slack is full: 500 messages are waiting in it, so its oldest are dropped as new ones come.",
         );
         expect(app.slack.messages[0]?.text).toBe("queued 1");
     });
@@ -268,9 +268,21 @@ describe("the Slack outbox", (): void => {
 
         const app = await loadApp(devvit);
         await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "late"));
-        // The drain looks three times before it lets go: as it takes the lease, to deliver, and for messages quoting
-        // deleted content.
-        app.context.redis.zRange.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+        // The drain looks at the notification queue three times before it lets go: as it takes the lease, to deliver,
+        // and for messages quoting deleted content. Each time, the message has not arrived yet.
+        const { zRange } = app.context.redis;
+        const realRange = zRange.getMockImplementation();
+        let looks = 0;
+        zRange.mockImplementation(async (...range: Readonly<Parameters<FakeRedis["zRange"]>>): Promise<ZMember[]> => {
+            if (range[0] === QUEUE_KEY && looks < 3) {
+                looks += 1;
+                return await Promise.resolve([]);
+            }
+            if (realRange === undefined) {
+                throw new Error("the fake Redis has no ZRANGE");
+            }
+            return await realRange(...range);
+        });
 
         await app.runJob("slackOutbox");
 

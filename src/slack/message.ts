@@ -67,6 +67,29 @@ export function inChannel(message: SlackMessage, channel: string): SlackMessage 
 }
 
 /**
+ * The two places alerts go: the Alert Channel, whose messages are delivered first, and the Notification Channel. An
+ * adapter that posts to both is given a sender for each, and chooses by what the alert is.
+ */
+export type SlackDestinations<Send> = Readonly<{ alerts: Send; notifications: Send }>;
+
+/** A sender that puts each message, and its version without quotes, in the channel before handing it to `send`. */
+export function toChannel(channel: string, send: SlackSender): SlackSender {
+    return async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
+        await (quoting === undefined
+            ? send(inChannel(message, channel))
+            : send(inChannel(message, channel), {
+                  ...quoting,
+                  withoutQuotes: inChannel(quoting.withoutQuotes, channel),
+              }));
+    };
+}
+
+/** A direct sender that puts each message in the channel before sending it, and answers as `send` does. */
+export function directToChannel(channel: string, send: DirectSlackSender): DirectSlackSender {
+    return async (message: SlackMessage): Promise<boolean> => await send(inChannel(message, channel));
+}
+
+/**
  * A Reddit permalink without the post's title in it: a post's `/r/sub/comments/abc/title/` becomes
  * `/r/sub/comments/abc/`, and a comment's `/r/sub/comments/abc/title/def/` becomes `/r/sub/comments/abc/_/def/`.
  * Reddit reads the link by its IDs, so it still opens the same post or comment. Other links are left as they are.

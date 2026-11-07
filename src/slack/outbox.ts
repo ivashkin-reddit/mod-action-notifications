@@ -3,8 +3,8 @@ import { callWithRetries, waitAfter, whenLastSent } from "./drain.js";
 import type { Drain, DrainEnd, OutboxDependencies, QueueDependencies } from "./drain.js";
 import { reportDelivery } from "./health.js";
 import type { Quoting, SlackMessage, SlackSender } from "./message.js";
-import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
-import type { Queued } from "./queue.js";
+import { MAX_AGE_SECONDS, oldest, QUEUE_TITLES, remove } from "./queue.js";
+import type { Queued, QueueName } from "./queue.js";
 import { oldestRedaction, queueRedactions, redactNext } from "./redactions.js";
 import { endsRefusal } from "./refusals.js";
 import {
@@ -24,12 +24,16 @@ import type { Delivery, Posted } from "./webApi.js";
 
 const MS_PER_SECOND = 1000;
 
+/**
+ * Each sender queues the message, then delivers what is queued at Slack's pace: every alert, oldest first, then
+ * every notification, oldest first. It sends the message directly when the queue cannot be written, and queues a
+ * message quoting content already deleted without the quotes. Neither rejects.
+ */
 export interface SlackOutbox {
-    /**
-     * Queues the message, then delivers the queue, oldest first, at Slack's pace; sends it directly when the queue
-     * cannot be written. A message quoting content already deleted is queued without the quotes. Never rejects.
-     */
-    readonly send: SlackSender;
+    /** Queues the message in the alert queue, delivered before any notification waiting with it. */
+    readonly alerts: SlackSender;
+    /** Queues the message in the notification queue. */
+    readonly notifications: SlackSender;
     /** Delivers what is queued, as the scheduled job. Rejects when the queue cannot be read. */
     readonly deliverQueued: () => Promise<void>;
 }
@@ -224,27 +228,33 @@ async function deliverQueued(outbox: OutboxDependencies): Promise<void> {
  * answer was lost, or that a dying drain made, is sent again. Content deleted on Reddit leaves the queue's messages,
  * and is taken out of the alerts already in Slack that quote it.
  */
+/** A sender that queues each message in `queue`, then delivers what is queued. */
+function queueAndDeliver(outbox: OutboxDependencies, queue: QueueName): SlackSender {
+    return async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
+        try {
+            const dropped = await enqueueQuoting(outbox.redis, { queue, message, quoting });
+            if (dropped > 0) {
+                await outbox.health.note("alert-dropped", dropped);
+                await outbox.health.raise("outbox-full", QUEUE_TITLES[queue]);
+            }
+        } catch (error) {
+            // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
+            // failure itself. Sent so, it is not remembered, and keeps its quotes if its content is deleted.
+            console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
+            await createDirectSender(outbox.api)(message);
+            return;
+        }
+        await deliverQueued(outbox).catch((error: unknown): void => {
+            // The message stays queued for the next drain.
+            console.error("[outbox] Could not deliver the queued alerts; they wait for the next drain:", error);
+        });
+    };
+}
+
 export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
     return {
-        send: async (message: SlackMessage, quoting?: Quoting): Promise<void> => {
-            try {
-                const dropped = await enqueueQuoting(outbox.redis, message, quoting);
-                if (dropped > 0) {
-                    await outbox.health.note("alert-dropped", dropped);
-                    await outbox.health.raise("outbox-full", "");
-                }
-            } catch (error) {
-                // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
-                // failure itself. Sent so, it is not remembered, and keeps its quotes if its content is deleted.
-                console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
-                await createDirectSender(outbox.api)(message);
-                return;
-            }
-            await deliverQueued(outbox).catch((error: unknown): void => {
-                // The message stays queued for the next drain.
-                console.error("[outbox] Could not deliver the queued alerts; they wait for the next drain:", error);
-            });
-        },
+        alerts: queueAndDeliver(outbox, "alerts"),
+        notifications: queueAndDeliver(outbox, "notifications"),
         deliverQueued: async (): Promise<void> => {
             await continuationStarted(outbox);
             await deliverQueued(outbox);

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { inChannel, withoutTitle } from "./message.js";
+import { describe, expect, it, vi } from "vitest";
+import { directToChannel, inChannel, toChannel, withoutTitle } from "./message.js";
+import type { DirectSlackSender, SlackSender } from "./message.js";
 
 const TEST_OPTIONS = { timeout: 1000 };
 
@@ -20,6 +21,44 @@ describe("a message sent to a channel", (): void => {
         expect.hasAssertions();
 
         expect(inChannel({ text: "hello" }, "")).toStrictEqual({ text: "hello" });
+    });
+});
+
+describe("a sender tied to a channel", (): void => {
+    it("puts the message and its version without quotes in the channel", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const send = vi.fn<SlackSender>(async (): Promise<void> => {
+            await Promise.resolve();
+        });
+
+        await toChannel("alerts", send)({ text: "quoting" }, { contentIds: ["t1_a"], withoutQuotes: { text: "bare" } });
+
+        expect(send).toHaveBeenCalledExactlyOnceWith(
+            { text: "quoting", channel: "#alerts" },
+            { contentIds: ["t1_a"], withoutQuotes: { text: "bare", channel: "#alerts" } },
+        );
+    });
+
+    it("hands on a message that quotes nothing without quoting", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const send = vi.fn<SlackSender>(async (): Promise<void> => {
+            await Promise.resolve();
+        });
+
+        await toChannel("C0123ABCD", send)({ text: "plain" });
+
+        expect(send).toHaveBeenCalledExactlyOnceWith({ text: "plain", channel: "C0123ABCD" });
+    });
+
+    it("sends straight to the channel, and answers as Slack did", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const send = vi.fn<DirectSlackSender>(async (): Promise<boolean> => await Promise.resolve(false));
+
+        await expect(directToChannel("mod-log", send)({ text: "simulated" })).resolves.toBe(false);
+        expect(send).toHaveBeenCalledExactlyOnceWith({ text: "simulated", channel: "#mod-log" });
     });
 });
 
