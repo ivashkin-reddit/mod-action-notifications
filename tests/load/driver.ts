@@ -1,6 +1,7 @@
 import { seededRandom } from "./events.js";
 import type { EventStream, GeneratedEvent } from "./events.js";
 import type { CompletionLine, Harness } from "./harness.js";
+import { queuedIn } from "./invariants.js";
 
 /**
  * Drives the harness with an event stream: events arrive at random (Poisson) at a rate, are handled at most
@@ -125,7 +126,7 @@ export async function settle(harness: Harness, maxMs: number): Promise<void> {
     while (Date.now() < until) {
         await harness.runDueJobs();
         const pending = harness.scheduler.jobs.filter(({ runAt }): boolean => runAt !== undefined).length;
-        const queued = Number(await harness.client.sendCommand(["ZCARD", "slack_outbox"]));
+        const queued = await queuedIn(harness);
         if (pending === 0 && queued === 0) {
             return;
         }

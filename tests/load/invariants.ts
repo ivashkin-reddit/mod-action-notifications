@@ -17,12 +17,18 @@ async function exists(harness: Harness, key: string): Promise<boolean> {
 
 /** The bounds the app keeps its structures to (OPERATORS-GUIDE.md, "Data stored"). */
 const BOUNDS: readonly (readonly [string, readonly string[], number])[] = [
-    ["queued alerts", ["ZCARD", "slack_outbox"], 500],
+    ["queued notifications", ["ZCARD", "slack_outbox"], 500],
+    ["queued alerts", ["ZCARD", "slack_outbox_alerts"], 500],
     ["redactions waiting", ["ZCARD", "slack_outbox_redactions"], 5000],
     ["sent-alert entries", ["ZCARD", "slack_outbox_sent_by_time"], 100_000],
     ["items awaiting a moderator", ["HLEN", "stats:awaiting"], 10_000],
     ["modmail conversations awaiting a reply", ["HLEN", "stats:modmail_waiting"], 10_000],
 ];
+
+/** How many messages wait in Slack's queues: the alert queue and the notification queue. */
+export async function queuedIn(harness: Harness): Promise<number> {
+    return (await count(harness, ["ZCARD", "slack_outbox_alerts"])) + (await count(harness, ["ZCARD", "slack_outbox"]));
+}
 
 /** Each alert's Slack message, taken once: no two posted messages are the same alert. */
 function duplicatesIn(harness: Harness): number {
@@ -39,7 +45,7 @@ export async function checkInvariants(
         const size = await count(harness, args);
         checks.push({ name: `${name} within ${String(bound)}`, holds: size <= bound, found: String(size) });
     }
-    const queued = await count(harness, ["ZCARD", "slack_outbox"]);
+    const queued = await queuedIn(harness);
     checks.push({ name: "the outbox drained", holds: queued === 0, found: `${String(queued)} queued` });
     const leased = await exists(harness, "slack_outbox_lease");
     checks.push({ name: "no lease left held", holds: !leased, found: leased ? "held" : "free" });
