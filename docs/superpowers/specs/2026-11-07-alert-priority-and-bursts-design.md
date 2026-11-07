@@ -23,6 +23,7 @@ Each part is built and passes CI on its own. Part 1 comes first.
 - **Urgent means the Alert Channel:** every message the app already routes there. That covers security alerts, unknown moderators, admin modmail and modmail waiting, urgent reports and pile-ups, queue and monitor alerts, deleted posts, and edits after approval. The rule holds when both channel settings name the same channel.
 - **Two queues, alerts drained first (approach A1).** Rejected: one queue with urgency in the score, whose score also means "when queued" for the one-day expiry, the oldest-waiting check and the cap. Also rejected: pacing each channel separately (A3), which gives no priority when the channels are the same, the default.
 - **Only removals are combined:** `removelink`, `removecomment`, `spamlink`, `spamcomment`. Bans and unbans keep their own messages, as each carries the ban's length and the user's recent history. Security actions are never combined.
+- **Reddit's own accounts are combined too:** u/reddit (Crowd Control and the filters) and Anti-Evil Operations (admins' removals), so an admin sweep of a thread is one summary, not hundreds of messages. Their alerts keep the Reddit style, and the spike label stays on human moderators' alerts only. AutoModerator's removals are not combined.
 - **The summary quotes nothing.** It gives counts by type, the time span and a link to the mod log filtered to the moderator.
 - **Hold and summarise (approach B1).** Rejected: one live message edited as the count grows (B2), whose edits notify nobody and which needs a new update path. Also rejected: merging what waits in the outbox (B3), which still sends about one message a second during a burst.
 - **Progress summaries give running totals**, not counts since the last summary. The final summary gives the burst's total.
@@ -82,15 +83,24 @@ Each part is built and passes CI on its own. Part 1 comes first.
 - **Progress summaries.** While the burst lasts, a progress summary goes every 5 minutes with the running totals so far, marked _"still going"_.
 - **Closing.** After the final summary the burst is over. The moderator's next removal alerts on its own again, until another spike opens a new burst.
 - **A burst that held nothing.** If no removal followed the opening one, the burst closes without a summary: the opening alert already said everything.
+- **Reddit's own accounts** burst the same way, with three differences:
+    - their opening alert has no spike label;
+    - the burst line and the summary name the account as their alerts already do, not as a `u/` link;
+    - the summary links to the unfiltered mod log, as a filter for Reddit's accounts can't be checked in a playtest.
 
 ### Which removals join
 
 A removal joins a burst only when all of these hold:
 
 - it is reported (`isReported`);
-- its actor is `"moderator"`, not `"reddit"` or `"unknown-moderator"`;
+- its actor is `"moderator"` or `"reddit"`, not `"unknown-moderator"`;
 - its type is one of the four removals;
-- it carries an activity spike. AutoModerator's and Reddit's accounts never do, since `activityOf` skips them.
+- it carries an activity spike.
+    - `activityOf` no longer skips Reddit's accounts, so their actions count toward the activity window as a moderator's do.
+    - The Slack adapter shows the spike label only for the `"moderator"` actor.
+    - AutoModerator's actions are still skipped, so they never carry a spike and never join.
+
+Activity counting feeds nothing but the spike, so counting Reddit's accounts changes no other alert.
 
 It joins only after it has claimed its ID (`isFirstDelivery`), so a removal Devvit delivers twice is counted once. Every removal is still counted in the team statistics.
 
@@ -122,7 +132,7 @@ All of it is in the moderation module:
 | `mod_actions:burst_run:{subreddit}:{moderator}:{due}`     | metadata | the claim of one scheduled run                                                                                                                                                                | an hour                               |
 | `mod_actions:burst_rescue:{subreddit}:{moderator}:{due}`  | metadata | the claim of one rescue, keyed by the overdue `due` (or `opened` when there is none)                                                                                                          | an hour                               |
 
-Subreddit and moderator parts are normalised as `activityKey` does. No key holds content, a mod note or a user ID.
+`{moderator}` is the acting account: a moderator, or one of Reddit's accounts. Subreddit and account parts are normalised as `activityKey` does. No key holds content, a mod note or a user ID.
 
 ### Joining a burst
 
@@ -177,7 +187,8 @@ During a burst the job runs about once a minute, well within Devvit's 60 one-off
     - opens;
     - holds;
     - doesn't open when scheduling fails;
-    - leaves unknown moderators, Reddit's accounts, AutoModerator, bans and non-spike removals alone;
+    - opens and holds for Reddit's accounts too, without the spike label;
+    - leaves unknown moderators, AutoModerator, bans and non-spike removals alone;
     - a duplicate delivery is counted once.
 - **The Redis burst records,** against the fake Redis. The fake gains `watch`, `multi` and `exec`, `rename` and `hSetNX`.
 
@@ -185,13 +196,14 @@ During a burst the job runs about once a minute, well within Devvit's 60 one-off
 
 - 20 removals in quick succession produce 5 single alerts, the fifth with the burst line, and one summary a minute after the last;
 - a burst lasting 12 minutes sends progress summaries at 5 and 10 minutes, with running totals;
+- an Anti-Evil Operations sweep of 20 removals is combined the same way, in the Reddit style, without a spike label, its summary linking the unfiltered mod log;
 - a Reddit admin's modmail queued behind 100 notifications is delivered first;
 - a summary job delivered twice sends one summary;
 - a lost summary job is rescued by the next removal;
 - the new keys and the `removalBurst` job name are pinned, as stored data;
 - `devvit.json` and `main.ts` still match.
 
-**Dependency budgets.** [dependencyBudgets.test.ts](../../../tests/integration/dependencyBudgets.test.ts) is updated on purpose: a held removal costs fewer Redis calls than queuing an alert, and a drain step reads one queue more.
+**Dependency budgets.** [dependencyBudgets.test.ts](../../../tests/integration/dependencyBudgets.test.ts) is updated on purpose: a held removal costs fewer Redis calls than queuing an alert, a drain step reads one queue more, and an action by one of Reddit's accounts is now counted toward the activity window.
 
 **Load harness:**
 
@@ -207,11 +219,11 @@ During a burst the job runs about once a minute, well within Devvit's 60 one-off
 - **README:** a burst of removals is summarised, and Alert Channel alerts are delivered first.
 - **OPERATORS-GUIDE:**
     - the two queues and their order;
-    - how a burst opens, is counted, summarised and closed;
+    - how a burst opens, is counted, summarised and closed, for moderators and for Reddit's accounts;
     - the new keys in "Data stored";
     - the two rows in Show Bot Status;
     - troubleshooting a burst that never summarised.
-- **PRIVACY-POLICY:** the burst record, a moderator's name with counts and times, kept an hour.
+- **PRIVACY-POLICY:** the burst record, the acting account's name (a moderator's or one of Reddit's) with counts and times, kept an hour.
 - **AGENTS.md:**
     - the moderation module's Redis keys (`mod_actions:burst*`);
     - the outbox bullet: two queues, alerts first;
@@ -225,13 +237,15 @@ During a burst the job runs about once a minute, well within Devvit's 60 one-off
 
 ## Out of scope
 
-- Bursts by AutoModerator or Reddit's own accounts.
+- Bursts by AutoModerator.
 - Bans and unbans in bursts.
 - Pacing each channel separately (A3); it can be added on top of the two queues if throughput ever matters.
 - A setting to turn bursts off.
 
 ## Risks and open questions
 
-- **Devvit app accounts.** If the playtest (runbook step 14) shows that a Devvit app's account is not on the mod list, a "nuke thread" app's removals count as an unknown moderator's. They become security alerts, which are never combined, and they would flood the alert queue ahead of everything else. If so, treating app accounts as moderators is its own change.
+- **Who counts as an unknown moderator.** The mod list doesn't lag. The app uses its cached copy only to confirm a moderator, and looks a missing name up in the live list, so a new moderator is recognised on their first action. Reddit's two accounts are recognised by name.
+- **Devvit app accounts.** Community reports, not Reddit's docs, say an installed app's account is added to the mod list with full permissions. If so, a "nuke thread" app's removals count as a moderator's and are combined. Runbook step 14 confirms which account Reddit names for an app's actions.
+- **Admins under other names.** An admin acting under any name but Reddit's two accounts would be an unknown moderator, whose removals are security alerts and never combined. Nothing seen so far says Reddit does this.
 - **The mod log link.** `?mod=` is old Reddit's filter. The playtest checks that it filters by moderator.
 - **Transactions.** Transactions are new to this app. The load harness checks their shape against real Redis, and the playtest step exercises them on Devvit.
