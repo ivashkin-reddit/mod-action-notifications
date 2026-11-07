@@ -1,14 +1,28 @@
 import type { TriggerContext, User } from "@devvit/public-api";
 import type { ModerationLookups } from "../application/ports.js";
 import type { BanLogEntry } from "../domain/banDuration.js";
+import type { NoteEntry, NoteKind } from "../domain/history.js";
 import { isBlank } from "../domain/modAction.js";
 
 /** A fetched mod list is reused for five minutes. */
 const MOD_LIST_REUSE_MS = 300_000;
 const RECENT_BANS = 10;
+/** At most this many of a user's mod notes are read: enough to cover any window a ban alert counts. */
+const MOD_NOTES_READ = 100;
+/** Reddit's mod note types a ban alert counts, by the kind it counts them as. */
+const NOTE_KINDS: ReadonlyMap<string, NoteKind> = new Map([
+    ["REMOVAL", "removal"],
+    ["SPAM", "spam"],
+    ["BAN", "ban"],
+    ["MUTE", "mute"],
+    ["NOTE", "note"],
+]);
 
 type ModerationReddit = Readonly<
-    Pick<TriggerContext["reddit"], "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog">
+    Pick<
+        TriggerContext["reddit"],
+        "getCurrentSubreddit" | "getCurrentSubredditName" | "getModerationLog" | "getModNotes"
+    >
 >;
 
 /** A ban as Devvit's mod log lists it. */
@@ -58,28 +72,64 @@ function banLogEntryOf(entry: LoggedBan): BanLogEntry {
     };
 }
 
+/**
+ * The subreddit a lookup is for: the one the event names, else the current one, whose name is asked of Reddit at
+ * most once for a set of lookups (one event's). '' when Reddit gives none.
+ */
+function subredditNames(
+    reddit: Readonly<Pick<ModerationReddit, "getCurrentSubredditName">>,
+): (named: string | undefined) => Promise<string> {
+    let current: Promise<string> | undefined;
+    return async (named: string | undefined): Promise<string> => {
+        if (!isBlank(named)) {
+            return named;
+        }
+        current ??= reddit.getCurrentSubredditName();
+        return await current;
+    };
+}
+
+/** The subreddit's mod list from Reddit, lower-cased, kept in the cache for the next lookups. */
+async function fetchModList(reddit: ModerationReddit, modList: ModList, now: number): Promise<readonly string[]> {
+    const moderators = await (await reddit.getCurrentSubreddit()).getModerators().all();
+    const usernames = moderators.map((moderator: Readonly<Pick<User, "username">>): string =>
+        moderator.username.toLowerCase(),
+    );
+    modList.cache.store(modList.installation, now, usernames);
+    return usernames;
+}
+
 export function createRedditModerationLookups(reddit: ModerationReddit, modList: ModList): ModerationLookups {
+    const subredditNameOf = subredditNames(reddit);
     return {
+        // A cached list shows who moderates, but not who doesn't: a moderator who joined since it was fetched is
+        // missing from it, so a name it lacks is looked up in the list as it is now.
         isModerator: async (username: string): Promise<boolean> => {
             const now = Date.now();
-            const cached = modList.cache.fresh(modList.installation, now);
-            if (cached !== undefined) {
-                return cached.includes(username.toLowerCase());
+            const name = username.toLowerCase();
+            if (modList.cache.fresh(modList.installation, now)?.includes(name) === true) {
+                return true;
             }
-            const moderators = await (await reddit.getCurrentSubreddit()).getModerators().all();
-            const usernames = moderators.map((moderator: Readonly<Pick<User, "username">>): string =>
-                moderator.username.toLowerCase(),
-            );
-            modList.cache.store(modList.installation, now, usernames);
-            return usernames.includes(username.toLowerCase());
+            return (await fetchModList(reddit, modList, now)).includes(name);
         },
         recentBans: async (subredditName: string | undefined): Promise<readonly BanLogEntry[]> => {
-            const name = isBlank(subredditName) ? await reddit.getCurrentSubredditName() : subredditName;
+            const name = await subredditNameOf(subredditName);
             if (name === "") {
                 return [];
             }
             const listing = reddit.getModerationLog({ subredditName: name, type: "banuser", limit: RECENT_BANS });
             return (await listing.get(RECENT_BANS)).map(banLogEntryOf);
+        },
+        modNotes: async (subredditName: string | undefined, username: string): Promise<readonly NoteEntry[]> => {
+            const subreddit = await subredditNameOf(subredditName);
+            if (subreddit === "") {
+                throw new Error("Reddit gave no name for the subreddit");
+            }
+            const notes = await reddit.getModNotes({ subreddit, user: username, limit: MOD_NOTES_READ }).all();
+            return notes.map(({ type, createdAt }: Readonly<{ type: string; createdAt: Date }>): NoteEntry => ({
+                kind: NOTE_KINDS.get(type) ?? "other",
+                createdAt,
+            }));
         },
     };
 }

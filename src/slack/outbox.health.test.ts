@@ -100,6 +100,27 @@ describe("the conditions a drain reports", (): void => {
         expect(health.note.mock.calls).toStrictEqual([["alert-dropped", 1]]);
     });
 
+    // The Slack app may be in one channel and not the other: Slack refusing one doesn't end with the other's alerts.
+    it(
+        "include Slack refusing a channel, until an alert to that channel is taken",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { health, outbox, slack } = fakeOutbox();
+            slack.respond("not_in_channel");
+
+            await drive(outbox.send({ text: "refused", channel: "C0ALERTS" }));
+            await drive(outbox.send({ text: "taken elsewhere", channel: "C0MODS" }));
+
+            expect(health.clear.mock.calls).not.toContainEqual(["slack-refusing"]);
+
+            await drive(outbox.send({ text: "taken there", channel: "C0ALERTS" }));
+
+            expect(health.clear.mock.calls).toContainEqual(["slack-refusing"]);
+        },
+    );
+
     it(
         "end with an alert Slack takes, and those of the queue once it empties",
         TEST_OPTIONS,

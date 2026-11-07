@@ -5,11 +5,14 @@ import { outboxFakes, queued, sendTimes } from "../../tests/fixtures/outbox.js";
 import type { OutboxFakes } from "../../tests/fixtures/outbox.js";
 import { createSlackOutbox, forgetContent } from "./outbox.js";
 import type { SlackOutbox } from "./outbox.js";
+import { rememberSent } from "./sent.js";
 
 const TEST_OPTIONS = { timeout: 5000 };
 const QUEUE_KEY = "slack_outbox";
 const REDACTIONS_KEY = "slack_outbox_redactions";
 const DAY = 86_400_000;
+/** An alert that quotes the comment t1_a, and its version without the quote. */
+const QUOTING = { contentIds: ["t1_a"], withoutQuotes: { text: "removed t1_a" } };
 
 /** An outbox on fake Redis, scheduler and Slack, with the clock frozen at NOW. */
 function fakeOutbox(): OutboxFakes & Readonly<{ outbox: SlackOutbox }> {
@@ -70,15 +73,31 @@ describe("a drain of the outbox with redactions waiting", (): void => {
     );
 });
 
+describe("a redaction Slack refuses to edit after the drain's time is up", (): void => {
+    // A drain starts no request after its time: the lease outlasts its time by one request, not two.
+    it("leaves the deletion that replaces the edit to a later drain", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const { outbox, redis, scheduler, slack } = fakeOutbox();
+        await redis.zAdd(REDACTIONS_KEY, redaction("1.000001"));
+        // Slack takes 15 seconds to refuse the edit: the drain's 10 seconds are then up.
+        slack.respondSlowly(15_000, "edit_window_closed");
+
+        await drive(outbox.deliverQueued());
+
+        expect(slack.requests.map(({ api }): string => api)).toStrictEqual(["chat.update"]);
+        expect(redis.keys()).toContain(REDACTIONS_KEY);
+        expect(scheduler.runJob).toHaveBeenCalledWith(expect.objectContaining({ name: "slackOutbox" }));
+    });
+});
+
 describe("content deleted on Reddit, quoted by alerts in Slack", (): void => {
     it("queues a redaction of each, and schedules a drain to make them", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const { dependencies, redis, scheduler } = fakeOutbox();
-        await redis.hSet("slack_outbox_sent:t1_a", {
-            "C0123MODS 1.000001": JSON.stringify({ text: "removed t1_a" }),
-            "C0456LOGS 1.000002": JSON.stringify({ text: "removed t1_a" }),
-        });
+        await rememberSent(dependencies, { channel: "C0123MODS", ts: "1.000001" }, QUOTING);
+        await rememberSent(dependencies, { channel: "C0456LOGS", ts: "1.000002" }, QUOTING);
 
         await forgetContent(dependencies, "t1_a");
 
@@ -89,6 +108,57 @@ describe("content deleted on Reddit, quoted by alerts in Slack", (): void => {
         expect(redis.ttlSeconds(REDACTIONS_KEY)).toBe(7 * 86_400);
         expect(scheduler.jobs.map(({ name }): string => name)).toStrictEqual(["slackOutbox"]);
     });
+
+    // A busy thread's post is quoted by every alert about a comment in it: more than one Redis request can carry.
+    it(
+        "queues a redaction of each alert, when they are more than one request to Redis can carry",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { dependencies, redis } = fakeOutbox();
+            const withoutQuotes = { text: "x".repeat(50_000) };
+            await Promise.all(
+                Array.from({ length: 120 }, async (_unused: unknown, index: number): Promise<void> => {
+                    await rememberSent(
+                        dependencies,
+                        { channel: "C0123MODS", ts: `1.${String(index)}` },
+                        { contentIds: ["t3_p"], withoutQuotes },
+                    );
+                }),
+            );
+
+            await forgetContent(dependencies, "t3_p");
+
+            await expect(redis.zCard(REDACTIONS_KEY)).resolves.toBe(120);
+        },
+    );
+
+    it(
+        "keeps where the alerts are when their redactions cannot be queued, so the deletion can be handled again",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const { dependencies, redis } = fakeOutbox();
+            await rememberSent(dependencies, { channel: "C0123MODS", ts: "1.000001" }, QUOTING);
+            // The deletion is noted, then the redaction cannot be queued.
+            redis.zAdd.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error("redis down"));
+
+            await expect(forgetContent(dependencies, "t1_a")).rejects.toThrow("redis down");
+
+            await forgetContent(dependencies, "t1_a");
+
+            expect(redis.members(REDACTIONS_KEY).map((member: string): unknown => JSON.parse(member))).toStrictEqual([
+                {
+                    channel: "C0123MODS",
+                    ts: "1.000001",
+                    withoutQuotes: { text: "removed t1_a" },
+                    queuedAt: NOW.getTime(),
+                },
+            ]);
+        },
+    );
 
     it(
         "keeps at most 5,000 redactions waiting, and reports dropping the oldest",
@@ -103,9 +173,7 @@ describe("content deleted on Reddit, quoted by alerts in Slack", (): void => {
                     redaction(`0.${String(index)}`, DAY),
                 ),
             );
-            await redis.hSet("slack_outbox_sent:t1_a", {
-                "C0123MODS 1.000001": JSON.stringify({ text: "removed t1_a" }),
-            });
+            await rememberSent(dependencies, { channel: "C0123MODS", ts: "1.000001" }, QUOTING);
 
             await forgetContent(dependencies, "t1_a");
 

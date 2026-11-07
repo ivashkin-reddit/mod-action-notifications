@@ -19,6 +19,28 @@ export const tests = defineConfig(
         },
     },
     {
+        // The load harness (tests/load/, run by hand with `npm run load`) is measurement scaffolding: its event mixes,
+        // rates and bounds are numbers by nature, its driver runs a scenario's steps in order and waits on each, its
+        // Redis adapter implements Devvit's client methods with Devvit's own signatures, its functions pass around the
+        // fakes and the Redis connection, which are mutable by nature, and its scenario catalogue reads best whole.
+        files: ["tests/load/**/*.ts"],
+        rules: {
+            "@typescript-eslint/no-magic-numbers": "off",
+            "@typescript-eslint/max-params": "off",
+            "max-lines-per-function": "off",
+            "max-statements": "off",
+            "no-await-in-loop": "off",
+            "@typescript-eslint/prefer-readonly-parameter-types": "off",
+            "max-lines": "off",
+            "@typescript-eslint/naming-convention": [
+                "error",
+                ...NAMING_CONVENTION,
+                // node-redis names its protocol option `RESP`.
+                { selector: "objectLiteralProperty", filter: { regex: "^RESP$", match: true }, format: null },
+            ],
+        },
+    },
+    {
         files: ["**/*.test.{ts,tsx,mts,cts}"],
         plugins: { vitest },
         settings: {

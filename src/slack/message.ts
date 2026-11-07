@@ -1,8 +1,6 @@
 /** A message as the app posts it with Slack's chat.postMessage: `channel` is a channel ID, or a #name. */
 export interface SlackMessage {
     readonly text: string;
-    readonly username?: string;
-    readonly icon_emoji?: string;
     readonly channel?: string;
     readonly attachments?: readonly SlackAttachment[];
 }

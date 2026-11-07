@@ -16,6 +16,10 @@ export interface MonitorThresholds {
     readonly unmoderatedAgeHours: number;
     /** Alert when reported content is at least this many hours old; 0 turns the alert off. */
     readonly reportedAgeHours: number;
+    /** Alert when Reddit's spam queue holds at least this many items; 0 turns the alert off. */
+    readonly spamQueueThreshold: number;
+    /** Alert when Reddit's edited queue holds at least this many items; 0 turns the alert off. */
+    readonly editedQueueThreshold: number;
 }
 
 const SECONDS_PER_HOUR = 3600;
@@ -43,11 +47,13 @@ export function isAlertOn(threshold: number): boolean {
 
 /** The monitor is scheduled only while at least one of its alerts is on. */
 export function isMonitoringEnabled(thresholds: MonitorThresholds): boolean {
-    return (
-        isAlertOn(thresholds.queueSizeThreshold) ||
-        isAlertOn(thresholds.unmoderatedAgeHours) ||
-        isAlertOn(thresholds.reportedAgeHours)
-    );
+    return [
+        thresholds.queueSizeThreshold,
+        thresholds.unmoderatedAgeHours,
+        thresholds.reportedAgeHours,
+        thresholds.spamQueueThreshold,
+        thresholds.editedQueueThreshold,
+    ].some((threshold: number): boolean => isAlertOn(threshold));
 }
 
 export function isQueueTooLong(size: number, queueSizeThreshold: number): boolean {

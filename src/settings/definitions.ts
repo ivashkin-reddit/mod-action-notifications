@@ -1,4 +1,11 @@
 import type { SettingsFormField } from "@devvit/public-api";
+import {
+    approvalDaysProblem,
+    dormantDaysProblem,
+    historyDaysProblem,
+    retentionProblem,
+    wholeNumberProblem,
+} from "./validation.js";
 
 /** The settings moderators fill in, with what each is checked for on saving. */
 
@@ -6,32 +13,15 @@ export const DEFAULT_MODQUEUE_THRESHOLD = 50;
 export const DEFAULT_UNMODERATED_AGE_HOURS = 24;
 export const DEFAULT_REPORTED_CONTENT_AGE_HOURS = 24;
 export const DEFAULT_POST_DELETION_UPVOTE_THRESHOLD = 100;
+export const DEFAULT_SPAM_QUEUE_THRESHOLD = 0;
+export const DEFAULT_BAN_HISTORY_DAYS = 30;
+export const DEFAULT_DORMANT_MODERATOR_DAYS = 90;
+export const DEFAULT_EDITED_QUEUE_THRESHOLD = 0;
+export const DEFAULT_REPORT_PILE_UP_THRESHOLD = 0;
+export const DEFAULT_MODMAIL_WAIT_HOURS = 24;
+export const DEFAULT_EDITS_AFTER_APPROVAL_DAYS = 7;
 /** The free Slack plan's only retention short of a year. */
 export const DEFAULT_SLACK_RETENTION_DAYS = 90;
-/** The app takes deleted content out of an alert for at most 90 days, so it remembers where alerts are no longer. */
-export const MAX_SLACK_RETENTION_DAYS = 90;
-/** A Slack bot token starts so; a user token (xoxp-) would post as the person who made it. */
-const BOT_TOKEN_PREFIX = "xoxb-";
-const BOT_TOKEN_PROBLEM = "Enter the Slack app's Bot User OAuth Token, starting xoxb-";
-const WHOLE_NUMBER_PROBLEM = "Enter a whole number, 0 or more (0 turns this alert off)";
-const RETENTION_PROBLEM = "Enter a whole number of days, from 1 to 90";
-
-/** Why the text cannot be the bot token, or undefined when it can: blank (no alerts) or a Slack bot token. */
-function botTokenProblem(text: string): string | undefined {
-    return text === "" || text.startsWith(BOT_TOKEN_PREFIX) ? undefined : BOT_TOKEN_PROBLEM;
-}
-
-/** Why the value cannot be a threshold, or undefined when it can: unset (the default) or a whole number of 0 or more. */
-function wholeNumberProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 0) ? undefined : WHOLE_NUMBER_PROBLEM;
-}
-
-/** Why the value cannot be the channels' retention, or undefined when it can: unset (the default) or 1 to 90 days. */
-function retentionProblem(value: number | undefined): string | undefined {
-    return value === undefined || (Number.isInteger(value) && value >= 1 && value <= MAX_SLACK_RETENTION_DAYS)
-        ? undefined
-        : RETENTION_PROBLEM;
-}
 
 /**
  * What the Enabled Mod Actions setting offers, and those it starts with. The moderation module knows the mod
@@ -59,10 +49,38 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
     },
     {
         type: "boolean",
+        name: "securityAlerts",
+        label: "Security Alerts",
+        helpText:
+            "Always send changes to the mod team (moderators added, removed or invited, permissions changed) and to Devvit apps (installed, removed, enabled, disabled or changed) as security alerts to the alert channel, whatever Enabled Mod Actions and Excluded Moderators say. Also alert on edits to AutoModerator's config, AutoModerator removing far more than usual after one, and moderators acting after a long silence",
+        defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "dormantModeratorDays",
+        label: "Dormant Moderator Alert (Days)",
+        helpText:
+            "Send a security alert when a moderator acts for the first time in at least this many days, as a compromised account might (0 to disable, at most 365)",
+        defaultValue: DEFAULT_DORMANT_MODERATOR_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            dormantDaysProblem(value),
+    },
+    {
+        type: "boolean",
         name: "includeModNote",
         label: "Include Mod Note",
         helpText: "Include moderator notes in Slack notifications",
         defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "banHistoryDays",
+        label: "Ban Alert History (Days)",
+        helpText:
+            "Ban alerts count the user's entries in Reddit's mod notes (removals, spam removals, bans, mutes and notes) from this many days before the ban, never their text (0 leaves the history out)",
+        defaultValue: DEFAULT_BAN_HISTORY_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            historyDaysProblem(value),
     },
     {
         type: "string",
@@ -119,6 +137,69 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
             wholeNumberProblem(value),
     },
     {
+        type: "number",
+        name: "spamQueueThreshold",
+        label: "Spam Queue Size Alert Threshold",
+        helpText: "Alert when Reddit's spam queue holds at least this many items (0 to disable)",
+        defaultValue: DEFAULT_SPAM_QUEUE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "number",
+        name: "editedQueueThreshold",
+        label: "Edited Queue Size Alert Threshold",
+        helpText:
+            "Alert when Reddit's edited queue, of recently edited posts and comments, holds at least this many items (0 to disable)",
+        defaultValue: DEFAULT_EDITED_QUEUE_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "number",
+        name: "modmailWaitHours",
+        label: "Modmail Waiting Alert (Hours)",
+        helpText:
+            "Alert, at most every six hours, when a user has waited this many hours for a reply in modmail, counting ban appeals apart (0 to disable)",
+        defaultValue: DEFAULT_MODMAIL_WAIT_HOURS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "string",
+        name: "urgentReportReasons",
+        label: "Urgent Report Reasons",
+        helpText:
+            "Report reasons that alert the alert channel at once, separated by commas, e.g. personal information, threatening violence. A report alerts when its reason contains one, ignoring case; the alert names the reason as written here, never the report's own words (none by default)",
+    },
+    {
+        type: "number",
+        name: "reportPileUpThreshold",
+        label: "Report Pile-Up Alert Threshold",
+        helpText: "Alert once when a post or comment reaches this many reports (0 to disable)",
+        defaultValue: DEFAULT_REPORT_PILE_UP_THRESHOLD,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            wholeNumberProblem(value),
+    },
+    {
+        type: "boolean",
+        name: "adminModmailAlerts",
+        label: "Admin Modmail Alerts",
+        helpText:
+            "Alert the alert channel at once when a Reddit admin writes to the subreddit's modmail (enabled by default)",
+        defaultValue: true,
+    },
+    {
+        type: "number",
+        name: "editsAfterApprovalDays",
+        label: "Edits After Approval Alert (Days)",
+        helpText:
+            "Alert when an author edits a post or comment a moderator approved within this many days. The alert shows neither version of the text (0 to disable, at most 30)",
+        defaultValue: DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
+        onValidate: ({ value }: Readonly<{ value?: number | undefined }>): string | undefined =>
+            approvalDaysProblem(value),
+    },
+    {
         type: "boolean",
         name: "enableAutoModAlerts",
         label: "Enable AutoModerator Slack Alerts",
@@ -142,30 +223,33 @@ const OTHER_SETTINGS: readonly SettingsFormField[] = [
             "Post a summary of the day before to Slack each morning at 08:00 UTC: mod actions, alerts, monitor runs and any problems. If it stops arriving, the app has stopped working (off by default)",
         defaultValue: false,
     },
+    {
+        type: "boolean",
+        name: "weeklyStatistics",
+        label: "Weekly Statistics",
+        helpText:
+            "Post the team's statistics for the week before to the notification channel each Monday at 08:00 UTC: actions, who took them, quiet hours, bans, how many moderators acted and the most-moderated threads. No figure names a moderator (off by default)",
+        defaultValue: false,
+    },
+    {
+        type: "boolean",
+        name: "debugLogging",
+        label: "Debug Logging",
+        helpText:
+            "Log a line for every event the app handles, with its timings and counts, for the app's developer during an incident. Off by default: Devvit keeps only 5,000 log lines",
+        defaultValue: false,
+    },
 ];
 
 /**
- * The settings: the Slack app's bot token, which the developer sets for every installation, then the form moderators
- * fill in, and the validated configuration read from it.
+ * The settings: the form moderators fill in, and the validated configuration read from it. The Slack app's bot token
+ * is not among them: moderators connect it with Connect Slack, and the app keeps it where no form shows it.
  *
  * Devvit stores the values under these setting names, so renaming one loses what was saved. The form lists the
  * settings in this order.
  */
 export function settingsDefinitions(modActions: ModActionChoices): SettingsFormField[] {
     return [
-        {
-            type: "string",
-            name: "slackBotToken",
-            label: "Slack Bot Token",
-            helpText:
-                "The Slack app's Bot User OAuth Token (xoxb-...). The app's developer sets it with `devvit settings set slackBotToken`",
-            // An app-wide secret: Devvit encrypts it, and only the developer can set it, from the command line.
-            // Moderators never see it.
-            scope: "app",
-            isSecret: true,
-            onValidate: ({ value }: Readonly<{ value?: string | undefined }>): string | undefined =>
-                botTokenProblem((value ?? "").trim()),
-        },
         {
             type: "select",
             name: "enabledActions",

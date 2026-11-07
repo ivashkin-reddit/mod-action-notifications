@@ -7,9 +7,10 @@
  * `mod_actions:discipline_events:{ban|mute}:{subreddit}:{username}` (90-day TTL), and reads, then deletes, the
  * earlier `mod_actions:discipline:{ban|mute}:{subreddit}:{username}`.
  */
-export { ENABLED_ACTIONS_CHOICES } from "./infrastructure/actionCatalog.js";
+export { actionName, ENABLED_ACTIONS_CHOICES } from "./infrastructure/actionCatalog.js";
 export { notifyModAction, type ModerationConfig, type ModerationPorts } from "./application/notifyModAction.js";
 export type { ModActionAlerts, SimulationAlerts } from "./application/ports.js";
+export { isRedditAccount, type ModAction } from "./domain/modAction.js";
 export { simulateModAction } from "./application/simulateModAction.js";
 export { modActionFromTriggerEvent, type ModActionEvent } from "./infrastructure/modActionEvent.js";
 export { createModListCache, createRedditModerationLookups } from "./infrastructure/redditModeration.js";

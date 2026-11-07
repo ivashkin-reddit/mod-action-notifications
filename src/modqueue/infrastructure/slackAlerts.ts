@@ -1,6 +1,12 @@
 import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
-import type { AgedContentAlert, ModqueueAlerts, MonitorFailingAlert, QueueTooLongAlert } from "../application/ports.js";
+import type {
+    AgedContentAlert,
+    ModqueueAlerts,
+    MonitorFailingAlert,
+    QueueTooLongAlert,
+    WatchedQueue,
+} from "../application/ports.js";
 import { hoursWaiting } from "../domain/monitoring.js";
 import type { QueueItem } from "../domain/monitoring.js";
 
@@ -10,11 +16,16 @@ function slackTimestamp(): number {
     return Math.floor(Date.now() / MS_PER_SECOND);
 }
 
-function queueTooLongMessage({ size, posts, comments, threshold }: QueueTooLongAlert): SlackMessage {
+/** How each watched queue's size alert is titled. */
+const QUEUE_TITLES: Readonly<Record<WatchedQueue, string>> = {
+    modqueue: "Modqueue Alert",
+    spam: "Spam Queue Alert",
+    edited: "Edited Queue Alert",
+};
+
+function queueTooLongMessage({ queue, size, posts, comments, threshold }: QueueTooLongAlert): SlackMessage {
     return {
-        text: `⚠️ Modqueue Alert: ${String(size)} items pending`,
-        username: "Mod Action Notifications",
-        icon_emoji: ":warning:",
+        text: `⚠️ ${QUEUE_TITLES[queue]}: ${String(size)} items pending`,
         attachments: [
             {
                 color: "#ff9900",
@@ -36,10 +47,9 @@ function waitingItemLine(item: QueueItem, now: number): string {
     return `• ${type} (${String(hoursWaiting(item, now))}h old): https://reddit.com${item.permalink}`;
 }
 
-/** How an age alert looks: its headline (given the count and the age limit), icon, colour and footer. */
+/** How an age alert looks: its headline (given the count and the age limit), colour and footer. */
 type AgedContentStyle = Readonly<{
     headline: (total: string, ageHours: string) => string;
-    icon: string;
     color: string;
     footer: string;
 }>;
@@ -47,7 +57,6 @@ type AgedContentStyle = Readonly<{
 const UNMODERATED_STYLE: AgedContentStyle = {
     headline: (total: string, ageHours: string): string =>
         `⏰ Unmoderated Content Alert: ${total} items over ${ageHours}h old`,
-    icon: ":alarm_clock:",
     color: "#ff6600",
     footer: "Mod Action Notifications - Unmoderated Monitor",
 };
@@ -55,7 +64,6 @@ const UNMODERATED_STYLE: AgedContentStyle = {
 const REPORTED_STYLE: AgedContentStyle = {
     headline: (total: string, ageHours: string): string =>
         `📣 Old Reported Content Alert: ${total} reported items over ${ageHours}h old`,
-    icon: ":loudspeaker:",
     color: "#cc3300",
     footer: "Mod Action Notifications - Reports Monitor",
 };
@@ -63,8 +71,6 @@ const REPORTED_STYLE: AgedContentStyle = {
 function agedContentMessage(style: AgedContentStyle, { oldest, total, ageHours, now }: AgedContentAlert): SlackMessage {
     return {
         text: style.headline(String(total), String(ageHours)),
-        username: "Mod Action Notifications",
-        icon_emoji: style.icon,
         attachments: [
             {
                 color: style.color,
@@ -85,8 +91,6 @@ function agedContentMessage(style: AgedContentStyle, { oldest, total, ageHours, 
 function monitorFailingMessage({ failures, error }: MonitorFailingAlert): SlackMessage {
     return {
         text: `⚠️ Critical: Modqueue Monitoring Failed ${String(failures)} Times`,
-        username: "Mod Action Notifications",
-        icon_emoji: ":warning:",
         attachments: [
             {
                 color: "#ff0000",

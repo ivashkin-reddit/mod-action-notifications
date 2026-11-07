@@ -58,16 +58,29 @@ export async function continuationStarted({ redis }: Readonly<{ redis: ScheduleR
     await redis.del(DRAIN_SCHEDULED_KEY);
 }
 
+/**
+ * Runs the outbox job at `runAt`, under a claim already taken. A job the scheduler refuses lets go of the claim, so
+ * the next drain can schedule one, and rejects.
+ */
+async function runUnder({ redis, scheduler }: Scheduling, claimKey: string, runAt: Date): Promise<void> {
+    try {
+        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
+    } catch (error) {
+        await redis.del(claimKey);
+        throw error;
+    }
+}
+
 /** Schedules one drain to continue later; a continuation already scheduled covers this one. */
-export async function scheduleDrain({ redis, scheduler }: Scheduling, afterMs: number): Promise<void> {
+export async function scheduleDrain(scheduling: Scheduling, afterMs: number): Promise<void> {
     const runAt = new Date(Date.now() + afterMs);
     const claimed =
-        (await redis.set(DRAIN_SCHEDULED_KEY, runAt.toISOString(), {
+        (await scheduling.redis.set(DRAIN_SCHEDULED_KEY, runAt.toISOString(), {
             nx: true,
             expiration: new Date(runAt.getTime() + LEASE_MS),
         })) !== "";
     if (claimed) {
-        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
+        await runUnder(scheduling, DRAIN_SCHEDULED_KEY, runAt);
     }
 }
 
@@ -77,11 +90,12 @@ export async function scheduleDrain({ redis, scheduler }: Scheduling, afterMs: n
  * left queued would wait for the next alert. A recovery already scheduled covers this one; it expires as its drain
  * runs, so a drain that finds the lease held can schedule the next.
  */
-export async function scheduleRecovery({ redis, scheduler }: Scheduling): Promise<void> {
+export async function scheduleRecovery(scheduling: Scheduling): Promise<void> {
     const runAt = new Date(Date.now() + LEASE_MS + MS_PER_SECOND);
     const claimed =
-        (await redis.set(RECOVERY_SCHEDULED_KEY, runAt.toISOString(), { nx: true, expiration: runAt })) !== "";
+        (await scheduling.redis.set(RECOVERY_SCHEDULED_KEY, runAt.toISOString(), { nx: true, expiration: runAt })) !==
+        "";
     if (claimed) {
-        await scheduler.runJob({ name: OUTBOX_JOB_NAME, runAt });
+        await runUnder(scheduling, RECOVERY_SCHEDULED_KEY, runAt);
     }
 }

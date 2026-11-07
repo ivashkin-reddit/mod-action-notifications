@@ -10,7 +10,8 @@ export type Condition =
     | "outbox-full"
     | "alerts-expired"
     | "redactions-failing"
-    | "monitor-failing";
+    | "monitor-failing"
+    | "modmail-unreadable";
 
 const CONDITION_NAMES: readonly string[] = [
     "token-missing",
@@ -21,6 +22,7 @@ const CONDITION_NAMES: readonly string[] = [
     "alerts-expired",
     "redactions-failing",
     "monitor-failing",
+    "modmail-unreadable",
 ];
 
 /** Whether the text names a condition: what Redis holds may come from another version. */
@@ -55,11 +57,11 @@ interface ConditionText {
 
 const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
     "token-missing": {
-        title: "No Slack bot token is set",
+        title: "Slack isn't connected",
         level: "warn",
         started: (): string =>
-            "No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.",
-        resolved: "A Slack bot token is set: alerts are sent again.",
+            "Slack isn't connected, so no alerts are sent. A moderator connects it with Connect Slack, as the app's README says.",
+        resolved: "Slack is connected: alerts are sent again.",
     },
     "channel-missing": {
         title: "No Slack channel is set",
@@ -72,7 +74,7 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
         title: "Slack is refusing alerts",
         level: "error",
         started: (detail: string): string =>
-            `Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.`,
+            `Slack is refusing alerts (${detail}), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.`,
         resolved: "Slack is taking alerts again.",
     },
     "slack-unreachable": {
@@ -109,6 +111,13 @@ const CONDITIONS: Readonly<Record<Condition, ConditionText>> = {
             `The modqueue monitor is failing (${detail}), so no modqueue alerts are sent until it recovers.`,
         resolved: "The modqueue monitor is working again.",
     },
+    "modmail-unreadable": {
+        title: "Modmail cannot be read",
+        level: "error",
+        started: (detail: string): string =>
+            `The app cannot read modmail (${detail}), so modmail from Reddit's admins and modmail waiting for a reply are not alerted.`,
+        resolved: "The app can read modmail again.",
+    },
 };
 
 /** The line that says the condition has ended. */
@@ -118,6 +127,17 @@ export function conditionResolved(condition: Condition): LogLine {
 
 /** How often a condition in force is logged again: a day. */
 export const REMINDER_SECONDS = 86_400;
+
+/**
+ * At most this many characters of what the app saw of a condition are kept. It comes from Reddit, Slack or the
+ * network, and goes into the log, modmail notices and Show Bot Status.
+ */
+const MAX_DETAIL = 200;
+
+/** What the app saw of a condition, as it is kept: at most MAX_DETAIL characters. */
+export function keptDetail(detail: string): string {
+    return detail.slice(0, MAX_DETAIL);
+}
 
 /** The line that says the condition is still in force, `since` ms since the epoch. */
 export function conditionContinuing(condition: Condition, detail: string, since: number): LogLine {

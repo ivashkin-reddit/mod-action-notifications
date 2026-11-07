@@ -1,4 +1,10 @@
-import { conditionContinuing, conditionResolved, conditionStarted, REMINDER_SECONDS } from "../domain/conditions.js";
+import {
+    conditionContinuing,
+    conditionResolved,
+    conditionStarted,
+    keptDetail,
+    REMINDER_SECONDS,
+} from "../domain/conditions.js";
 import type { Condition, InForce, LogLine } from "../domain/conditions.js";
 import { NOTICE_PERIOD_SECONDS, noticeDue, problemNotice, resolvedNotice } from "../domain/notices.js";
 import type { Notice } from "../domain/notices.js";
@@ -66,15 +72,20 @@ export async function clearCondition(ports: ConditionPorts, condition: Condition
     });
 }
 
-/** Tells moderators of the condition, when it has lasted long enough and they were not told of it within the day. */
+/**
+ * Tells moderators of the condition, when it has lasted long enough and they were not told of it within the day. A
+ * notice modmail could not take lets go of its claim, so the condition's next report tries again.
+ */
 async function noticeIfDue(ports: ConditionPorts, problem: InForce): Promise<void> {
     if (
-        noticeDue(problem.condition, problem.since, Date.now()) &&
-        (await ports.store.claimNotice(problem.condition, NOTICE_PERIOD_SECONDS)) &&
-        (await tell(ports, problem.condition, problemNotice(problem)))
+        !noticeDue(problem.condition, problem.since, Date.now()) ||
+        !(await ports.store.claimNotice(problem.condition, NOTICE_PERIOD_SECONDS))
     ) {
-        await ports.store.recordNotice(problem.condition);
+        return;
     }
+    await ((await tell(ports, problem.condition, problemNotice(problem)))
+        ? ports.store.recordNotice(problem.condition)
+        : ports.store.releaseNotice(problem.condition));
 }
 
 async function start(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {
@@ -98,6 +109,6 @@ async function start(ports: ConditionPorts, condition: Condition, detail: string
  */
 export async function raiseCondition(ports: ConditionPorts, condition: Condition, detail: string): Promise<void> {
     await recording(condition, async (): Promise<void> => {
-        await start(ports, condition, detail);
+        await start(ports, condition, keptDetail(detail));
     });
 }

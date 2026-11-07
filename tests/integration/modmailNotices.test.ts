@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadApp, NOW } from "../fixtures/app.js";
+import { NOW, connect, loadApp } from "../fixtures/app.js";
+import type { Setup } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
 import { createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
-import type { ModNotification, Settings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import type { ModNotification } from "../fixtures/fakeReddit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -48,7 +49,7 @@ describe("a problem moderators must act on", (): void => {
                     subredditId: "t5_testsub",
                     subject: "Mod Action Notifications: Slack is refusing alerts",
                     bodyMarkdown: [
-                        "Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
+                        "Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.",
                         "This started at 2026-11-04 12:00 UTC. **Show Bot Status**, in the subreddit's mod tools, shows how the bot is doing now.",
                         "_The bot sends this at most once a day for each problem, and says when it is over._",
                     ].join("\n\n"),
@@ -150,12 +151,12 @@ describe("a problem that may pass by itself", (): void => {
 
 describe("a Slack app not set up", (): void => {
     it.each([
-        ["no bot token", { slackBotToken: undefined }],
+        ["no bot token", { connectedToken: undefined }],
         ["no notification channel", { notificationChannel: undefined }],
     ])(
         "is not sent to modmail for %s: it is set up with the app",
         TEST_OPTIONS,
-        async (_label: string, settings: Readonly<Settings>): Promise<void> => {
+        async (_label: string, settings: Readonly<Setup>): Promise<void> => {
             expect.hasAssertions();
 
             const app = await loadApp(devvit, settings);
@@ -198,6 +199,7 @@ describe("a notice modmail cannot take", (): void => {
 
             const app = await loadApp(devvit);
             const { context: installation } = createFakeContext(defaultSettings(), "not-a-subreddit");
+            connect(installation.redis);
             app.slack.respond("not_in_channel");
 
             await app.fire("ModAction", removedPost(), installation);
@@ -209,6 +211,20 @@ describe("a notice modmail cannot take", (): void => {
             });
         },
     );
+
+    // The notice is claimed for the day as it is sent: one modmail could not take is not claimed.
+    it("is tried again with the next problem when modmail could not take it", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.modMail.createModNotification.mockRejectedValueOnce(new Error("modmail down"));
+        app.slack.respond("not_in_channel", "not_in_channel");
+
+        await app.fire("ModAction", removedPost({ id: "ModAction_1" }));
+        await app.fire("ModAction", removedPost({ id: "ModAction_2" }));
+
+        expect(subjects(app.context.reddit.modMail.createModNotification.mock.calls)).toHaveLength(2);
+    });
 
     it("is logged, and the work it was about goes on", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();

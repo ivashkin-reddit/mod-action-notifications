@@ -49,6 +49,8 @@ export interface ConditionStore {
     readonly inForce: () => Promise<readonly InForce[]>;
     /** Claims the condition's modmail notice for `seconds`: false when one was claimed within them. */
     readonly claimNotice: (condition: Condition, seconds: number) => Promise<boolean>;
+    /** Lets go of the condition's notice claim, for a notice that could not be sent. */
+    readonly releaseNotice: (condition: Condition) => Promise<void>;
     /** Records that moderators were sent a notice of the condition, so its end is sent too. */
     readonly recordNotice: (condition: Condition) => Promise<void>;
     /** Forgets that moderators were sent a notice of the condition: false when they were not. */

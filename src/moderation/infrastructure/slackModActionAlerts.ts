@@ -1,8 +1,10 @@
 import { escapeText, inChannel, quote, withoutTitle } from "../../slack/index.js";
 import type { DirectSlackSender, SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
+import { isSecurityAction } from "../domain/alerting.js";
 import { banDurationText } from "../domain/banDuration.js";
 import { disciplineStep } from "../domain/discipline.js";
+import type { HistoryCounts, RecentHistory } from "../domain/history.js";
 import { isBlank } from "../domain/modAction.js";
 import type { Actor, ModAction, ModActionTarget } from "../domain/modAction.js";
 import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
@@ -13,6 +15,8 @@ export interface ModActionPresentation {
     readonly notificationChannel: string;
     /** A channel ID, or a channel name without #, for security alerts. */
     readonly alertChannel: string;
+    /** Send security actions as security alerts, to the alert channel. */
+    readonly securityAlerts: boolean;
 }
 
 const PREVIEW_LENGTH = 200;
@@ -78,6 +82,27 @@ function detailLines(modAction: ModAction, includeModNote: boolean): readonly st
     ];
 }
 
+/** The counted kinds, in the order the line gives them, with their names for one and for several. */
+const HISTORY_KINDS: readonly Readonly<{ kind: keyof HistoryCounts; one: string; many: string }>[] = [
+    { kind: "removal", one: "removal", many: "removals" },
+    { kind: "spam", one: "spam removal", many: "spam removals" },
+    { kind: "ban", one: "ban", many: "bans" },
+    { kind: "mute", one: "mute", many: "mutes" },
+    { kind: "note", one: "note", many: "notes" },
+];
+
+/** For a ban: what the user's mod notes record in the days before it, as counts. */
+function historyLines(history: RecentHistory | undefined): readonly string[] {
+    if (history === undefined) {
+        return [];
+    }
+    const counted = HISTORY_KINDS.filter(({ kind }): boolean => history.counts[kind] > 0).map(
+        ({ kind, one, many }): string => `${String(history.counts[kind])} ${history.counts[kind] === 1 ? one : many}`,
+    );
+    const summary = counted.length === 0 ? "nothing in mod notes" : counted.join(", ");
+    return [`• *Last ${String(history.days)} days:* ${summary}`];
+}
+
 /** For an unban or unmute: the ban or mute it lifts. */
 function relatedLines(modAction: ModAction): readonly string[] {
     const related = modAction.relatedAction;
@@ -99,7 +124,6 @@ type ActorStyle = Readonly<{
     header: string;
     /** The message's text, given the action's title. */
     text: (title: string) => string;
-    icon: string;
     /** A status for the actor; '' for none. */
     status: string;
 }>;
@@ -108,22 +132,35 @@ const ACTOR_STYLES: Readonly<Record<Actor, ActorStyle>> = {
     "moderator": {
         header: "🔔 *Moderator Action*",
         text: (title: string): string => title,
-        icon: ":shield:",
         status: "",
     },
     "unknown-moderator": {
         header: "🚨 *Security Alert*",
         text: (title: string): string => `🚨 SECURITY ALERT: ${title} by unknown moderator`,
-        icon: ":warning:",
         status: "Unknown moderator (alert)",
     },
     "reddit": {
         header: "🔶 *Reddit Action*",
         text: (title: string): string => `${title} by Reddit`,
-        icon: ":shield:",
         status: "Origin Reddit",
     },
 };
+
+/** A security action's alert, unless an unknown moderator took it: theirs is a security alert already. */
+const SECURITY_STYLE: ActorStyle = {
+    header: "🛡️ *Security Alert*",
+    text: (title: string): string => `🛡️ Security alert: ${title}`,
+    status: "",
+};
+
+/** A security action while Security Alerts is on, unless an unknown moderator took it: that alert is one already. */
+function isSecurityAlert(modAction: ModAction, actor: Actor, presentation: ModActionPresentation): boolean {
+    return presentation.securityAlerts && actor !== "unknown-moderator" && isSecurityAction(modAction);
+}
+
+function styleOf(modAction: ModAction, actor: Actor, presentation: ModActionPresentation): ActorStyle {
+    return isSecurityAlert(modAction, actor, presentation) ? SECURITY_STYLE : ACTOR_STYLES[actor];
+}
 
 function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
     const spike = modAction.activitySpike;
@@ -143,12 +180,13 @@ function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
 function messageLines(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): readonly string[] {
     const isComment = modAction.target?.commentId !== undefined;
     return [
-        ACTOR_STYLES[actor].header,
+        styleOf(modAction, actor, presentation).header,
         `• *Action:* ${actionName(modAction.type, isComment)}`,
         `• *Moderator:* ${userLink(modAction.moderatorName)}`,
         ...targetLines(modAction.target),
         `• *When:* ${timestamp(modAction.occurredAt)}`,
         ...detailLines(modAction, presentation.includeModNote),
+        ...historyLines(modAction.recentHistory),
         ...relatedLines(modAction),
         ...statusLines(modAction, actor),
     ];
@@ -156,11 +194,9 @@ function messageLines(modAction: ModAction, presentation: ModActionPresentation,
 
 function modActionMessage(modAction: ModAction, presentation: ModActionPresentation, actor: Actor): SlackMessage {
     const unknownModerator = actor === "unknown-moderator";
-    const style = ACTOR_STYLES[actor];
+    const style = styleOf(modAction, actor, presentation);
     const message: SlackMessage = {
         text: style.text(actionTitle(modAction.type, modAction.target?.commentId !== undefined)),
-        username: "Mod Action Notifications",
-        icon_emoji: style.icon,
         attachments: [
             {
                 color: unknownModerator ? "#ff0000" : actionColor(modAction.type),
@@ -171,7 +207,8 @@ function modActionMessage(modAction: ModAction, presentation: ModActionPresentat
             },
         ],
     };
-    return inChannel(message, unknownModerator ? presentation.alertChannel : presentation.notificationChannel);
+    const toAlertChannel = unknownModerator || isSecurityAlert(modAction, actor, presentation);
+    return inChannel(message, toAlertChannel ? presentation.alertChannel : presentation.notificationChannel);
 }
 
 /** The Reddit content an action's alert quotes: the comment's or post's text, and the post's title in its link. */
@@ -179,13 +216,17 @@ function quotedContent(target: ModActionTarget | undefined): readonly string[] {
     return [target?.commentId, target?.postId].filter((id: string | undefined): id is string => id !== undefined);
 }
 
-/** The action as its alert shows it once the content is deleted: without the content's text, or a title in its link. */
+/**
+ * The action as its alert shows it once the content is deleted: without the content's text, or a title in its link.
+ * Records keep this version, to replace the alert in Slack, and records hold no mod note, so it has none either.
+ */
 function withoutContent(modAction: ModAction): ModAction {
     const { target } = modAction;
     return target === undefined
         ? modAction
         : {
               ...modAction,
+              description: undefined,
               target: {
                   ...target,
                   body: undefined,
@@ -213,13 +254,27 @@ export function createSlackModActionAlerts(send: SlackSender, presentation: ModA
     };
 }
 
-/** A simulated action's alert as a moderator's Slack message, sent straight to Slack. */
+type Attachment = NonNullable<SlackMessage["attachments"]>[number];
+
+/** An alert marked as a simulation in its text and footer, so no one takes it for a moderator's real action. */
+function asSimulation(message: SlackMessage): SlackMessage {
+    return {
+        ...message,
+        text: `🧪 Simulation: ${message.text}`,
+        attachments: (message.attachments ?? []).map((attachment: Attachment): Attachment => ({
+            ...attachment,
+            footer: "Mod Action Notifications - Simulation",
+        })),
+    };
+}
+
+/** A simulated action's alert as a moderator's Slack message, marked as a simulation, sent straight to Slack. */
 export function createSlackSimulationAlerts(
     send: DirectSlackSender,
     presentation: ModActionPresentation,
 ): SimulationAlerts {
     return {
         deliver: async (modAction: ModAction): Promise<boolean> =>
-            await send(modActionMessage(modAction, presentation, "moderator")),
+            await send(asSimulation(modActionMessage(modAction, presentation, "moderator"))),
     };
 }

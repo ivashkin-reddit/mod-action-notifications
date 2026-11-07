@@ -34,8 +34,6 @@ describe("the Test Slack Connection menu item", (): void => {
         expect(app.slack.messages).toStrictEqual([
             {
                 text: "🧪 Test message from Mod Action Notifications",
-                username: "Mod Action Notifications (Test)",
-                icon_emoji: ":robot_face:",
                 channel: "#mod-log",
                 attachments: [
                     {
@@ -57,13 +55,13 @@ describe("the Test Slack Connection menu item", (): void => {
     it("says when no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: "" });
+        const app = await loadApp(devvit, { connectedToken: "" });
 
         await app.fillForm("Test Slack Connection", {});
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(app.toasts).toStrictEqual([
-            { text: "⚠️ No Slack bot token is set. The app's developer sets it.", appearance: "neutral" },
+            { text: "⚠️ Slack isn't connected. Use Connect Slack first.", appearance: "neutral" },
         ]);
     });
 

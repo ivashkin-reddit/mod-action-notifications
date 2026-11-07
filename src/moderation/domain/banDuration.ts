@@ -31,8 +31,8 @@ export function banLengthLabel(days: number): string {
 }
 
 /**
- * Reads a ban length from free text: "permanent" anywhere, or a number of days ("7 day", "7d"). The pattern does
- * not match a plural "days", so such text is kept as the label, verbatim.
+ * Reads a ban length from free text: "permanent" anywhere, or a number of days ("7 days", "7 day", "7d"); other
+ * text is kept as the label, verbatim.
  */
 export function parseBanDuration(text: string | undefined): BanDuration {
     const normalized = text?.trim() ?? "";
@@ -43,7 +43,7 @@ export function parseBanDuration(text: string | undefined): BanDuration {
         return { days: 0, label: "Permanent Ban" };
     }
     // A match starts only at the first digit of a run: the leftmost match does anyway, and it keeps the search linear.
-    const dayCount = /(?<!\d)(?<days>\d+)\s*(?:d|day)\b/iu.exec(normalized)?.groups?.["days"];
+    const dayCount = /(?<!\d)(?<days>\d+)\s*(?:d|days?)\b/iu.exec(normalized)?.groups?.["days"];
     if (dayCount === undefined) {
         return { days: undefined, label: normalized };
     }

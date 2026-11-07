@@ -11,6 +11,8 @@ export default defineConfig({
     test: {
         // Unit tests sit beside the code they test in src; integration tests, and the fixtures they share, in tests.
         include: [TEST_FILES, `tests/**/*.test.${TYPESCRIPT}`],
+        // The load harness runs by hand, against a real Redis: `npm run load` (vitest.load.config.ts).
+        exclude: ["tests/load/**", "node_modules/**"],
         setupFiles: ["tests/fixtures/setup.ts"],
         // Devvit runs in UTC; timestamps in Slack messages must not depend on the machine's time zone.
         env: { TZ: "UTC" },

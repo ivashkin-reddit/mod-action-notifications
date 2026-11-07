@@ -35,7 +35,10 @@ describe("the Show Bot Status menu item", (): void => {
 
         const app = await loadApp(devvit);
 
-        await expect(status(app)).resolves.toMatchObject({ "App version": "1.2.3", "Slack app": "Set up" });
+        await expect(status(app)).resolves.toMatchObject({
+            "App version": "1.2.3",
+            "Slack app": "Connected to Test Workspace",
+        });
     });
 
     it("shows that the monitor is not scheduled yet", TEST_OPTIONS, async (): Promise<void> => {
@@ -100,21 +103,25 @@ describe("the Show Bot Status menu item", (): void => {
         await app.pressMenuItem("Setup Modqueue Monitoring");
         app.context.redis.get.mockRejectedValue(new Error("redis down"));
 
-        await expect(status(app)).resolves.toMatchObject({ "Modqueue monitor": "On, scheduled (cron */15 * * * *)" });
+        await expect(status(app)).resolves.toMatchObject({
+            "Modqueue monitor": "On, scheduled (cron */15 * * * *)",
+            "Slack app": "Unknown: Redis could not be read",
+        });
     });
 
     it("shows monitoring off and the bot token missing", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit, {
-            slackBotToken: "",
+            connectedToken: "",
             modqueueThreshold: 0,
             unmoderagedAgeHours: 0,
             reportedContentAgeHours: 0,
+            modmailWaitHours: 0,
         });
 
         await expect(status(app)).resolves.toMatchObject({
-            "Slack app": "No bot token is set, so no alerts are sent. The app's developer sets it",
+            "Slack app": "Not connected, so no alerts are sent. Use Connect Slack",
             "Modqueue monitor": "Off: all its thresholds are 0",
         });
     });
@@ -149,7 +156,7 @@ describe("the problems Show Bot Status shows", (): void => {
 
         await expect(status(app)).resolves.toMatchObject({
             "Current problems":
-                "For 3 hours: Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means the bot token needs replacing.",
+                "For 3 hours: Slack is refusing alerts (not_in_channel), so they are dropped. Check that the channels in the app's settings are right and the Slack app has been added to them, then use Test Slack Connection. invalid_auth or token_revoked means Slack needs connecting again, with Connect Slack and a new token.",
         });
     });
 

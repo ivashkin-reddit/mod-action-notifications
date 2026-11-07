@@ -8,7 +8,6 @@ export type SlackField = Readonly<{ title: string; value: string; short: boolean
 export interface SlackMessage {
     readonly text: string;
     readonly username?: string;
-    readonly icon_emoji?: string;
     readonly channel?: string;
     readonly attachments?: readonly Readonly<{
         color: string;
@@ -76,6 +75,8 @@ export interface FakeSlack {
     readonly fetch: Mock<(url: string, init?: FetchInit) => Promise<FakeResponse>>;
     /** Queues outcomes for the next requests, in order; requests after these are taken. */
     readonly respond: (...outcomes: readonly Outcome[]) => void;
+    /** Queues an outcome for the next request, given after `afterMs`: a slow Slack. */
+    readonly respondSlowly: (afterMs: number, outcome: Outcome) => void;
 }
 
 const OK = 200;
@@ -83,6 +84,8 @@ const TOO_MANY_REQUESTS = 429;
 const FIRST_NON_SUCCESS = 300;
 const MS_PER_SECOND = 1000;
 const TS_SEQUENCE_DIGITS = 6;
+/** The name of the Slack workspace whose token the fake takes, as auth.test answers it. */
+export const WORKSPACE = "Test Workspace";
 
 function isSlackMessage(value: unknown): value is SlackMessage {
     return typeof value === "object" && value !== null && "text" in value && typeof value.text === "string";
@@ -96,9 +99,9 @@ function bodyOf(body: unknown): Readonly<Record<string, unknown>> {
     return Object.fromEntries(Object.entries(parsed));
 }
 
-/** The message a call carries, which every call but chat.delete must. */
+/** The message a call carries, which every call but chat.delete and auth.test must. */
 function messageIn(api: string, body: Readonly<Record<string, unknown>>): SlackMessage | undefined {
-    if (api === "chat.delete") {
+    if (api === "chat.delete" || api === "auth.test") {
         return undefined;
     }
     if (!isSlackMessage(body)) {
@@ -126,12 +129,49 @@ function response(status: number, body: string, retryAfter: string | null = null
  * the call gave it for an edit or a deletion.
  */
 function taken(request: SlackRequest, sequence: number): FakeResponse {
+    if (request.api === "auth.test") {
+        return response(OK, JSON.stringify({ ok: true, team: WORKSPACE, user: "mod-action-notifications" }));
+    }
     const seconds = Math.floor(request.sentAt / MS_PER_SECOND);
     const ts =
         request.api === "chat.postMessage"
             ? `${String(seconds)}.${String(sequence).padStart(TS_SEQUENCE_DIGITS, "0")}`
             : textOf(request.body["ts"]);
     return response(OK, JSON.stringify({ ok: true, channel: textOf(request.body["channel"]), ts }));
+}
+
+/** The messages posted with chat.postMessage. */
+function messagesIn(requests: readonly SlackRequest[]): readonly SlackMessage[] {
+    return requests.flatMap((request: SlackRequest): SlackMessage[] =>
+        request.api === "chat.postMessage" && request.message !== undefined ? [request.message] : [],
+    );
+}
+
+/** The edits asked for with chat.update. */
+function updatesIn(requests: readonly SlackRequest[]): readonly SlackUpdate[] {
+    return requests.flatMap((request: SlackRequest): SlackUpdate[] =>
+        request.api === "chat.update" && request.message !== undefined
+            ? [{ ...request.message, channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
+            : [],
+    );
+}
+
+/** The deletions asked for with chat.delete. */
+function deletesIn(requests: readonly SlackRequest[]): readonly SlackDelete[] {
+    return requests.flatMap((request: SlackRequest): SlackDelete[] =>
+        request.api === "chat.delete"
+            ? [{ channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
+            : [],
+    );
+}
+
+/** Waits `ms` on the test's clock; nothing for 0. */
+async function after(ms: number): Promise<void> {
+    if (ms > 0) {
+        await new Promise<void>((resolve: () => void): void => {
+            setTimeout(resolve, ms);
+        });
+    }
 }
 
 function responseFor(
@@ -161,26 +201,18 @@ function responseFor(
 export function createFakeSlack(): FakeSlack {
     const requests: SlackRequest[] = [];
     const outcomes: (string | number | RateLimited | Answer | Error)[] = [];
+    /** How long each queued outcome takes, beside it. */
+    const delays: number[] = [];
     return {
         requests,
         get messages(): readonly SlackMessage[] {
-            return requests.flatMap((request: SlackRequest): SlackMessage[] =>
-                request.api === "chat.postMessage" && request.message !== undefined ? [request.message] : [],
-            );
+            return messagesIn(requests);
         },
         get updates(): readonly SlackUpdate[] {
-            return requests.flatMap((request: SlackRequest): SlackUpdate[] =>
-                request.api === "chat.update" && request.message !== undefined
-                    ? [{ ...request.message, channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
-                    : [],
-            );
+            return updatesIn(requests);
         },
         get deletes(): readonly SlackDelete[] {
-            return requests.flatMap((request: SlackRequest): SlackDelete[] =>
-                request.api === "chat.delete"
-                    ? [{ channel: textOf(request.body["channel"]), ts: textOf(request.body["ts"]) }]
-                    : [],
-            );
+            return deletesIn(requests);
         },
         fetch: vi.fn(async (url: string, init?: FetchInit): Promise<FakeResponse> => {
             const api = url.slice(url.lastIndexOf("/") + 1);
@@ -195,6 +227,7 @@ export function createFakeSlack(): FakeSlack {
                 sentAt: Date.now(),
             };
             requests.push(request);
+            await after(delays.shift() ?? 0);
             const outcome = outcomes.shift() ?? OK;
             if (outcome instanceof Error) {
                 throw outcome;
@@ -203,6 +236,11 @@ export function createFakeSlack(): FakeSlack {
         }),
         respond: (...queued: readonly Outcome[]): void => {
             outcomes.push(...queued);
+            delays.push(...queued.map((): number => 0));
+        },
+        respondSlowly: (afterMs: number, outcome: Outcome): void => {
+            outcomes.push(outcome);
+            delays.push(afterMs);
         },
     };
 }

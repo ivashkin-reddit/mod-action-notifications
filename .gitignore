@@ -48,3 +48,6 @@ temp/
 
 # Portable package for redistribution
 portable-package/
+
+# Load harness results (npm run load)
+load-results/

@@ -16,6 +16,8 @@ const CONFIG: ModerationConfig = {
     enabledActions: ["removelink", "banuser", "unbanuser"],
     excludedModerators: [],
     enableAutoModAlerts: false,
+    securityAlerts: false,
+    banHistoryDays: 0,
     flagUnknownModerators: true,
 };
 

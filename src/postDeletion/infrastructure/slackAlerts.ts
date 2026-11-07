@@ -11,8 +11,6 @@ const MS_PER_SECOND = 1000;
 function deletedPostMessage({ post, subredditName, deletedAt, reason }: DeletedPostAlert): SlackMessage {
     return {
         text: `🗑️ User Deleted High-Score Post: ${String(post.score)} upvotes`,
-        username: "Mod Action Notifications",
-        icon_emoji: ":wastebasket:",
         attachments: [
             {
                 color: "#cc0000",

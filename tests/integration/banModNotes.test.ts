@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp, NOW } from "../fixtures/app.js";
 import { bannedUser } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
-import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
+import { lines, onlyMessage } from "../fixtures/messages.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -30,13 +30,20 @@ describe("a ban's mod note", (): void => {
 
         await app.fire("ModAction", bannedUser());
 
-        expect(lastLine(onlyMessage(app.slack.messages))).toBe("• *Details:* 7 days");
+        expect(lines(onlyMessage(app.slack.messages)).slice(-2)).toStrictEqual([
+            "• *Details:* 7 days",
+            "• *Last 30 days:* nothing in mod notes",
+        ]);
     });
 
     // A mod log entry can give a ban's note without its length; the note is never taken for the length.
     it.each([
-        ["on", true, ["• *Ban Duration:* Unknown Duration", "• *Mod Note:* Spamming"]],
-        ["off", false, ["• *Ban Duration:* Unknown Duration"]],
+        [
+            "on",
+            true,
+            ["• *Ban Duration:* Unknown Duration", "• *Mod Note:* Spamming", "• *Last 30 days:* nothing in mod notes"],
+        ],
+        ["off", false, ["• *Ban Duration:* Unknown Duration", "• *Last 30 days:* nothing in mod notes"]],
     ])(
         "shows a note the log gives without a length only as the note, with mod notes %s",
         TEST_OPTIONS,
@@ -59,4 +66,48 @@ describe("a ban's mod note", (): void => {
             expect(lines(onlyMessage(app.slack.messages)).slice(5)).toStrictEqual(lastLines);
         },
     );
+
+    // Records hold no mod note: the version of an alert kept to replace it in Slack, once its content is deleted, too.
+    it("shows the note in Slack, but keeps it in no record of the alert", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        app.context.reddit.modLog = [
+            {
+                id: "ModAction_1",
+                moderatorName: "ModA",
+                createdAt: NOW,
+                details: "7 days",
+                description: "Spamming",
+                target: { author: "Troll" },
+            },
+        ];
+
+        await app.fire(
+            "ModAction",
+            bannedUser({
+                targetComment: {
+                    id: "t1_c",
+                    postId: "t3_abc",
+                    body: "what they wrote",
+                    permalink: "/r/testsub/comments/abc/hello_world/c/",
+                    author: "Troll",
+                },
+            }),
+        );
+
+        expect(lines(onlyMessage(app.slack.messages))).toContain("• *Mod Note:* Spamming");
+
+        const remembered = JSON.stringify(
+            await Promise.all(
+                app.context.redis
+                    .keys()
+                    .filter((key: string): boolean => key.startsWith("slack_outbox_sent_alert:"))
+                    .map(async (key: string): Promise<string | undefined> => await app.context.redis.get(key)),
+            ),
+        );
+
+        expect(remembered).not.toContain("Spamming");
+        expect(remembered).toContain("User Banned");
+    });
 });

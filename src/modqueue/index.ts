@@ -1,9 +1,11 @@
 /**
- * Modqueue monitoring: a scheduler job that alerts moderators when the modqueue grows too long, when content waits
- * unreviewed too long, when reported content is too old, and when the monitor itself keeps failing.
+ * Modqueue monitoring: a scheduler job that alerts moderators when the modqueue, the spam queue or the edited queue
+ * grows too long, when content waits unreviewed too long, when reported content is too old, and when the monitor
+ * itself keeps failing.
  *
- * Owns the Redis keys `mod_actions:throttle:{modqueue_size|modqueue_unmoderated|modqueue_reported}` (1-hour TTL)
- * and `scheduler_failure_count` (1-hour TTL), and the scheduler job MONITOR_JOB_NAME; setup deletes the earlier
+ * Owns the Redis keys
+ * `mod_actions:throttle:{modqueue_size|modqueue_spam|modqueue_edited|modqueue_unmoderated|modqueue_reported}` and
+ * `scheduler_failure_count` (1-hour TTL), and the scheduler job MONITOR_JOB_NAME; setup deletes the earlier
  * `modqueue_monitor_job_id`.
  */
 export { isMonitoringEnabled, type MonitorThresholds } from "./domain/monitoring.js";

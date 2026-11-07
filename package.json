@@ -11,7 +11,9 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "playtest": "devvit playtest",
-    "upload": "devvit upload"
+    "upload": "devvit upload",
+    "load:redis": "docker run --rm -d --name mod-action-notifications-redis -p 6390:6379 redis:7.4-alpine",
+    "load": "vitest run --config vitest.load.config.ts"
   },
   "dependencies": {
     "@devvit/public-api": "^0.15.2",
@@ -32,6 +34,7 @@
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-regexp": "^3.3.3",
     "prettier": "3.9.10",
+    "redis": "^6.3.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
     "vitest": "^5.1.0"

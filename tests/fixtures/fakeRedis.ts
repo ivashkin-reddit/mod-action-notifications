@@ -2,7 +2,7 @@ import { vi } from "vitest";
 import type { Mock } from "vitest";
 import { hashCommands } from "./fakeRedisHashes.js";
 import type { HashCommands } from "./fakeRedisHashes.js";
-import { createKeyspace, MS_PER_SECOND, scoresAt, textAt } from "./fakeRedisKeyspace.js";
+import { createKeyspace, MS_PER_SECOND, scoresAt, textAt, withinRequestLimit } from "./fakeRedisKeyspace.js";
 import type { Keyspace } from "./fakeRedisKeyspace.js";
 import { ranked, sortedSetCommands } from "./fakeRedisSortedSets.js";
 import type { SortedSetCommands, ZMember } from "./fakeRedisSortedSets.js";
@@ -11,14 +11,16 @@ export type { ZMember };
 
 /**
  * A stand-in for Devvit's Redis client: the commands the app uses, with Redis's behaviour for expiry, NX sets,
- * sorted sets and hashes. Every command is a vi.fn, so a test can make one fail (`mockRejectedValueOnce`) or count
- * its calls.
+ * sorted sets and hashes, and Devvit's limit on a request's size. Every command is a vi.fn, so a test can make one
+ * fail (`mockRejectedValueOnce`) or count its calls.
  */
 
 type SetOptions = Readonly<{ nx?: boolean; expiration?: Date }>;
 
 interface StringCommands {
     readonly get: Mock<(key: string) => Promise<string | undefined>>;
+    /** The string at each key, null where there is none, as Devvit answers. */
+    readonly mGet: Mock<(keys: readonly string[]) => Promise<(string | null)[]>>;
     readonly set: Mock<(key: string, value: string, options?: SetOptions) => Promise<string>>;
     readonly del: Mock<(...keys: readonly string[]) => Promise<void>>;
     readonly incrBy: Mock<(key: string, increment: number) => Promise<number>>;
@@ -34,13 +36,20 @@ export interface FakeRedis extends StringCommands, SortedSetCommands, HashComman
     readonly ttlSeconds: (key: string) => number | undefined;
     /** Writes a value directly, as an earlier app version might have left it. */
     readonly seed: (key: string, value: string) => void;
+    /** What `key` holds, whatever its type; undefined when it does not exist. */
+    readonly dump: (key: string) => unknown;
 }
 
 function stringCommands(keyspace: Keyspace): StringCommands {
     const { live, put, drop } = keyspace;
     return {
         get: vi.fn(async (key: string): Promise<string | undefined> => await Promise.resolve(textAt(keyspace, key))),
+        mGet: vi.fn(
+            async (keys: readonly string[]): Promise<(string | null)[]> =>
+                await Promise.resolve(keys.map((key: string): string | null => textAt(keyspace, key) ?? null)),
+        ),
         set: vi.fn(async (key: string, value: string, options?: SetOptions): Promise<string> => {
+            withinRequestLimit("set", [key, value]);
             // Like Redis, an NX set leaves an existing key alone and answers nil, which Devvit returns as "".
             if (options?.nx === true && live(key) !== undefined) {
                 return await Promise.resolve("");
@@ -86,5 +95,6 @@ export function createFakeRedis(): FakeRedis {
         seed: (key: string, value: string): void => {
             keyspace.put(key, { value: { kind: "string", text: value }, expiresAt: undefined });
         },
+        dump: (key: string): unknown => keyspace.live(key)?.value,
     };
 }

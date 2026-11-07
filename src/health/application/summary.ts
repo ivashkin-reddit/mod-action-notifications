@@ -11,13 +11,14 @@ export interface SummaryPorts {
 
 /**
  * Sends the summary of the UTC day `day`, once however often it is asked to: a job delivered twice, or two summary
- * jobs left by overlapping setups, send it once. Rejects when Redis fails.
+ * jobs left by overlapping setups, send it once. Read before it is claimed, so a run that cannot read it leaves it
+ * to the next. Rejects when Redis fails.
  */
 export async function sendDailySummary(ports: SummaryPorts, day: string): Promise<void> {
+    const summary = dailySummary(day, await ports.events.counts(day), await ports.conditions.inForce());
     if (!(await ports.events.claimSummary(day, SUMMARY_CLAIM_SECONDS))) {
         return;
     }
-    const summary = dailySummary(day, await ports.events.counts(day), await ports.conditions.inForce());
     await ports.send(summary);
     console.info(`[health] Sent the daily summary for ${day}`);
 }

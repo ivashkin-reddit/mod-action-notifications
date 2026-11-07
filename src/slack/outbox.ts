@@ -6,6 +6,7 @@ import type { Quoting, SlackMessage, SlackSender } from "./message.js";
 import { MAX_AGE_SECONDS, oldest, remove } from "./queue.js";
 import type { Queued } from "./queue.js";
 import { oldestRedaction, queueRedactions, redactNext } from "./redactions.js";
+import { endsRefusal } from "./refusals.js";
 import {
     continuationStarted,
     CONTINUE_SOON_MS,
@@ -17,6 +18,7 @@ import {
     SEND_INTERVAL_MS,
 } from "./schedule.js";
 import { rememberSent, takeSent } from "./sent.js";
+import type { SentAlert } from "./sent.js";
 import { createDirectSender, postMessage, wait } from "./webApi.js";
 import type { Delivery, Posted } from "./webApi.js";
 
@@ -98,12 +100,12 @@ async function rememberQuoting(
 
 /** Posts a message within a drain, reporting what Slack's answer says about Slack. */
 async function post(drain: Drain, message: SlackMessage): Promise<Delivery<Posted>> {
-    const { health, token } = drain.outbox;
+    const { health, redis, api } = drain.outbox;
     const delivery = await callWithRetries(
         drain,
-        async (): Promise<Delivery<Posted>> => await postMessage(token, message),
+        async (): Promise<Delivery<Posted>> => await postMessage(api, message),
     );
-    await reportDelivery(health, delivery);
+    await reportDelivery(health, delivery, await endsRefusal(redis, delivery, message.channel ?? ""));
     return delivery;
 }
 
@@ -175,7 +177,10 @@ async function drainUnderLease(outbox: OutboxDependencies): Promise<DrainEnd | u
     }
     try {
         if (await anyWaiting(outbox)) {
-            await scheduleRecovery(outbox);
+            // The recovery only covers this drain dying: one the scheduler refuses must not stop the delivery.
+            await scheduleRecovery(outbox).catch((error: unknown): void => {
+                console.warn("[outbox] Could not schedule a recovery drain, so delivering without one:", error);
+            });
         }
         const end = await drainQueue({ outbox, deadline: Date.now() + DRAIN_BUDGET_MS }, await whenLastSent(outbox));
         await removeDeletedQuotes(outbox.redis);
@@ -232,7 +237,7 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
                 // The queue only paces delivery: without it, the alert still goes, straight to Slack, which logs a
                 // failure itself. Sent so, it is not remembered, and keeps its quotes if its content is deleted.
                 console.warn("[outbox] Could not queue an alert, so sent it straight to Slack:", error);
-                await createDirectSender(outbox.token)(message);
+                await createDirectSender(outbox.api)(message);
                 return;
             }
             await deliverQueued(outbox).catch((error: unknown): void => {
@@ -249,14 +254,15 @@ export function createSlackOutbox(outbox: OutboxDependencies): SlackOutbox {
 
 /** Queues a redaction of each alert in Slack that quotes the content, and has a drain make them. */
 async function redactSent(queue: QueueDependencies, contentId: string): Promise<void> {
-    const sent = await takeSent(queue.redis, contentId);
-    if (sent.length === 0) {
-        return;
+    // Each page is queued before it is forgotten: a deletion that fails between the two is handled again, not lost.
+    const found = await takeSent(queue.redis, contentId, async (alerts: readonly SentAlert[]): Promise<void> => {
+        if ((await queueRedactions(queue.redis, alerts)) > 0) {
+            await queue.health.raise("redactions-failing", "too many waiting");
+        }
+    });
+    if (found) {
+        await scheduleDrain(queue, CONTINUE_SOON_MS);
     }
-    if ((await queueRedactions(queue.redis, sent)) > 0) {
-        await queue.health.raise("redactions-failing", "too many waiting");
-    }
-    await scheduleDrain(queue, CONTINUE_SOON_MS);
 }
 
 /**

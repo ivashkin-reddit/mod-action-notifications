@@ -1,8 +1,17 @@
 import type { Context, Form, ParagraphField, User } from "@devvit/public-api";
-import { configOf, modActionPresentation, monitorThresholds, slackSetup } from "./composition.js";
-import type { AppContext, SlackSetup } from "./composition.js";
+import {
+    actionNameOf,
+    configOf,
+    modActionPresentation,
+    monitorWanted,
+    settingsOf,
+    slackApiOf,
+    slackSetup,
+    withConnection,
+} from "./composition.js";
+import type { AppContext, PlatformContext } from "./composition.js";
 import { createRedisConditionStore, createRedisEventStore, dayOf, statusLines } from "./health/index.js";
-import type { MonitorState, StatusLine } from "./health/index.js";
+import type { MonitorState, SlackStatus, StatusLine } from "./health/index.js";
 import {
     createSlackSimulationAlerts,
     simulateModAction,
@@ -10,10 +19,14 @@ import {
     slackChannelFromForm,
 } from "./moderation/index.js";
 import type { SimulateFormValues } from "./moderation/index.js";
-import { createDevvitMonitorScheduler, isMonitoringEnabled, monitorJobStatus } from "./modqueue/index.js";
+import { createDevvitMonitorScheduler, monitorJobStatus } from "./modqueue/index.js";
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
-import { createDirectSender, queueState, sendTestMessage } from "./slack/delivery.js";
+import type { AppConfig } from "./settings/index.js";
+import { createDirectSender, queueState, readConnection } from "./slack/delivery.js";
+import type { SlackConnection } from "./slack/delivery.js";
+import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
+import type { ReportLine, TeamReport } from "./statistics/index.js";
 
 /**
  * The composition root's menu actions: what each menu item and form does for the moderator who invoked it, and the
@@ -31,6 +44,11 @@ export type InvokerContext = Readonly<{
 
 /** The Devvit APIs a menu item or form handler calls. */
 export type MenuContext = AppContext &
+    InvokerContext &
+    Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
+
+/** What Devvit gives a menu item or form handler: what MenuContext is made from, for each invocation. */
+export type PlatformMenuContext = PlatformContext &
     InvokerContext &
     Readonly<{ ui: Readonly<Pick<Context["ui"], "showForm" | "showToast">> }>;
 
@@ -98,15 +116,20 @@ function readFailed(error: unknown): undefined {
  * statusForm, which Devvit requires to be plain JSON.
  */
 export async function botStatus(context: MenuContext): Promise<{ lines: { label: string; value: string }[] }> {
-    const config = await configOf(context);
+    const config = await settingsOf(context);
     const job = await monitorJobStatus(createDevvitMonitorScheduler(context.scheduler));
     const events = createRedisEventStore(context.redis);
     const now = Date.now();
     const lines = statusLines({
         now,
         version: context.appVersion,
-        slack: slackSetup(config),
-        monitor: monitorState(isMonitoringEnabled(monitorThresholds(config)), job),
+        slack: await readConnection(context.redis)
+            .then((connection: SlackConnection | undefined): SlackStatus => {
+                const installation = withConnection(config, connection);
+                return { setup: slackSetup(installation), workspace: installation.slackWorkspace };
+            })
+            .catch(readFailed),
+        monitor: monitorState(monitorWanted(config), job),
         problems: await createRedisConditionStore(context.redis).inForce().catch(readFailed),
         queue: await queueState(context.redis).catch(readFailed),
         lastSeen: await events.lastSeen().catch(readFailed),
@@ -126,78 +149,118 @@ function isStatusLine(value: unknown): value is StatusLine {
     );
 }
 
-/** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
-export function statusForm(data: Readonly<Record<string, unknown>>): Form {
-    const lines = Array.isArray(data["lines"]) ? data["lines"].filter(isStatusLine) : [];
-    return {
-        title: "Bot Status",
-        fields: lines.map(({ label, value }: StatusLine, index: number): ParagraphField => ({
-            name: `status${String(index)}`,
-            label,
-            type: "paragraph",
-            defaultValue: value,
-            disabled: true,
-        })),
-        acceptLabel: "Close",
+/** Show Team Stats covers the last 7 days, today included. */
+const WEEK_DAYS = 7;
+
+/** A form titled `title` of read-only lines, from the data a menu item gave ui.showForm: `{ lines }`. */
+export function readOnlyForm(title: string): (data: Readonly<Record<string, unknown>>) => Form {
+    return (data: Readonly<Record<string, unknown>>): Form => {
+        const lines = Array.isArray(data["lines"]) ? data["lines"].filter(isStatusLine) : [];
+        return {
+            title,
+            fields: lines.map(({ label, value }: StatusLine, index: number): ParagraphField => ({
+                name: `status${String(index)}`,
+                label,
+                type: "paragraph",
+                defaultValue: value,
+                disabled: true,
+            })),
+            acceptLabel: "Close",
+        };
     };
 }
 
-/** How sending a test message went, or what kept it from being sent. */
-type ConnectionTest = "delivered" | Exclude<SlackSetup, "set-up"> | "failed";
+/** The bot's status as a form of read-only lines, from the data botStatus gave ui.showForm. */
+export const statusForm = readOnlyForm("Bot Status");
 
-const CONNECTION_TEST_TOASTS: Readonly<
-    Record<ConnectionTest, Readonly<{ text: string; appearance: "neutral" | "success" }>>
-> = {
-    "delivered": { text: "🧪 Test alert sent! Check your Slack channel and bot logs.", appearance: "success" },
-    "token-missing": { text: "⚠️ No Slack bot token is set. The app's developer sets it.", appearance: "neutral" },
-    "channel-missing": {
-        text: "⚠️ No Notification Channel is set. Set it in the app's settings.",
-        appearance: "neutral",
-    },
-    "failed": {
-        text: "❌ Slack did not accept the test alert. Check the Notification Channel, and that the Slack app is in it.",
-        appearance: "neutral",
-    },
-};
-
-async function testSlackConnection(context: AppContext): Promise<ConnectionTest> {
-    const config = await configOf(context);
-    const setup = slackSetup(config);
-    if (setup !== "set-up") {
-        return setup;
+/** The team's reports for the last 7 days and for today; undefined, once the moderator is told, when unreadable. */
+async function teamReports(
+    context: MenuContext,
+    now: number,
+): Promise<Readonly<{ week: TeamReport; today: TeamReport }> | undefined> {
+    const store = createRedisStatisticsStore(context.redis);
+    try {
+        return {
+            week: await reportFor(store, dayRange(now, WEEK_DAYS, 0), now),
+            today: await reportFor(store, dayRange(now, 1, 0), now),
+        };
+    } catch (error) {
+        console.warn("[menu] Could not read the team's statistics:", error);
+        context.ui.showToast({
+            text: "❌ Could not read the team's statistics. Try again in a moment.",
+            appearance: "neutral",
+        });
+        return undefined;
     }
-    return (await sendTestMessage(config.slackBotToken, config.notificationChannel)) ? "delivered" : "failed";
 }
 
-/** Sends a test message to Slack, and says how it went. */
-export async function sendTestAlert(context: MenuContext): Promise<void> {
-    context.ui.showToast(CONNECTION_TEST_TOASTS[await testSlackConnection(context)]);
+/**
+ * The team's statistics for the last 7 days, today included, as lines for a read-only form, with today's actions
+ * last. They name no moderator. Undefined, once the moderator is told, when they cannot be read.
+ */
+export async function teamStats(
+    context: MenuContext,
+): Promise<{ lines: { label: string; value: string }[] } | undefined> {
+    const reports = await teamReports(context, Date.now());
+    if (reports === undefined) {
+        return undefined;
+    }
+    const { week, today } = reports;
+    const lines: readonly ReportLine[] = [
+        ...reportLines(week, actionNameOf),
+        { label: "Today", value: countOf(today.actions.total, "action") },
+    ];
+    return { lines: lines.map(({ label, value }: ReportLine): { label: string; value: string } => ({ label, value })) };
 }
 
-/** Rejects when Slack is not set up or did not accept the alert. */
-async function sendSimulatedModAction(values: SimulateFormValues, context: AppContext): Promise<void> {
+/**
+ * The channel the form names, without its #: '' for none, so the alert goes where a real one would. Only the
+ * configured channels may be named: the bot token reaches every channel the Slack app is in, not only the alert
+ * channels. Undefined for any other channel.
+ */
+function simulationChannel(values: SimulateFormValues, config: AppConfig): string | undefined {
+    const channel = slackChannelFromForm(values).replace(/^#+/u, "");
+    return channel === "" || [config.notificationChannel, config.alertChannel].includes(channel) ? channel : undefined;
+}
+
+/** Sends the simulation; "channel-refused" when the form names a channel not configured. Rejects when Slack is not set up or did not accept the alert. */
+async function sendSimulatedModAction(
+    values: SimulateFormValues,
+    context: AppContext,
+): Promise<"sent" | "channel-refused"> {
     const config = await configOf(context);
     const setup = slackSetup(config);
     if (setup !== "set-up") {
         throw new Error(`Slack is not set up: ${setup}`);
     }
-    const channel = slackChannelFromForm(values);
+    const channel = simulationChannel(values, config);
+    if (channel === undefined) {
+        return "channel-refused";
+    }
     const presentation = modActionPresentation(config);
     await simulateModAction(
         simulationRequestFromForm(values),
         context.subredditName,
         // A moderator waits on the result, so the simulation goes straight to Slack, to the channel the form names.
-        createSlackSimulationAlerts(createDirectSender(config.slackBotToken), {
+        createSlackSimulationAlerts(createDirectSender(slackApiOf(context, config)), {
             ...presentation,
             notificationChannel: channel === "" ? presentation.notificationChannel : channel,
         }),
     );
+    return "sent";
 }
 
 /** Sends the simulated action's alert straight to Slack, and says how it went. */
 export async function sendSimulation(values: SimulateFormValues, context: MenuContext): Promise<void> {
     try {
-        await sendSimulatedModAction(values, context);
+        if ((await sendSimulatedModAction(values, context)) === "channel-refused") {
+            console.warn("[menu] Refused a simulated mod action to a channel that is not configured");
+            context.ui.showToast({
+                text: "❌ The channel override must be your Notification Channel or Alert Channel.",
+                appearance: "neutral",
+            });
+            return;
+        }
         context.ui.showToast({ text: "✅ Simulation delivered to Slack!", appearance: "success" });
     } catch (error) {
         console.warn("[menu] Could not send the simulated mod action:", error);

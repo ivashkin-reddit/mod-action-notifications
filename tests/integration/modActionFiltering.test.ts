@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import { removedPost } from "../fixtures/events.js";
-import { BOT_TOKEN, CHANNEL, createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
+import { CHANNEL, createFakeContext, defaultSettings } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
 import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
@@ -17,13 +17,13 @@ describe("which mod actions are sent", (): void => {
     it("sends nothing when no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: undefined });
+        const app = await loadApp(devvit, { connectedToken: undefined });
 
         await app.fire("ModAction", removedPost());
 
         expect(app.slack.requests).toStrictEqual([]);
         expect(console.warn).toHaveBeenCalledWith(
-            "[health] No Slack bot token is set, so no alerts are sent. The app's developer sets it, as slack-app/README.md in the app's repository says.",
+            "[health] Slack isn't connected, so no alerts are sent. A moderator connects it with Connect Slack, as the app's README says.",
         );
     });
 
@@ -38,16 +38,6 @@ describe("which mod actions are sent", (): void => {
         expect(console.warn).toHaveBeenCalledWith(
             "[health] No Notification Channel is set, so no alerts are sent. Set it in the app's settings to the Slack channel's ID.",
         );
-    });
-
-    it("trims spaces around the bot token", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { slackBotToken: `  ${BOT_TOKEN}  ` });
-
-        await app.fire("ModAction", removedPost());
-
-        expect(app.slack.requests[0]?.headers).toMatchObject({ authorization: `Bearer ${BOT_TOKEN}` });
     });
 
     it("sends nothing for an action type that is not enabled", TEST_OPTIONS, async (): Promise<void> => {
@@ -95,7 +85,7 @@ describe("which mod actions are sent", (): void => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
-        vi.mocked(app.context.settings.get).mockRejectedValue(new Error("settings unavailable"));
+        vi.mocked(app.context.settings.getAll).mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost());
 
@@ -111,7 +101,7 @@ describe("which mod actions are sent", (): void => {
 
         const app = await loadApp(devvit);
         await app.fire("ModAction", removedPost());
-        vi.mocked(app.context.settings.get).mockRejectedValue(new Error("settings unavailable"));
+        vi.mocked(app.context.settings.getAll).mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost());
 
@@ -131,7 +121,7 @@ describe("which mod actions are sent", (): void => {
             { ...defaultSettings(), notificationChannel: "C0999OTHER" },
             "t5_other",
         );
-        otherInstallation.settings.get.mockRejectedValue(new Error("settings unavailable"));
+        otherInstallation.settings.getAll.mockRejectedValue(new Error("settings unavailable"));
 
         await app.fire("ModAction", removedPost(), otherInstallation);
 
@@ -162,7 +152,6 @@ describe("an action by someone not on the mod list", (): void => {
 
         expect(message).toMatchObject({
             text: "🚨 SECURITY ALERT: 🗑️ Post Removed by unknown moderator",
-            icon_emoji: ":warning:",
             channel: "#security",
             attachments: [{ color: "#ff0000" }],
         });
@@ -170,12 +159,11 @@ describe("an action by someone not on the mod list", (): void => {
             "🚨 *Security Alert*",
             "• *Status:* Unknown moderator (alert)",
         ]);
+        // The alert names the account for the moderators; the developer's log does not.
+        expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("Intruder");
         expect(console.warn).toHaveBeenCalledWith(
             "[modaction] An account not on the mod list took an action, alerted as a security alert",
-            {
-                moderator: "Intruder",
-                action: "removelink",
-            },
+            { action: "removelink" },
         );
     });
 

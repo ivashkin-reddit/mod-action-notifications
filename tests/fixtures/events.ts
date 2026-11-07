@@ -6,7 +6,7 @@ import {
 } from "@devvit/protos/types/devvit/events/v1alpha/events.js";
 import { ModAction } from "@devvit/protos/types/devvit/reddit/v2alpha/modaction.js";
 import { SUBREDDIT } from "./fakeContext.js";
-import type { FakePost } from "./fakeContext.js";
+import type { FakePost } from "./fakeReddit.js";
 
 /** DeletionSource is Devvit's EventSource, renamed: the WebWorker lib already has a global EventSource. */
 export { DeletionReason, DeletionSource };

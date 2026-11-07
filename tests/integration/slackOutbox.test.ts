@@ -159,18 +159,6 @@ describe("the Slack outbox", (): void => {
         expect(app.slack.requests).toStrictEqual([]);
     });
 
-    it("waits, without delivering, while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
-        expect.hasAssertions();
-
-        const app = await loadApp(devvit, { slackBotToken: "" });
-        await app.context.redis.zAdd(QUEUE_KEY, queued(NOW.getTime(), "queued"));
-
-        await app.runJob("slackOutbox");
-
-        expect(app.slack.requests).toStrictEqual([]);
-        expect(app.context.redis.keys()).toContain(QUEUE_KEY);
-    });
-
     it("drops, logged, a message queued over a day ago", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 

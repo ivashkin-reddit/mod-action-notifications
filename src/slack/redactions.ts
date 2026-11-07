@@ -3,6 +3,7 @@ import { callWithRetries, waitAfter } from "./drain.js";
 import type { Drain, DrainEnd } from "./drain.js";
 import type { DeliveryHealth } from "./health.js";
 import { isSlackMessage } from "./queue.js";
+import { CONTINUE_SOON_MS } from "./schedule.js";
 import type { SentAlert } from "./sent.js";
 import { deleteMessage, failureDetail, updateMessage } from "./webApi.js";
 import type { Delivery } from "./webApi.js";
@@ -18,6 +19,8 @@ const MAX_AGE_SECONDS = 604_800;
 /** At most this many redactions wait; beyond that the oldest are dropped. */
 const MAX_QUEUED = 5000;
 const MS_PER_SECOND = 1000;
+/** Each request queueing redactions carries at most this much, a fifth of the 5 MB Devvit takes in one request. */
+const REQUEST_BYTES = 1_000_000;
 
 /**
  * Error codes with which Slack refuses to edit a message it would still let the app delete: the workspace's
@@ -34,18 +37,42 @@ export type RedactionRedis = Readonly<
 /** A queued redaction, as stored; `sent` is undefined for a member this app cannot read. */
 export type QueuedRedaction = Readonly<{ member: string; queuedAt: number; sent: SentAlert | undefined }>;
 
-/** Queues a redaction of each alert, and returns how many of the oldest it pushed out of a full queue. */
+type Member = Readonly<{ member: string; score: number }>;
+
+/** A run of members for one request, and how many bytes they carry. */
+type Run = Readonly<{ members: readonly Member[]; bytes: number }>;
+
+/** Adds the member to the last run when it fits in REQUEST_BYTES, else starts a run with it. */
+function addToRuns(runs: readonly Run[], member: Member): readonly Run[] {
+    const bytes = new TextEncoder().encode(member.member).length;
+    const last = runs[runs.length - 1];
+    return last !== undefined && last.bytes + bytes <= REQUEST_BYTES
+        ? [...runs.slice(0, -1), { members: [...last.members, member], bytes: last.bytes + bytes }]
+        : [...runs, { members: [member], bytes }];
+}
+
+/** The members in runs of at most REQUEST_BYTES each, one run to a request; a member larger than that, alone. */
+function inRequests(members: readonly Member[]): (readonly Member[])[] {
+    return members.reduce<readonly Run[]>(addToRuns, []).map(({ members: run }: Run): readonly Member[] => run);
+}
+
+/**
+ * Queues a redaction of each alert, and returns how many of the oldest it pushed out of a full queue. However many
+ * the alerts, each request to Redis carries a run of them that fits.
+ */
 export async function queueRedactions(redis: RedactionRedis, alerts: readonly SentAlert[]): Promise<number> {
     if (alerts.length === 0) {
         return 0;
     }
     const queuedAt = Date.now();
-    await redis.zAdd(
-        REDACTIONS_KEY,
-        ...alerts.map(({ posted, withoutQuotes }: SentAlert): Readonly<{ member: string; score: number }> => ({
-            member: JSON.stringify({ channel: posted.channel, ts: posted.ts, withoutQuotes, queuedAt }),
-            score: queuedAt,
-        })),
+    const members = alerts.map(({ posted, withoutQuotes }: SentAlert): Member => ({
+        member: JSON.stringify({ channel: posted.channel, ts: posted.ts, withoutQuotes, queuedAt }),
+        score: queuedAt,
+    }));
+    await Promise.all(
+        inRequests(members).map(async (run: readonly Member[]): Promise<void> => {
+            await redis.zAdd(REDACTIONS_KEY, ...run);
+        }),
     );
     await redis.expire(REDACTIONS_KEY, MAX_AGE_SECONDS);
     return await redis.zRemRangeByRank(REDACTIONS_KEY, 0, -(MAX_QUEUED + 1));
@@ -93,16 +120,23 @@ async function reportRedaction(health: DeliveryHealth, delivery: Delivery<unknow
     );
 }
 
-/** Edits the alert to its version without quotes, or deletes it where Slack lets the app delete it but not edit it. */
-async function redact(drain: Drain, { posted, withoutQuotes }: SentAlert): Promise<Delivery> {
-    const { token } = drain.outbox;
+/**
+ * Edits the alert to its version without quotes, or deletes it where Slack lets the app delete it but not edit it.
+ * "later" when Slack refused the edit after the drain's time was up: a drain starts no request after it, as its
+ * lease outlasts its time by one request only, so the deletion is left to a later drain.
+ */
+async function redact(drain: Drain, { posted, withoutQuotes }: SentAlert): Promise<Delivery | "later"> {
+    const { api } = drain.outbox;
     const edit = await callWithRetries(
         drain,
-        async (): Promise<Delivery> => await updateMessage(token, posted, withoutQuotes),
+        async (): Promise<Delivery> => await updateMessage(api, posted, withoutQuotes),
     );
-    return edit.outcome === "rejected" && edit.failure.kind === "response" && CANNOT_EDIT.includes(edit.failure.error)
-        ? await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(token, posted))
-        : edit;
+    if (edit.outcome !== "rejected" || edit.failure.kind !== "response" || !CANNOT_EDIT.includes(edit.failure.error)) {
+        return edit;
+    }
+    return Date.now() >= drain.deadline
+        ? "later"
+        : await callWithRetries(drain, async (): Promise<Delivery> => await deleteMessage(api, posted));
 }
 
 /** Why a waiting redaction is dropped unmade: it cannot be read, or it waited a week; undefined to make it. */
@@ -111,6 +145,16 @@ function whyDrop(queued: QueuedRedaction): string | undefined {
         return "unreadable";
     }
     return Date.now() - queued.queuedAt > MAX_AGE_SECONDS * MS_PER_SECOND ? "waited a week" : undefined;
+}
+
+/** Makes a redaction and reports how it went; a DrainEnd when it must wait for a later drain. */
+async function make(drain: Drain, sent: SentAlert): Promise<DrainEnd | undefined> {
+    const delivery = await redact(drain, sent);
+    if (delivery === "later") {
+        return { until: "later", afterMs: CONTINUE_SOON_MS };
+    }
+    await reportRedaction(drain.outbox.health, delivery);
+    return delivery.outcome === "retry" ? waitAfter(delivery.retryAfterMs) : undefined;
 }
 
 /**
@@ -123,10 +167,9 @@ export async function redactNext(drain: Drain, queued: QueuedRedaction): Promise
     if (why !== undefined) {
         await health.raise("redactions-failing", why);
     } else if (queued.sent !== undefined) {
-        const delivery = await redact(drain, queued.sent);
-        await reportRedaction(health, delivery);
-        if (delivery.outcome === "retry") {
-            return waitAfter(delivery.retryAfterMs);
+        const end = await make(drain, queued.sent);
+        if (end !== undefined) {
+            return end;
         }
     }
     await redis.zRem(REDACTIONS_KEY, [queued.member]);

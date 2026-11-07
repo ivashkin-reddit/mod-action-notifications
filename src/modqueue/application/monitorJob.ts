@@ -1,5 +1,4 @@
-import { isMonitoringEnabled, MONITOR_CRON } from "../domain/monitoring.js";
-import type { MonitorThresholds } from "../domain/monitoring.js";
+import { MONITOR_CRON } from "../domain/monitoring.js";
 import type { MonitorScheduler, MonitorStore, ScheduledMonitorJob } from "./ports.js";
 
 export interface MonitorJobPorts {
@@ -72,12 +71,11 @@ async function scheduleOne(scheduler: MonitorScheduler): Promise<string> {
 }
 
 /**
- * Leaves the scheduler running exactly what the thresholds call for: one monitor job on MONITOR_CRON while any of
- * its alerts is on, none while all are off. It reads the scheduler, so it also cancels jobs left by an interrupted
- * or overlapping setup or scheduled on an older cron. Rejects, after logging, when scheduling fails.
+ * Leaves the scheduler running exactly what is called for: one monitor job on MONITOR_CRON while `enabled`, none
+ * otherwise. It reads the scheduler, so it also cancels jobs left by an interrupted or overlapping setup or scheduled
+ * on an older cron. Rejects, after logging, when scheduling fails.
  */
-export async function setupMonitoring(thresholds: MonitorThresholds, ports: MonitorJobPorts): Promise<MonitoringSetup> {
-    const enabled = isMonitoringEnabled(thresholds);
+export async function setupMonitoring(enabled: boolean, ports: MonitorJobPorts): Promise<MonitoringSetup> {
     const kept = await keepOne(ports.scheduler, enabled);
     // Cleanup only: a job ID left behind is never read, and the next setup deletes it.
     await ports.store.forgetLegacyJobId().catch((error: unknown): void => {

@@ -21,13 +21,20 @@ export interface DeliveryHealth {
 }
 
 /**
- * Reports what a drain's delivery of an alert says about Slack: an alert taken ends any problem, one refused means
- * Slack is refusing alerts, and one left for a later drain means Slack is not taking them for now.
+ * Reports what a drain's delivery of an alert says about Slack: an alert taken ends Slack not taking alerts, and,
+ * when `endsRefusal`, Slack refusing them; one refused means Slack is refusing alerts, and one left for a later
+ * drain means Slack is not taking them for now.
  */
-export async function reportDelivery(health: DeliveryHealth, delivery: Delivery<unknown>): Promise<void> {
+export async function reportDelivery(
+    health: DeliveryHealth,
+    delivery: Delivery<unknown>,
+    endsRefusal: boolean,
+): Promise<void> {
     if (delivery.outcome === "delivered") {
         await health.note("alert-delivered", 1);
-        await health.clear("slack-refusing");
+        if (endsRefusal) {
+            await health.clear("slack-refusing");
+        }
         await health.clear("slack-unreachable");
         return;
     }

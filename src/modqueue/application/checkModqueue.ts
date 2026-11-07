@@ -9,7 +9,7 @@ import {
     OLDEST_ITEMS_LISTED,
 } from "../domain/monitoring.js";
 import type { MonitorThresholds, QueueItem } from "../domain/monitoring.js";
-import type { ModerationQueues, ModqueueAlerts, MonitorHealth, MonitorStore } from "./ports.js";
+import type { ModerationQueues, ModqueueAlerts, MonitorHealth, MonitorStore, WatchedQueue } from "./ports.js";
 
 export interface CheckModqueuePorts {
     readonly openQueues: () => Promise<ModerationQueues>;
@@ -18,20 +18,33 @@ export interface CheckModqueuePorts {
     readonly health: MonitorHealth;
 }
 
+/** A queue whose size has a threshold: the listing it reads, and the alert it claims. */
+type SizeCheck = Readonly<{
+    queue: WatchedQueue;
+    alert: "queue-size" | "spam-size" | "edited-size";
+    read: () => Promise<readonly QueueItem[]>;
+    threshold: number;
+}>;
+
+function sizeChecks(queues: ModerationQueues, thresholds: MonitorThresholds): readonly SizeCheck[] {
+    return [
+        { queue: "modqueue", alert: "queue-size", read: queues.modqueue, threshold: thresholds.queueSizeThreshold },
+        { queue: "spam", alert: "spam-size", read: queues.spam, threshold: thresholds.spamQueueThreshold },
+        { queue: "edited", alert: "edited-size", read: queues.edited, threshold: thresholds.editedQueueThreshold },
+    ];
+}
+
+/** Reads the queue while its alert is on, and alerts when it is too long: at most once an hour for each queue. */
 async function alertIfQueueTooLong(
-    items: readonly QueueItem[],
-    thresholds: MonitorThresholds,
+    { queue, alert, read, threshold }: SizeCheck,
     ports: CheckModqueuePorts,
 ): Promise<void> {
-    if (
-        isQueueTooLong(items.length, thresholds.queueSizeThreshold) &&
-        (await ports.store.claimAlert("queue-size", ALERT_PERIOD_SECONDS))
-    ) {
-        await ports.alerts.queueTooLong({
-            size: items.length,
-            ...countByKind(items),
-            threshold: thresholds.queueSizeThreshold,
-        });
+    if (!isAlertOn(threshold)) {
+        return;
+    }
+    const items = await read();
+    if (isQueueTooLong(items.length, threshold) && (await ports.store.claimAlert(alert, ALERT_PERIOD_SECONDS))) {
+        await ports.alerts.queueTooLong({ queue, size: items.length, ...countByKind(items), threshold });
     }
 }
 
@@ -76,9 +89,11 @@ async function checkQueues(
     thresholds: MonitorThresholds,
     ports: CheckModqueuePorts,
 ): Promise<void> {
-    if (isAlertOn(thresholds.queueSizeThreshold)) {
-        await alertIfQueueTooLong(await queues.modqueue(), thresholds, ports);
-    }
+    await Promise.all(
+        sizeChecks(queues, thresholds).map(async (check: SizeCheck): Promise<void> => {
+            await alertIfQueueTooLong(check, ports);
+        }),
+    );
     if (isAlertOn(thresholds.unmoderatedAgeHours)) {
         const items = await queues.unmoderated();
         await alertIfOld({ alert: "unmoderated", items, ageHours: thresholds.unmoderatedAgeHours }, ports);
@@ -97,8 +112,8 @@ async function succeeded(ports: CheckModqueuePorts): Promise<void> {
 }
 
 /**
- * One run of the modqueue monitor: alerts when the modqueue is too long, when content has waited unreviewed too
- * long, and when reported content is too old, each at most once an hour. A run that fails, however it fails, is
+ * One run of the modqueue monitor: alerts when the modqueue, the spam queue or the edited queue is too long, when
+ * content has waited unreviewed too long, and when reported content is too old, each at most once an hour. A run that fails, however it fails, is
  * reported as the monitor failing until one succeeds, and is counted: the third failure in a row alerts
  * moderators. A failed run resolves, as Devvit keeps nothing an app can read about a scheduler run that rejects.
  */

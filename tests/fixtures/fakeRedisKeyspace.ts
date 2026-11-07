@@ -85,6 +85,23 @@ export function fieldsAt({ live }: Keyspace, key: string): Fields {
     return value.fields;
 }
 
+/**
+ * The most one Redis request may carry: Devvit documents 5 MB ("Platform limits",
+ * developers.reddit.com/docs/capabilities/server/redis). Read as 5,000,000 bytes, the stricter reading.
+ */
+const MAX_REQUEST_BYTES = 5_000_000;
+
+/**
+ * Rejects a request carrying more than Devvit takes, as Devvit does. Devvit does not document its error's wording:
+ * this one says what was refused.
+ */
+export function withinRequestLimit(command: string, args: readonly unknown[]): void {
+    const bytes = new TextEncoder().encode(JSON.stringify(args)).length;
+    if (bytes > MAX_REQUEST_BYTES) {
+        throw new Error(`${command}: a request of ${String(bytes)} bytes is over Redis's 5 MB limit`);
+    }
+}
+
 /** Stores `value` at `key`, keeping its expiry; like Redis, an emptied sorted set or hash goes. */
 export function keep(keyspace: Keyspace, key: string, value: Value): void {
     const empty =

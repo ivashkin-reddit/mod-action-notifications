@@ -99,8 +99,6 @@ describe("the daily summary", (): void => {
             expect(app.slack.messages.slice(-1)).toStrictEqual([
                 {
                     text: "📊 Daily summary for 2026-11-04 (UTC)",
-                    username: "Mod Action Notifications",
-                    icon_emoji: ":bar_chart:",
                     channel: "#mod-log",
                     attachments: [
                         {
@@ -136,6 +134,18 @@ describe("the daily summary", (): void => {
         );
     });
 
+    it("is sent on a later run when a run cannot read the day's counts", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit, { dailySummary: true });
+        app.context.redis.hGetAll.mockRejectedValueOnce(new Error("redis down"));
+
+        await app.runJob("dailySummary");
+        await app.runJob("dailySummary");
+
+        expect(app.slack.requests).toHaveLength(1);
+    });
+
     it("is sent once a day, however often the job runs", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
@@ -151,7 +161,7 @@ describe("the daily summary", (): void => {
     it("sends nothing while no bot token is set", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { dailySummary: true, slackBotToken: undefined });
+        const app = await loadApp(devvit, { dailySummary: true, connectedToken: undefined });
 
         await app.runJob("dailySummary");
 

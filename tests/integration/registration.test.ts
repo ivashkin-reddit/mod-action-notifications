@@ -33,7 +33,6 @@ describe("what the app registers with Devvit", (): void => {
                     }),
                 ),
             ).toStrictEqual([
-                { name: "slackBotToken", type: "string", defaultValue: undefined },
                 {
                     name: "enabledActions",
                     type: "select",
@@ -41,36 +40,43 @@ describe("what the app registers with Devvit", (): void => {
                 },
                 { name: "excludedModerators", type: "string", defaultValue: undefined },
                 { name: "flagUnknownModerators", type: "boolean", defaultValue: true },
+                { name: "securityAlerts", type: "boolean", defaultValue: true },
+                { name: "dormantModeratorDays", type: "number", defaultValue: 90 },
                 { name: "includeModNote", type: "boolean", defaultValue: true },
+                { name: "banHistoryDays", type: "number", defaultValue: 30 },
                 { name: "notificationChannel", type: "string", defaultValue: undefined },
                 { name: "alertChannel", type: "string", defaultValue: undefined },
                 { name: "slackRetentionDays", type: "number", defaultValue: 90 },
                 { name: "modqueueThreshold", type: "number", defaultValue: 50 },
                 { name: "unmoderagedAgeHours", type: "number", defaultValue: 24 },
                 { name: "reportedContentAgeHours", type: "number", defaultValue: 24 },
+                { name: "spamQueueThreshold", type: "number", defaultValue: 0 },
+                { name: "editedQueueThreshold", type: "number", defaultValue: 0 },
+                { name: "modmailWaitHours", type: "number", defaultValue: 24 },
+                { name: "urgentReportReasons", type: "string", defaultValue: undefined },
+                { name: "reportPileUpThreshold", type: "number", defaultValue: 0 },
+                { name: "adminModmailAlerts", type: "boolean", defaultValue: true },
+                { name: "editsAfterApprovalDays", type: "number", defaultValue: 7 },
                 { name: "enableAutoModAlerts", type: "boolean", defaultValue: false },
                 { name: "postDeletionUpvoteThreshold", type: "number", defaultValue: 100 },
                 { name: "dailySummary", type: "boolean", defaultValue: false },
+                { name: "weeklyStatistics", type: "boolean", defaultValue: false },
+                { name: "debugLogging", type: "boolean", defaultValue: false },
             ]);
         },
     );
 
     // Devvit encrypts a secret, and only the developer can set it, from the command line: moderators never see it.
-    it(
-        "registers the Slack bot token as a secret the developer sets for the whole app",
-        TEST_OPTIONS,
-        async (): Promise<void> => {
-            expect.hasAssertions();
+    // Each subreddit connects its own Slack workspace with Connect Slack: the app holds no token of its own.
+    it("registers no secret, and no setting for the app as a whole", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
 
-            const app = await loadApp(devvit);
+        const app = await loadApp(devvit);
 
-            expect(
-                app.registrations.settings
-                    .filter(({ isSecret }): boolean => isSecret === true)
-                    .map(({ name, scope }): { name: string; scope: string | undefined } => ({ name, scope })),
-            ).toStrictEqual([{ name: "slackBotToken", scope: "app" }]);
-        },
-    );
+        expect(
+            app.registrations.settings.filter(({ isSecret, scope }): boolean => isSecret === true || scope === "app"),
+        ).toStrictEqual([]);
+    });
 
     it("offers every mod action type the Slack messages know how to name", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
@@ -111,6 +117,18 @@ describe("what the app registers with Devvit", (): void => {
             "adjust_post_crowd_control_level",
             "enable_post_crowd_control_filter",
             "disable_post_crowd_control_filter",
+            "setpermissions",
+            "wikirevise",
+            "createrule",
+            "editrule",
+            "deleterule",
+            "reorderrules",
+            "edit_post_requirements",
+            "dev_platform_app_installed",
+            "dev_platform_app_uninstalled",
+            "dev_platform_app_enabled",
+            "dev_platform_app_disabled",
+            "dev_platform_app_changed",
         ]);
     });
 
@@ -128,9 +146,16 @@ describe("what the app registers with Devvit", (): void => {
         expect(registered).toStrictEqual([
             "onAppInstall",
             "onAppUpgrade",
+            "onAutomoderatorFilterComment",
+            "onAutomoderatorFilterPost",
             "onCommentDelete",
+            "onCommentReport",
+            "onCommentUpdate",
             "onModAction",
+            "onModMail",
             "onPostDelete",
+            "onPostReport",
+            "onPostUpdate",
         ]);
     });
 
@@ -154,7 +179,7 @@ describe("what the app registers with Devvit", (): void => {
 
     // Scheduler job names are stored with every scheduled job: renaming one orphans the jobs already scheduled.
     it(
-        "registers the modqueue monitor, the Slack outbox and the daily summary as its scheduler jobs",
+        "registers the modqueue monitor, the Slack outbox, the daily summary and the weekly statistics as its scheduler jobs",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -165,11 +190,12 @@ describe("what the app registers with Devvit", (): void => {
                 "modqueueMonitor",
                 "slackOutbox",
                 "dailySummary",
+                "weeklyStatistics",
             ]);
         },
     );
 
-    it("adds four subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
+    it("adds six subreddit menu items, shown to moderators only", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
@@ -187,8 +213,10 @@ describe("what the app registers with Devvit", (): void => {
                 }),
             ),
         ).toStrictEqual([
+            { label: "Connect Slack", location: "subreddit", forUserType: "moderator" },
             { label: "Test Slack Connection", location: "subreddit", forUserType: "moderator" },
             { label: "Show Bot Status", location: "subreddit", forUserType: "moderator" },
+            { label: "Show Team Stats", location: "subreddit", forUserType: "moderator" },
             { label: "Simulate Mod Action", location: "subreddit", forUserType: "moderator" },
             { label: "Setup Modqueue Monitoring", location: "subreddit", forUserType: "moderator" },
         ]);

@@ -30,5 +30,9 @@ export async function openRedditQueues(
             (await subreddit.getUnmoderated({ type: "all" }).all()).map(queueItemOf),
         reported: async (): Promise<readonly QueueItem[]> =>
             (await subreddit.getReports({ type: "all" }).all()).map(queueItemOf),
+        spam: async (): Promise<readonly QueueItem[]> =>
+            (await subreddit.getSpam({ type: "all" }).all()).map(queueItemOf),
+        edited: async (): Promise<readonly QueueItem[]> =>
+            (await subreddit.getEdited({ type: "all" }).all()).map(queueItemOf),
     };
 }

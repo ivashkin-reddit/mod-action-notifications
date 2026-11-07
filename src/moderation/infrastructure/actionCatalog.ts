@@ -64,6 +64,27 @@ const ACTION_STYLES: ReadonlyMap<string, ActionStyle> = new Map([
         "disable_post_crowd_control_filter",
         { label: "Disable Crowd Control Filter", emoji: "🛡️", name: "Crowd Control Disabled", color: "#00cc00" },
     ],
+    [
+        "setpermissions",
+        { label: "Change Moderator Permissions", emoji: "🔑", name: "Moderator Permissions Changed", color: "#ff8800" },
+    ],
+    ["wikirevise", { label: "Edit Wiki Page", emoji: "📝", name: "Wiki Page Edited", color: "#8800ff" }],
+    ["createrule", { label: "Create Rule", emoji: "📜", name: "Rule Created", color: "#0088ff" }],
+    ["editrule", { label: "Edit Rule", emoji: "📜", name: "Rule Edited", color: "#8800ff" }],
+    ["deleterule", { label: "Delete Rule", emoji: "📜", name: "Rule Deleted", color: "#ff4444" }],
+    ["reorderrules", { label: "Reorder Rules", emoji: "📜", name: "Rules Reordered", color: "#888888" }],
+    [
+        "edit_post_requirements",
+        { label: "Edit Post Requirements", emoji: "📋", name: "Post Requirements Edited", color: "#8800ff" },
+    ],
+    ["dev_platform_app_installed", { label: "Install App", emoji: "🧩", name: "App Installed", color: "#0088ff" }],
+    [
+        "dev_platform_app_uninstalled",
+        { label: "Uninstall App", emoji: "🧩", name: "App Uninstalled", color: "#ff4444" },
+    ],
+    ["dev_platform_app_enabled", { label: "Enable App", emoji: "🧩", name: "App Enabled", color: "#00cc00" }],
+    ["dev_platform_app_disabled", { label: "Disable App", emoji: "🧩", name: "App Disabled", color: "#ff8800" }],
+    ["dev_platform_app_changed", { label: "Change App", emoji: "🧩", name: "App Changed", color: "#8800ff" }],
 ]);
 
 const UNKNOWN_ACTION_COLOR = "#666666";

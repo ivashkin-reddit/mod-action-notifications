@@ -79,7 +79,17 @@ describe("architecture rules", (): void => {
 
 const SRC = fileURLToPath(new URL("../../src", import.meta.url));
 // The composition root.
-const EDGE_FILES = ["composition.ts", "main.ts", "menuActions.ts", "scheduledJobs.ts"];
+const EDGE_FILES = [
+    "communityTriggers.ts",
+    "composition.ts",
+    "invocations.ts",
+    "main.ts",
+    "menuActions.ts",
+    "meter.ts",
+    "scheduledJobs.ts",
+    "slackConnection.ts",
+    "triggers.ts",
+];
 // Modules without layers: each is its own files, importing only each other.
 const SHARED_MODULES = ["settings", "slack"];
 // A capability module: its interface and its three layers.

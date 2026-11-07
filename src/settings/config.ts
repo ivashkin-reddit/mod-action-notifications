@@ -4,21 +4,34 @@ import {
     DEFAULT_UNMODERATED_AGE_HOURS,
     DEFAULT_REPORTED_CONTENT_AGE_HOURS,
     DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
+    DEFAULT_SPAM_QUEUE_THRESHOLD,
+    DEFAULT_BAN_HISTORY_DAYS,
+    DEFAULT_DORMANT_MODERATOR_DAYS,
+    DEFAULT_EDITED_QUEUE_THRESHOLD,
+    DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
+    DEFAULT_MODMAIL_WAIT_HOURS,
+    DEFAULT_REPORT_PILE_UP_THRESHOLD,
     DEFAULT_SLACK_RETENTION_DAYS,
-    MAX_SLACK_RETENTION_DAYS,
 } from "./definitions.js";
+import { MAX_SLACK_RETENTION_DAYS } from "./validation.js";
 
 const DECIMAL = 10;
 
 /** The installation's settings, validated. */
 export interface AppConfig {
-    /** The Slack app's bot token, trimmed, or '' when none is set. The developer sets it for every installation. */
-    readonly slackBotToken: string;
     readonly enabledActions: readonly string[];
+    /** Log a completion line for every invocation, not only for failed and slow ones. */
+    readonly debugLogging: boolean;
     /** Lower-cased usernames, from the comma-separated setting. */
     readonly excludedModerators: readonly string[];
     readonly flagUnknownModerators: boolean;
+    /** Send every security action as a security alert. */
+    readonly securityAlerts: boolean;
+    /** A moderator's first action after this many days is a security alert; 0 turns it off. */
+    readonly dormantModeratorDays: number;
     readonly includeModNote: boolean;
+    /** How many days of the banned user's mod notes a ban alert counts; 0 leaves them out. */
+    readonly banHistoryDays: number;
     /** A channel ID, or a channel name without its leading #; '' when none is set, so no alerts can be sent. */
     readonly notificationChannel: string;
     /** A channel ID or name without its leading #: the alert channel, else the notification channel, else ''. */
@@ -31,34 +44,63 @@ export interface AppConfig {
     readonly unmoderatedAgeHours: number;
     /** 0 turns the old-reported-content alert off. */
     readonly reportedContentAgeHours: number;
+    /** 0 turns the spam queue alert off. */
+    readonly spamQueueThreshold: number;
+    /** 0 turns the edited queue alert off. */
+    readonly editedQueueThreshold: number;
+    /** Hours a user waits for a reply in modmail before it alerts; 0 turns the alert off. */
+    readonly modmailWaitHours: number;
+    /** Report reasons that alert at once, as moderators wrote them, from the comma-separated setting. */
+    readonly urgentReportReasons: readonly string[];
+    /** 0 turns the report pile-up alert off. */
+    readonly reportPileUpThreshold: number;
+    /** Whether a Reddit admin's modmail alerts at once. */
+    readonly adminModmailAlerts: boolean;
+    /** An author's edit within this many days of a moderator's approval alerts; 0 turns it off. */
+    readonly editsAfterApprovalDays: number;
     readonly enableAutoModAlerts: boolean;
     /** 0 turns deleted-post alerts off. */
     readonly postDeletionUpvoteThreshold: number;
     /** Whether a summary of the day before goes to Slack each morning. */
     readonly dailySummary: boolean;
+    /** Whether the team's statistics for the week before go to Slack each Monday. */
+    readonly weeklyStatistics: boolean;
 }
 
-// Devvit's client lets a caller name the type a setting comes back as, but checks nothing: a saved value can be
-// anything, so each is read as unknown and parsed. Devvit's client satisfies this.
-type SettingsReader = Readonly<{ get: (name: string) => Promise<unknown> }>;
+// Every setting at once: Devvit's client (0.15) answers get(name) by fetching every setting, so the app asks once.
+// A saved value can be anything, so each is read as unknown and parsed. Devvit's client satisfies this.
+type SettingsReader = Readonly<{ getAll: () => Promise<object> }>;
 type SettingValue = unknown;
+/** The saved values, by setting name. */
+type Values = Readonly<Pick<ReadonlyMap<string, SettingValue>, "get">>;
 
 /** What the app uses until it first reads the settings. */
 const DEFAULT_CONFIG: AppConfig = {
-    slackBotToken: "",
     enabledActions: [],
+    debugLogging: false,
     excludedModerators: [],
     flagUnknownModerators: true,
+    securityAlerts: true,
+    dormantModeratorDays: DEFAULT_DORMANT_MODERATOR_DAYS,
     includeModNote: true,
+    banHistoryDays: DEFAULT_BAN_HISTORY_DAYS,
     notificationChannel: "",
     alertChannel: "",
     slackRetentionDays: DEFAULT_SLACK_RETENTION_DAYS,
     modqueueThreshold: DEFAULT_MODQUEUE_THRESHOLD,
     unmoderatedAgeHours: DEFAULT_UNMODERATED_AGE_HOURS,
     reportedContentAgeHours: DEFAULT_REPORTED_CONTENT_AGE_HOURS,
+    spamQueueThreshold: DEFAULT_SPAM_QUEUE_THRESHOLD,
+    editedQueueThreshold: DEFAULT_EDITED_QUEUE_THRESHOLD,
+    modmailWaitHours: DEFAULT_MODMAIL_WAIT_HOURS,
+    urgentReportReasons: [],
+    reportPileUpThreshold: DEFAULT_REPORT_PILE_UP_THRESHOLD,
+    adminModmailAlerts: true,
+    editsAfterApprovalDays: DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
     enableAutoModAlerts: false,
     postDeletionUpvoteThreshold: DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
     dailySummary: false,
+    weeklyStatistics: false,
 };
 
 function trimmed(value: SettingValue): string {
@@ -96,6 +138,16 @@ function selected(value: SettingValue): readonly string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+/** The entries of comma-separated text, trimmed, leaving out blanks. */
+function commaList(value: SettingValue): readonly string[] {
+    return typeof value === "string"
+        ? value
+              .split(",")
+              .map((entry: string): string => entry.trim())
+              .filter((entry: string): boolean => entry !== "")
+        : [];
+}
+
 /** The names in comma-separated text, trimmed and lower-cased, leaving out blanks. */
 function usernames(value: SettingValue): readonly string[] {
     return typeof value === "string"
@@ -106,33 +158,63 @@ function usernames(value: SettingValue): readonly string[] {
         : [];
 }
 
-async function readConfig(settings: SettingsReader): Promise<AppConfig> {
-    // Read one after another: a setting that cannot be read stops the rest.
-    const notificationChannel = channelName(await settings.get("notificationChannel"));
-    const alertChannel = channelName(await settings.get("alertChannel"));
+/** The settings of the alerts on what the community does: modmail, reports and edits after approval. */
+type CommunityAlerts = Pick<
+    AppConfig,
+    | "modmailWaitHours"
+    | "urgentReportReasons"
+    | "reportPileUpThreshold"
+    | "adminModmailAlerts"
+    | "editsAfterApprovalDays"
+>;
+
+function readCommunityAlerts(values: Values): CommunityAlerts {
     return {
-        slackBotToken: trimmed(await settings.get("slackBotToken")),
-        enabledActions: selected(await settings.get("enabledActions")),
-        excludedModerators: usernames(await settings.get("excludedModerators")),
-        flagUnknownModerators: booleanOr(await settings.get("flagUnknownModerators"), true),
-        includeModNote: booleanOr(await settings.get("includeModNote"), true),
+        modmailWaitHours: nonNegativeInteger(values.get("modmailWaitHours"), DEFAULT_MODMAIL_WAIT_HOURS),
+        urgentReportReasons: commaList(values.get("urgentReportReasons")),
+        reportPileUpThreshold: nonNegativeInteger(
+            values.get("reportPileUpThreshold"),
+            DEFAULT_REPORT_PILE_UP_THRESHOLD,
+        ),
+        adminModmailAlerts: booleanOr(values.get("adminModmailAlerts"), true),
+        editsAfterApprovalDays: nonNegativeInteger(
+            values.get("editsAfterApprovalDays"),
+            DEFAULT_EDITS_AFTER_APPROVAL_DAYS,
+        ),
+    };
+}
+
+async function readConfig(settings: SettingsReader): Promise<AppConfig> {
+    const values: Values = new Map<string, SettingValue>(Object.entries(await settings.getAll()));
+    const notificationChannel = channelName(values.get("notificationChannel"));
+    const alertChannel = channelName(values.get("alertChannel"));
+    return {
+        enabledActions: selected(values.get("enabledActions")),
+        debugLogging: booleanOr(values.get("debugLogging"), false),
+        excludedModerators: usernames(values.get("excludedModerators")),
+        flagUnknownModerators: booleanOr(values.get("flagUnknownModerators"), true),
+        securityAlerts: booleanOr(values.get("securityAlerts"), true),
+        dormantModeratorDays: nonNegativeInteger(values.get("dormantModeratorDays"), DEFAULT_DORMANT_MODERATOR_DAYS),
+        includeModNote: booleanOr(values.get("includeModNote"), true),
+        banHistoryDays: nonNegativeInteger(values.get("banHistoryDays"), DEFAULT_BAN_HISTORY_DAYS),
         notificationChannel,
         // The setting's help text: "uses main channel if empty".
         alertChannel: alertChannel === "" ? notificationChannel : alertChannel,
-        slackRetentionDays: retentionDays(await settings.get("slackRetentionDays")),
-        modqueueThreshold: nonNegativeInteger(await settings.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
-        unmoderatedAgeHours: nonNegativeInteger(
-            await settings.get("unmoderagedAgeHours"),
-            DEFAULT_UNMODERATED_AGE_HOURS,
-        ),
+        slackRetentionDays: retentionDays(values.get("slackRetentionDays")),
+        modqueueThreshold: nonNegativeInteger(values.get("modqueueThreshold"), DEFAULT_MODQUEUE_THRESHOLD),
+        unmoderatedAgeHours: nonNegativeInteger(values.get("unmoderagedAgeHours"), DEFAULT_UNMODERATED_AGE_HOURS),
         reportedContentAgeHours: nonNegativeInteger(
-            await settings.get("reportedContentAgeHours"),
+            values.get("reportedContentAgeHours"),
             DEFAULT_REPORTED_CONTENT_AGE_HOURS,
         ),
-        enableAutoModAlerts: booleanOr(await settings.get("enableAutoModAlerts"), false),
-        dailySummary: booleanOr(await settings.get("dailySummary"), false),
+        spamQueueThreshold: nonNegativeInteger(values.get("spamQueueThreshold"), DEFAULT_SPAM_QUEUE_THRESHOLD),
+        editedQueueThreshold: nonNegativeInteger(values.get("editedQueueThreshold"), DEFAULT_EDITED_QUEUE_THRESHOLD),
+        ...readCommunityAlerts(values),
+        enableAutoModAlerts: booleanOr(values.get("enableAutoModAlerts"), false),
+        dailySummary: booleanOr(values.get("dailySummary"), false),
+        weeklyStatistics: booleanOr(values.get("weeklyStatistics"), false),
         postDeletionUpvoteThreshold: nonNegativeInteger(
-            await settings.get("postDeletionUpvoteThreshold"),
+            values.get("postDeletionUpvoteThreshold"),
             DEFAULT_POST_DELETION_UPVOTE_THRESHOLD,
         ),
     };
@@ -157,7 +239,7 @@ export function createConfigLoader(): ConfigLoader {
         } catch (error) {
             const last = lastRead.get(installation);
             if (last === undefined) {
-                // The defaults set no bot token: nothing is sent until the settings can be read.
+                // The defaults name no channel: nothing is sent until the settings can be read.
                 console.error(
                     "[settings] Could not read the settings, so no alerts are sent until they can be:",
                     error,

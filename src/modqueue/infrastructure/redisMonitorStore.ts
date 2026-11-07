@@ -13,6 +13,8 @@ const LEGACY_MONITOR_JOB_ID_KEY = "modqueue_monitor_job_id";
 const FAILURE_COUNT_KEY = "scheduler_failure_count";
 const THROTTLE_KEYS: Readonly<Record<QueueAlert, string>> = {
     "queue-size": "mod_actions:throttle:modqueue_size",
+    "spam-size": "mod_actions:throttle:modqueue_spam",
+    "edited-size": "mod_actions:throttle:modqueue_edited",
     "unmoderated": "mod_actions:throttle:modqueue_unmoderated",
     "reported": "mod_actions:throttle:modqueue_reported",
 };

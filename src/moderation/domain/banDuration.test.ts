@@ -63,8 +63,8 @@ describe("parsing a ban length from text", (): void => {
         ["one day", "1 day", { days: 1, label: "1 day" }],
         ["a number with d", "ban 30d for spam", { days: 30, label: "30 days" }],
         ["a number with no space before day", "a 3day ban", { days: 3, label: "3 days" }],
-        // Pinned: a plural "days" is not read as a number, so the text is shown as written.
-        ["a plural days", "7 days", { days: undefined, label: "7 days" }],
+        // As Reddit's mod log writes a ban's length.
+        ["a plural days", "7 days", { days: 7, label: "7 days" }],
         ["text with no length", "until appeal", { days: undefined, label: "until appeal" }],
     ])("reads %s", TEST_OPTIONS, (_label: string, text: string | undefined, expected: BanDuration): void => {
         expect.hasAssertions();

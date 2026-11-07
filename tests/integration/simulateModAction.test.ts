@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, WHEN_NOW } from "../fixtures/messages.js";
+import { keysBesidesConnection } from "../fixtures/redisKeys.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -47,7 +48,7 @@ describe("the Simulate Mod Action menu item", (): void => {
         async (): Promise<void> => {
             expect.hasAssertions();
 
-            const app = await loadApp(devvit);
+            const app = await loadApp(devvit, { alertChannel: "mods" });
 
             await app.fillForm("Simulate Mod Action", {
                 actionType: ["banuser"],
@@ -62,7 +63,7 @@ describe("the Simulate Mod Action menu item", (): void => {
 
             const [message] = app.slack.messages;
 
-            expect(message).toMatchObject({ text: "🔨 User Banned", channel: "#mods" });
+            expect(message).toMatchObject({ text: "🧪 Simulation: 🔨 User Banned", channel: "#mods" });
             expect(lines(message)).toStrictEqual([
                 "🔔 *Moderator Action*",
                 "• *Action:* User Banned",
@@ -74,7 +75,7 @@ describe("the Simulate Mod Action menu item", (): void => {
                 "• *Mod Note:* Testing",
             ]);
             expect(app.context.reddit.getModerators).not.toHaveBeenCalled();
-            expect(app.context.redis.keys()).toStrictEqual([]);
+            expect(keysBesidesConnection(app.context.redis)).toStrictEqual([]);
             expect(app.toasts).toStrictEqual([{ text: "✅ Simulation delivered to Slack!", appearance: "success" }]);
         },
     );
@@ -88,8 +89,9 @@ describe("the Simulate Mod Action menu item", (): void => {
 
         const [message] = app.slack.messages;
 
-        expect(message?.text).toBe("🗑️ Post Removed");
+        expect(message?.text).toBe("🧪 Simulation: 🗑️ Post Removed");
         expect(message?.channel).toBe("#mod-log");
+        expect(message?.attachments?.[0]?.footer).toBe("Mod Action Notifications - Simulation");
         expect(lines(message)).toStrictEqual([
             "🔔 *Moderator Action*",
             "• *Action:* Post Removed",
@@ -120,12 +122,33 @@ describe("the Simulate Mod Action menu item", (): void => {
     it("keeps a channel that already starts with #", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit);
+        const app = await loadApp(devvit, { alertChannel: "already" });
 
         await app.fillForm("Simulate Mod Action", { slackChannel: "#already" });
 
         expect(app.slack.messages[0]?.channel).toBe("#already");
     });
+
+    // The bot token is the app's: any channel the Slack app is in, another subreddit's included, could be named.
+    it(
+        "sends to no channel but the Notification Channel or the Alert Channel",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { notificationChannel: "mod-log", alertChannel: "mod-alerts" });
+
+            await app.fillForm("Simulate Mod Action", { slackChannel: "#another-team" });
+
+            expect(app.slack.requests).toStrictEqual([]);
+            expect(app.toasts).toStrictEqual([
+                {
+                    text: "❌ The channel override must be your Notification Channel or Alert Channel.",
+                    appearance: "neutral",
+                },
+            ]);
+        },
+    );
 
     it.each([
         [{ banDuration: 1 }, ["• *Ban Duration:* 1 day", "• *Details:* 1 day"]],
@@ -153,7 +176,7 @@ describe("the Simulate Mod Action menu item", (): void => {
     it("reports that it cannot send without a bot token", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit, { slackBotToken: "" });
+        const app = await loadApp(devvit, { connectedToken: "" });
 
         await app.fillForm("Simulate Mod Action", {});
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
-import { fakeUser } from "../fixtures/fakeContext.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
+import { fakeUser } from "../fixtures/fakeReddit.js";
 
 const devvit = await vi.hoisted(async (): Promise<FakeDevvit> =>
     (await import("../fixtures/fakeDevvit.js")).createFakeDevvit(),
@@ -11,8 +11,10 @@ vi.mock("@devvit/public-api", (): { Devvit: FakeDevvit["api"] } => ({ Devvit: de
 const TEST_OPTIONS = { timeout: 5000 };
 const REFUSAL = { text: "🔒 Only this subreddit's moderators can use this.", appearance: "neutral" };
 const MENU_ITEMS = [
+    ["Connect Slack"],
     ["Test Slack Connection"],
     ["Show Bot Status"],
+    ["Show Team Stats"],
     ["Simulate Mod Action"],
     ["Setup Modqueue Monitoring"],
 ];
@@ -114,6 +116,24 @@ describe("a form", (): void => {
 
             expect(app.toasts).toStrictEqual([REFUSAL]);
             expect(app.slack.requests).toStrictEqual([]);
+        },
+    );
+
+    it(
+        "from Connect Slack connects nothing for a user who no longer moderates",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { connectedToken: undefined });
+            await app.pressMenuItem("Connect Slack");
+            app.context.reddit.currentUser = fakeUser("ModA", []);
+
+            await app.submitForm(app.shownForm().key, { token: "xoxb-their-workspace" });
+
+            expect(app.toasts).toStrictEqual([REFUSAL]);
+            expect(app.slack.requests).toStrictEqual([]);
+            expect(app.context.redis.keys()).not.toContain("slack_connection");
         },
     );
 

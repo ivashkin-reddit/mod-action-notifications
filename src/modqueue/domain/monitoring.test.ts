@@ -18,7 +18,13 @@ function item(kind: QueueItem["kind"], hoursAgo: number, permalink = `/${kind}/$
     return { kind, id: "t3_p", postId: "t3_p", createdAt: new Date(NOW.getTime() - hoursAgo * HOUR), permalink };
 }
 
-const OFF: MonitorThresholds = { queueSizeThreshold: 0, unmoderatedAgeHours: 0, reportedAgeHours: 0 };
+const OFF: MonitorThresholds = {
+    queueSizeThreshold: 0,
+    unmoderatedAgeHours: 0,
+    reportedAgeHours: 0,
+    spamQueueThreshold: 0,
+    editedQueueThreshold: 0,
+};
 
 describe("an alert's threshold", (): void => {
     it("turns the alert off at 0 and on above it", TEST_OPTIONS, (): void => {
@@ -34,6 +40,8 @@ describe("monitoring", (): void => {
         ["the queue size alert is on", { ...OFF, queueSizeThreshold: 50 }, true],
         ["the unmoderated age alert is on", { ...OFF, unmoderatedAgeHours: 24 }, true],
         ["the reported age alert is on", { ...OFF, reportedAgeHours: 24 }, true],
+        ["the spam queue alert is on", { ...OFF, spamQueueThreshold: 10 }, true],
+        ["the edited queue alert is on", { ...OFF, editedQueueThreshold: 10 }, true],
     ])(
         "is enabled when %s: %j",
         TEST_OPTIONS,

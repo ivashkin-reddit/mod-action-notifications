@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOT_TOKEN, createFakeContext, defaultSettings } from "../../tests/fixtures/fakeContext.js";
+import { createFakeContext, defaultSettings } from "../../tests/fixtures/fakeContext.js";
 import type { Settings } from "../../tests/fixtures/fakeContext.js";
 import { createConfigLoader } from "./config.js";
 import type { AppConfig } from "./config.js";
@@ -16,20 +16,31 @@ describe("reading the settings", (): void => {
         expect.hasAssertions();
 
         await expect(configFrom({})).resolves.toStrictEqual({
-            slackBotToken: "",
             enabledActions: [],
+            debugLogging: false,
             excludedModerators: [],
             flagUnknownModerators: true,
+            securityAlerts: true,
+            dormantModeratorDays: 90,
             includeModNote: true,
+            banHistoryDays: 30,
             notificationChannel: "",
             alertChannel: "",
             slackRetentionDays: 90,
             modqueueThreshold: 50,
             unmoderatedAgeHours: 24,
             reportedContentAgeHours: 24,
+            spamQueueThreshold: 0,
+            editedQueueThreshold: 0,
+            modmailWaitHours: 24,
+            urgentReportReasons: [],
+            reportPileUpThreshold: 0,
+            adminModmailAlerts: true,
+            editsAfterApprovalDays: 7,
             enableAutoModAlerts: false,
             postDeletionUpvoteThreshold: 100,
             dailySummary: false,
+            weeklyStatistics: false,
         });
     });
 
@@ -137,15 +148,6 @@ describe("reading the settings", (): void => {
             configFrom({ flagUnknownModerators: false, includeModNote: "false", enableAutoModAlerts: 1 }),
         ).resolves.toMatchObject({ flagUnknownModerators: false, includeModNote: true, enableAutoModAlerts: false });
     });
-
-    it.each([
-        ["a bot token, trimmed", ` ${BOT_TOKEN} `, BOT_TOKEN],
-        ["a value of another type, as none", 5, ""],
-    ])("reads %s", TEST_OPTIONS, async (_label: string, value: unknown, token: string): Promise<void> => {
-        expect.hasAssertions();
-
-        await expect(configFrom({ slackBotToken: value })).resolves.toMatchObject({ slackBotToken: token });
-    });
 });
 
 // One app process can serve several installations, each with its own settings.
@@ -157,7 +159,7 @@ describe("settings that cannot be read", (): void => {
         const { context } = createFakeContext({ ...defaultSettings(), modqueueThreshold: 7 });
         await load(context.settings, "t5_one");
         const failure = new Error("settings unavailable");
-        context.settings.get.mockRejectedValue(failure);
+        context.settings.getAll.mockRejectedValue(failure);
 
         await expect(load(context.settings, "t5_one")).resolves.toMatchObject({ modqueueThreshold: 7 });
         expect(console.warn).toHaveBeenCalledExactlyOnceWith(
@@ -177,9 +179,9 @@ describe("settings that cannot be read", (): void => {
             const { context } = createFakeContext(defaultSettings());
             await load(context.settings, "t5_one");
             const failure = new Error("settings unavailable");
-            context.settings.get.mockRejectedValue(failure);
+            context.settings.getAll.mockRejectedValue(failure);
 
-            await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ slackBotToken: "" });
+            await expect(load(context.settings, "t5_other")).resolves.toMatchObject({ notificationChannel: "" });
             expect(console.error).toHaveBeenCalledExactlyOnceWith(
                 "[settings] Could not read the settings, so no alerts are sent until they can be:",
                 failure,

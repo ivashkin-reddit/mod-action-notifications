@@ -4,10 +4,18 @@
  * and direct sending, for a moderator waiting on the result. Capability adapters get a SlackSender and never choose
  * how it delivers.
  *
- * Owns the Redis keys that start `slack_outbox`, and the scheduler job OUTBOX_JOB_NAME.
+ * Owns the Redis keys that start `slack_outbox`, `slack_connection`, and the scheduler job OUTBOX_JOB_NAME.
  */
+export {
+    connectSlack,
+    disconnectSlack,
+    readConnection,
+    type Connecting,
+    type ConnectRequest,
+    type SlackConnection,
+} from "./connection.js";
 export type { DeliveryCondition, DeliveryHealth } from "./health.js";
 export { createSlackOutbox, forgetContent, type SlackOutbox } from "./outbox.js";
 export { queueState } from "./queue.js";
-export { OUTBOX_JOB_NAME } from "./schedule.js";
-export { createDirectSender, sendTestMessage } from "./webApi.js";
+export { continuationStarted, OUTBOX_JOB_NAME } from "./schedule.js";
+export { createDirectSender, sendTestMessage, type SlackApi, type SlackFetch } from "./webApi.js";
