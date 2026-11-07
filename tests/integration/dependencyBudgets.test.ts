@@ -132,4 +132,27 @@ describe("an invocation's dependency calls", (): void => {
             expect(measured?.redis).toBeLessThanOrEqual(redis);
         },
     );
+
+    // A removal in a burst is counted, not alerted: its transaction is nine calls (WATCH, then MULTI, six commands and
+    // EXEC, counted as redis.tx.*), in place of queuing and draining an alert (71 calls above).
+    it(
+        "are, for a removal held in its moderator's burst, Redis calls and no alert",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { debugLogging: true });
+            // Five removals in a minute open ModA's burst; the sixth is held for its summary.
+            for (let index = 0; index < 5; index += 1) {
+                await app.fire("ModAction", commentRemoval(`ModAction_${String(index)}`));
+            }
+
+            await expect(callsOf(app, "ModAction", commentRemoval("ModAction_held"))).resolves.toStrictEqual({
+                redis: 39,
+                reddit: 0,
+                settings: 1,
+                slack: 0,
+            });
+        },
+    );
 });

@@ -224,10 +224,10 @@ export function invoked<E>(
 /** A scheduler job run as an invocation named for the job. */
 export function invokedJob(
     name: string,
-    run: (context: AppContext) => Promise<void>,
+    run: (context: AppContext, event: unknown) => Promise<void>,
 ): (event: unknown, context: PlatformContext) => Promise<void> {
-    return invoked(name, async (_event: unknown, context: AppContext): Promise<void> => {
-        await run(context);
+    return invoked(name, async (event: unknown, context: AppContext): Promise<void> => {
+        await run(context, event);
     });
 }
 

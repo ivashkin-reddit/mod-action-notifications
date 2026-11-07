@@ -3,6 +3,7 @@ import {
     alertsConfigured,
     configOf,
     healthReports,
+    modActionPresentation,
     modmailPorts,
     monitorJobPorts,
     monitorThresholds,
@@ -20,6 +21,13 @@ import {
     setUpSummary,
     yesterdayOf,
 } from "./health/index.js";
+import {
+    burstJobOf,
+    createDevvitBurstSchedule,
+    createRedisBurstRecords,
+    createSlackModActionAlerts,
+    summariseBurst,
+} from "./moderation/index.js";
 import { checkWaitingModmail } from "./modmail/index.js";
 import {
     checkModqueue,
@@ -135,6 +143,34 @@ export async function sendWeeklyStatistics(context: AppContext): Promise<void> {
         );
     } catch (error) {
         console.error("[statistics] Could not send the weekly statistics:", error);
+    }
+}
+
+/**
+ * One run of a burst of removals' summary, the scheduled job: sends the burst's running totals while it lasts, or
+ * closes it and sends its total. Logs, and resolves, when the job names no burst or Redis fails.
+ */
+export async function summariseRemovalBurst(context: AppContext, event: unknown): Promise<void> {
+    const job = burstJobOf(event);
+    if (job === undefined) {
+        console.warn("[burst] A burst's summary job named no burst, so it did nothing");
+        return;
+    }
+    const config = await configOf(context);
+    if (!alertsConfigured(config)) {
+        return;
+    }
+    try {
+        await summariseBurst(
+            { ...job, now: Date.now() },
+            {
+                bursts: createRedisBurstRecords(context.redis),
+                burstSchedule: createDevvitBurstSchedule(context.scheduler),
+                alerts: createSlackModActionAlerts(slackSendersOf(context, config), modActionPresentation(config)),
+            },
+        );
+    } catch (error) {
+        console.error("[burst] Could not summarise a burst of removals:", error);
     }
 }
 

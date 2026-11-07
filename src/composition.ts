@@ -60,6 +60,8 @@ export type PlatformContext = Readonly<{
             | "hLen"
             | "hScan"
             | "zCard"
+            | "rename"
+            | "watch"
         >
     >;
     reddit: Readonly<

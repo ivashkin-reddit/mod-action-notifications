@@ -25,11 +25,11 @@ function removal(index: number): ReturnType<typeof removedPost> {
     return removedPost({ id: `ModAction_${String(index)}`, targetUser: { name: `User${String(index)}` } });
 }
 
-/** Fires removals 0 to count - 1 at once, as Devvit delivers a burst of mod actions. */
+/** Fires removals 0 to count - 1 at once, as Devvit delivers a burst: each by its own moderator, so none is summarised. */
 async function burst(fire: App["fire"], count: number): Promise<void> {
     await Promise.all(
         Array.from({ length: count }, async (_unused: unknown, index: number): Promise<void> => {
-            await fire("ModAction", removal(index));
+            await fire("ModAction", { ...removal(index), moderator: { name: `Mod${String(index)}` } });
         }),
     );
 }

@@ -189,6 +189,14 @@ export function createMeter(): Meter {
 /** What a dependency's calls are counted against, and under what name prefix (`modMail.` for Reddit's modmail). */
 type Metering = Readonly<{ dependency: Dependency; meter: Meter; prefix: string }>;
 
+/**
+ * Whether the call answers a Redis transaction: `watch` resolves to a client whose queued commands, and `exec`, are
+ * each a call to Redis, so they are counted too, as `redis.tx.{command}`.
+ */
+function opensTransaction({ dependency, prefix }: Metering, property: string): boolean {
+    return dependency === "redis" && prefix === "" && property === "watch";
+}
+
 /** `target` with each of its methods counted, and each of its objects likewise; methods run on `target` itself. */
 function meteredWith<T extends object>(target: T, metering: Metering): T {
     return new Proxy(target, {
@@ -198,10 +206,21 @@ function meteredWith<T extends object>(target: T, metering: Metering): T {
                 return value;
             }
             if (typeof value === "function") {
-                return (...args: readonly unknown[]): unknown =>
-                    metering.meter.call(metering.dependency, `${metering.prefix}${property}`, (): unknown =>
-                        Reflect.apply(value, object, args),
+                return (...args: readonly unknown[]): unknown => {
+                    const result = metering.meter.call(
+                        metering.dependency,
+                        `${metering.prefix}${property}`,
+                        (): unknown => Reflect.apply(value, object, args),
                     );
+                    // A transaction's client, metered too, so its queued commands are counted.
+                    return opensTransaction(metering, property) && result instanceof Promise
+                        ? result.then((client: unknown): unknown =>
+                              typeof client === "object" && client !== null
+                                  ? meteredWith(client, { ...metering, prefix: "tx." })
+                                  : client,
+                          )
+                        : result;
+                };
             }
             return typeof value === "object" && value !== null
                 ? meteredWith(value, { ...metering, prefix: `${metering.prefix}${property}.` })

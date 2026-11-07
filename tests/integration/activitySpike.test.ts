@@ -113,7 +113,7 @@ describe("an activity spike", (): void => {
         await app.fire("ModAction", removedPost({ actionedAt: new Date(NOW.getTime() + MINUTE) }));
         await app.fire("ModAction", removedPost({ actionedAt: new Date(NOW.getTime() + MINUTE + 1) }));
 
-        expect(lastLine(app.slack.messages[4])).toBe("• *Status:* Activity spike 5 actions / 1 min");
+        expect(statusLines(app)[4]).toBe("• *Status:* Activity spike 5 actions / 1 min");
         expect(lastLine(app.slack.messages[5])).toBe(WHEN_NOW.replace("12:00:00", "12:01:00"));
     });
 
@@ -131,17 +131,18 @@ describe("an activity spike", (): void => {
             app.settings.excludedModerators = "";
             await app.fire("ModAction", removedPost());
 
-            expect(lastLine(onlyMessage(app.slack.messages))).toBe("• *Status:* Activity spike 5 actions / 1 min");
+            expect(statusLines(app)).toStrictEqual(["• *Status:* Activity spike 5 actions / 1 min"]);
         },
     );
 
+    // Locks, not removals: a moderator's removals at the spike rate are summarised, not alerted one by one.
     it("keeps at most the 100 most recent actions", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
-        const app = await loadApp(devvit);
+        const app = await loadApp(devvit, { enabledActions: ["lock"] });
 
         for (let count = 0; count < 105; count += 1) {
-            await app.fire("ModAction", removedPost({ actionedAt: NOW }));
+            await app.fire("ModAction", removedPost({ action: "lock", actionedAt: NOW }));
         }
 
         await expect(app.context.redis.zRange(ACTIVITY_KEY, 0, NOW.getTime(), { by: "score" })).resolves.toHaveLength(

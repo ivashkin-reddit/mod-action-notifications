@@ -3,11 +3,14 @@ import type { DirectSlackSender, SlackDestinations, SlackMessage, SlackSender } 
 import type { ModActionAlerts, SimulationAlerts } from "../application/ports.js";
 import { isSecurityAction } from "../domain/alerting.js";
 import { banDurationText } from "../domain/banDuration.js";
+import type { BurstSummary } from "../domain/burst.js";
 import { disciplineStep } from "../domain/discipline.js";
 import type { HistoryCounts, RecentHistory } from "../domain/history.js";
 import { isBlank } from "../domain/modAction.js";
 import type { Actor, ModAction, ModActionTarget } from "../domain/modAction.js";
 import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
+import { accountName, burstMessage } from "./slackBurstAlerts.js";
+import { timestamp, userLink } from "./slackText.js";
 
 export interface ModActionPresentation {
     readonly includeModNote: boolean;
@@ -18,20 +21,6 @@ export interface ModActionPresentation {
 const PREVIEW_LENGTH = 200;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
-
-/** A Slack link to the user's profile, without any u/ prefix; "Unknown" for a blank name. */
-function userLink(username: string | undefined): string {
-    const trimmed = username?.trim() ?? "";
-    if (trimmed === "") {
-        return "Unknown";
-    }
-    const normalized = trimmed.replace(/^u\//iu, "");
-    return `<https://www.reddit.com/u/${encodeURIComponent(normalized)}|u/${escapeText(normalized)}>`;
-}
-
-function timestamp(date: Date): string {
-    return date.toISOString().replace("T", " ").replace(/\..+/u, " UTC");
-}
 
 function contentLine(target: ModActionTarget): readonly string[] {
     if (isBlank(target.permalink)) {
@@ -164,7 +153,7 @@ function statusLines(modAction: ModAction, actor: Actor): readonly string[] {
     const status = [
         ...(actorStatus === "" ? [] : [actorStatus]),
         ...(modAction.isAutoModerator ? ["Origin AutoModerator"] : []),
-        ...(spike === undefined
+        ...(spike === undefined || actor !== "moderator"
             ? []
             : [
                   `Activity spike ${String(spike.count)} actions / ${String(Math.round(spike.windowSeconds / SECONDS_PER_MINUTE))} min`,
@@ -235,6 +224,25 @@ function withoutContent(modAction: ModAction): ModAction {
           };
 }
 
+type Attachment = NonNullable<SlackMessage["attachments"]>[number];
+
+/** The alert of the removal that opened a burst, saying the account's further removals will be summarised. */
+function withBurstLine(message: SlackMessage, moderatorName: string | undefined, actor: Actor): SlackMessage {
+    const line = `• *Burst:* Further removals by ${accountName(moderatorName ?? "", actor)} will be summarised`;
+    return {
+        ...message,
+        attachments: (message.attachments ?? []).map((attachment: Attachment, index: number): Attachment =>
+            index === 0
+                ? {
+                      ...attachment,
+                      text: `${attachment.text ?? ""}
+${line}`,
+                  }
+                : attachment,
+        ),
+    };
+}
+
 /**
  * Mod-action alerts as Slack messages, handed to the sender for where each goes, which queues it: an unknown
  * moderator's action or a security alert to `alerts`, the rest to `notifications`. An alert on a post or comment
@@ -245,21 +253,22 @@ export function createSlackModActionAlerts(
     presentation: ModActionPresentation,
 ): ModActionAlerts {
     return {
-        report: async (modAction: ModAction, actor: Actor): Promise<void> => {
+        report: async (modAction: ModAction, actor: Actor, opensBurst: boolean): Promise<void> => {
             const send = isUrgent(modAction, presentation, actor) ? destinations.alerts : destinations.notifications;
-            const message = modActionMessage(modAction, presentation, actor);
+            const told = (shown: ModAction): SlackMessage => {
+                const message = modActionMessage(shown, presentation, actor);
+                return opensBurst ? withBurstLine(message, modAction.moderatorName, actor) : message;
+            };
             const contentIds = quotedContent(modAction.target);
             await (contentIds.length === 0
-                ? send(message)
-                : send(message, {
-                      contentIds,
-                      withoutQuotes: modActionMessage(withoutContent(modAction), presentation, actor),
-                  }));
+                ? send(told(modAction))
+                : send(told(modAction), { contentIds, withoutQuotes: told(withoutContent(modAction)) }));
+        },
+        reportBurst: async (summary: BurstSummary): Promise<void> => {
+            await destinations.notifications(burstMessage(summary));
         },
     };
 }
-
-type Attachment = NonNullable<SlackMessage["attachments"]>[number];
 
 /** An alert marked as a simulation in its text and footer, so no one takes it for a moderator's real action. */
 function asSimulation(message: SlackMessage): SlackMessage {

@@ -15,6 +15,8 @@ import {
     createModListCache,
     createRedditModerationLookups,
     createRedisModerationRecords,
+    createDevvitBurstSchedule,
+    createRedisBurstRecords,
     createSlackModActionAlerts,
     isRedditAccount,
     modActionFromTriggerEvent,
@@ -68,6 +70,8 @@ function moderationPorts(context: AppContext, config: Installation): ModerationP
             installation: context.subredditId,
         }),
         alerts: createSlackModActionAlerts(slackSendersOf(context, config), modActionPresentation(config)),
+        bursts: createRedisBurstRecords(context.redis),
+        burstSchedule: createDevvitBurstSchedule(context.scheduler),
     };
 }
 

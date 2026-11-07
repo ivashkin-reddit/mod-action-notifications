@@ -18,6 +18,8 @@ export const BURST_QUIET_MS = 60_000;
 export const BURST_PROGRESS_MS = 300_000;
 /** A summary due this long ago is scheduled again by the next removal: its job was lost. */
 export const BURST_OVERDUE_MS = 60_000;
+/** A rescued summary runs this soon: at once, but in the future, as the scheduler expects. */
+export const BURST_RESCUE_DELAY_MS = 1000;
 /** A burst with no summary scheduled this long after it opened lost its schedule: the opening removal sets one at once. */
 const UNSCHEDULED_OVERDUE_MS = 120_000;
 

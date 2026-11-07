@@ -26,7 +26,7 @@ import {
     teamStats,
 } from "./menuActions.js";
 import type { MenuContext } from "./menuActions.js";
-import { ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
+import { BURST_JOB_NAME, ENABLED_ACTIONS_CHOICES, simulateForm } from "./moderation/index.js";
 import type { SimulateFormValues } from "./moderation/index.js";
 import { MONITOR_JOB_NAME } from "./modqueue/index.js";
 import {
@@ -35,6 +35,7 @@ import {
     sendSummary,
     sendWeeklyStatistics,
     setUpScheduledJobs,
+    summariseRemovalBurst,
 } from "./scheduledJobs.js";
 import { settingsDefinitions } from "./settings/index.js";
 import { OUTBOX_JOB_NAME } from "./slack/delivery.js";
@@ -146,6 +147,13 @@ Devvit.addSchedulerJob({
 Devvit.addSchedulerJob({
     name: OUTBOX_JOB_NAME,
     onRun: invokedJob(OUTBOX_JOB_NAME, deliverQueuedAlerts),
+});
+
+// Sends a burst of removals' summary: its running totals while it lasts, then its total. A run that fails logs it,
+// and resolves.
+Devvit.addSchedulerJob({
+    name: BURST_JOB_NAME,
+    onRun: invokedJob(BURST_JOB_NAME, summariseRemovalBurst),
 });
 
 // Sends the summary of the day before at 08:00 UTC, when the setting is on.
