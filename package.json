@@ -31,7 +31,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-boundaries": "^7.4.1",
-    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-import-x": "^4.18.0",
     "eslint-plugin-regexp": "^3.3.3",
     "prettier": "3.9.10",
     "redis": "^6.3.1",
@@ -47,11 +47,17 @@
     "  cause: devvit 0.15.2's CLI pins inquirer@9.1.4, whose external-editor@3.1.0 asks for tmp ^0.0.33, which has a path traversal (GHSA-ph9p-34f9-6g65) and a symlink write (GHSA-52f5-9888-hmc6). external-editor only calls tmp.tmpNameSync, which tmp 0.2.x keeps.",
     "  blocked: every inquirer 9 release uses external-editor 3.1.0, its last release, and no devvit release moves the CLI off inquirer 9.",
     "  fix: a devvit release whose CLI no longer brings in external-editor; then delete this override.",
-    "  until: `npm ls external-editor` is empty after a devvit upgrade."
+    "  until: `npm ls external-editor` is empty after a devvit upgrade.",
+    "WORKAROUND: minimatch 10 is overridden to 11",
+    "  cause: eslint 10.14.0, @eslint/config-array 0.23.5 and @typescript-eslint/typescript-estree 8.72.1 ask for minimatch ^10, and every minimatch 10 has a denial of service through globparts amplification (GHSA-g3hv-75wg-m249), fixed only in 11.0.1. They call only minimatch(), new Minimatch() with the dot and flipNegate options, its match() and its pattern, which minimatch 11 keeps. The range key leaves the copies of minimatch 3 and 5 that devvit's dependencies use, which the advisory does not cover.",
+    "  blocked: the latest release of each of the three still asks for ^10, and minimatch has no patched 10 release.",
+    "  fix: releases of eslint, @eslint/config-array and @typescript-eslint/typescript-estree that accept minimatch 11; then delete this override.",
+    "  until: with the override deleted, `npm ls minimatch` shows no 10.x after an upgrade."
   ],
   "overrides": {
     "external-editor": {
       "tmp": "^0.2.7"
-    }
+    },
+    "minimatch@^10": "^11.0.5"
   }
 }
