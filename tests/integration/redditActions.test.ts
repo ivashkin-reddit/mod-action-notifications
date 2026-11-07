@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
-import { removedPost } from "../fixtures/events.js";
+import { bannedUser, modActionEvent, removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
 import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
@@ -38,6 +38,37 @@ describe("an action by one of Reddit's own accounts", (): void => {
             expect(app.context.reddit.getModerators).not.toHaveBeenCalled();
         },
     );
+
+    // Reddit's accounts stand for Reddit, not a person, and Anti-Evil Operations has no profile to link to.
+    it.each([["reddit"], ["Anti-Evil Operations"]])(
+        "names %s in plain text, as a Reddit account",
+        TEST_OPTIONS,
+        async (name): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+
+            await app.fire("ModAction", removedPost({ moderator: { name } }));
+
+            expect(lines(onlyMessage(app.slack.messages))[2]).toBe(`• *Reddit account:* ${name}`);
+        },
+    );
+
+    it("is named in plain text where an unban recalls its ban", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.fire("ModAction", bannedUser({ moderator: { name: "Anti-Evil Operations" } }));
+
+        await app.fire(
+            "ModAction",
+            modActionEvent({ action: "unbanuser", moderator: { name: "ModB" }, targetUser: { name: "Troll" } }),
+        );
+
+        expect(lines(app.slack.messages[1])).toContain(
+            "• *Related Ban:* Reddit account Anti-Evil Operations • on 2026-11-04T12:00:00.000Z",
+        );
+    });
 
     // Reddit's removals count toward its account's activity, so a sweep is summarised as a burst; the spike label
     // stays on moderators' alerts, as Reddit's accounts acting fast is no news.

@@ -1,19 +1,9 @@
-import { escapeText } from "../../slack/index.js";
 import type { SlackMessage } from "../../slack/index.js";
 import type { BurstSummary, BurstTally } from "../domain/burst.js";
-import type { Actor } from "../domain/modAction.js";
 import { actionColor } from "./actionCatalog.js";
-import { timestamp, userLink } from "./slackText.js";
+import { actorName, actorTitle, timestamp } from "./slackText.js";
 
 const MS_PER_SECOND = 1000;
-
-/**
- * How a burst names its account: a moderator by a link to their profile; one of Reddit's accounts by its name, which
- * no profile has.
- */
-export function accountName(name: string, actor: Actor): string {
-    return actor === "reddit" ? escapeText(name) : userLink(name);
-}
 
 function counted(count: number, noun: string): string {
     return `${String(count)} ${noun}${count === 1 ? "" : "s"}`;
@@ -39,7 +29,7 @@ function modLogLink({ account, actor }: BurstSummary): string {
  * and a link to the mod log. It quotes no content, so needs no version without quotes.
  */
 export function burstMessage(summary: BurstSummary): SlackMessage {
-    const { account, actor, tally, opened, last, final } = summary;
+    const { account, tally, opened, last, final } = summary;
     const removed = removedText(tally);
     const when = final
         ? `• *When:* ${timestamp(new Date(opened))} to ${timestamp(new Date(last))}`
@@ -53,7 +43,7 @@ export function burstMessage(summary: BurstSummary): SlackMessage {
                 color: actionColor("removecomment"),
                 text: [
                     final ? "🧹 *Removal Burst*" : "🧹 *Removal Burst, Still Going*",
-                    `• *${actor === "reddit" ? "Reddit account" : "Moderator"}:* ${accountName(account.moderatorName, actor)}`,
+                    `• *${actorTitle(account.moderatorName)}:* ${actorName(account.moderatorName)}`,
                     `• *Removed:* ${removed}`,
                     when,
                     `• *Mod log:* <${modLogLink(summary)}|Open the mod log>`,

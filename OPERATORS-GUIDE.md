@@ -230,7 +230,7 @@ For each mod action, the app works through these steps. Steps 2 to 4 happen even
 
 **Alert content.** An alert names:
 
-- the action, the moderator, and the user acted on;
+- the action, the moderator, and the user acted on. A moderator is linked to their profile; u/reddit and Anti-Evil Operations are named in plain text, as a Reddit account, since they stand for Reddit and Anti-Evil Operations has no profile. The same goes for who issued the ban an unban alert recalls, and for burst lines and summaries;
 - a link to the content and a quote of up to 200 characters;
 - when the action was taken (UTC);
 - for bans, the length, any details, the mod note if enabled, and the user's mod-note history over Ban Alert History days, as counts by kind;

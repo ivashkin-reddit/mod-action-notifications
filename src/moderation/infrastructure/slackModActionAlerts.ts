@@ -9,8 +9,8 @@ import type { HistoryCounts, RecentHistory } from "../domain/history.js";
 import { isBlank } from "../domain/modAction.js";
 import type { Actor, ModAction, ModActionTarget } from "../domain/modAction.js";
 import { actionColor, actionName, actionTitle } from "./actionCatalog.js";
-import { accountName, burstMessage } from "./slackBurstAlerts.js";
-import { timestamp, userLink } from "./slackText.js";
+import { burstMessage } from "./slackBurstAlerts.js";
+import { actorName, actorTitle, timestamp, userLink } from "./slackText.js";
 
 export interface ModActionPresentation {
     readonly includeModNote: boolean;
@@ -95,7 +95,9 @@ function relatedLines(modAction: ModAction): readonly string[] {
         return [];
     }
     const pieces = [
-        ...(isBlank(related.moderatorName) ? [] : [`Moderator ${userLink(related.moderatorName)}`]),
+        ...(isBlank(related.moderatorName)
+            ? []
+            : [`${actorTitle(related.moderatorName)} ${actorName(related.moderatorName)}`]),
         ...(related.occurredAt === undefined ? [] : [`on ${related.occurredAt.toISOString()}`]),
         // Its details, never its note: the note is shown, where the setting allows it, in the ban's own alert.
         ...(isBlank(related.details) ? [] : [`Details ${escapeText(related.details)}`]),
@@ -167,7 +169,7 @@ function messageLines(modAction: ModAction, presentation: ModActionPresentation,
     return [
         styleOf(modAction, actor, presentation).header,
         `• *Action:* ${actionName(modAction.type, isComment)}`,
-        `• *Moderator:* ${userLink(modAction.moderatorName)}`,
+        `• *${actorTitle(modAction.moderatorName)}:* ${actorName(modAction.moderatorName)}`,
         ...targetLines(modAction.target),
         `• *When:* ${timestamp(modAction.occurredAt)}`,
         ...detailLines(modAction, presentation.includeModNote),
@@ -227,8 +229,8 @@ function withoutContent(modAction: ModAction): ModAction {
 type Attachment = NonNullable<SlackMessage["attachments"]>[number];
 
 /** The alert of the removal that opened a burst, saying the account's further removals will be summarised. */
-function withBurstLine(message: SlackMessage, moderatorName: string | undefined, actor: Actor): SlackMessage {
-    const line = `• *Burst:* Further removals by ${accountName(moderatorName ?? "", actor)} will be summarised`;
+function withBurstLine(message: SlackMessage, moderatorName: string | undefined): SlackMessage {
+    const line = `• *Burst:* Further removals by ${actorName(moderatorName)} will be summarised`;
     return {
         ...message,
         attachments: (message.attachments ?? []).map((attachment: Attachment, index: number): Attachment =>
@@ -257,7 +259,7 @@ export function createSlackModActionAlerts(
             const send = isUrgent(modAction, presentation, actor) ? destinations.alerts : destinations.notifications;
             const told = (shown: ModAction): SlackMessage => {
                 const message = modActionMessage(shown, presentation, actor);
-                return opensBurst ? withBurstLine(message, modAction.moderatorName, actor) : message;
+                return opensBurst ? withBurstLine(message, modAction.moderatorName) : message;
             };
             const contentIds = quotedContent(modAction.target);
             await (contentIds.length === 0
