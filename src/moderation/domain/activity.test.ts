@@ -11,11 +11,19 @@ describe("whose activity an action counts toward", (): void => {
         expect(activityOf(modAction())).toStrictEqual({ subredditName: "testsub", moderatorName: "ModA" });
     });
 
-    // AutoModerator's and Reddit's bursts are automated, not a moderator acting fast.
+    // Reddit's accounts count, so that a sweep of removals by one is summarised as a moderator's burst is.
+    it.each([
+        ["u/reddit", "reddit"],
+        ["Anti-Evil Operations", "Anti-Evil Operations"],
+    ])("is %s's for its action", TEST_OPTIONS, (_label: string, moderatorName: string): void => {
+        expect.hasAssertions();
+
+        expect(activityOf(modAction({ moderatorName }))).toStrictEqual({ subredditName: "testsub", moderatorName });
+    });
+
+    // AutoModerator's bursts are its rules at work, not a moderator acting fast.
     it.each([
         ["AutoModerator's", { moderatorName: "AutoModerator", isAutoModerator: true }],
-        ["u/reddit's", { moderatorName: "reddit" }],
-        ["Anti-Evil Operations'", { moderatorName: "Anti-Evil Operations" }],
         ["one naming no moderator", { moderatorName: undefined }],
         ["one with a blank moderator", { moderatorName: "" }],
         ["one naming no subreddit", { subredditName: undefined }],

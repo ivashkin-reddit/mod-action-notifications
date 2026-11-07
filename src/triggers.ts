@@ -6,7 +6,7 @@ import {
     configOf,
     healthReports,
     modActionPresentation,
-    outboxOf,
+    slackSendersOf,
     slackReady,
 } from "./composition.js";
 import type { AppContext, Installation } from "./composition.js";
@@ -15,6 +15,8 @@ import {
     createModListCache,
     createRedditModerationLookups,
     createRedisModerationRecords,
+    createDevvitBurstSchedule,
+    createRedisBurstRecords,
     createSlackModActionAlerts,
     isRedditAccount,
     modActionFromTriggerEvent,
@@ -67,7 +69,9 @@ function moderationPorts(context: AppContext, config: Installation): ModerationP
             cache: modListCache,
             installation: context.subredditId,
         }),
-        alerts: createSlackModActionAlerts(outboxOf(context, config).send, modActionPresentation(config)),
+        alerts: createSlackModActionAlerts(slackSendersOf(context, config), modActionPresentation(config)),
+        bursts: createRedisBurstRecords(context.redis),
+        burstSchedule: createDevvitBurstSchedule(context.scheduler),
     };
 }
 
@@ -149,7 +153,7 @@ async function watchForSecurity(
             {
                 store: createRedisSecurityStore(context.redis),
                 wiki: createRedditConfigWiki(context.reddit),
-                alerts: createSlackSecurityAlerts(outboxOf(context, config).send, config.alertChannel, actionNameOf),
+                alerts: createSlackSecurityAlerts(slackSendersOf(context, config).alerts, actionNameOf),
             },
         );
     } catch (error) {
@@ -232,7 +236,7 @@ async function alertOnPostDeletion(event: PostDeleteEvent, context: AppContext):
     await alertOnUserDeletion(postDeletionConfig(config), postDeletionFromTriggerEvent(event), {
         posts: createRedditPostLookup(context.reddit),
         claims: createRedisDeletionClaims(context.redis),
-        alerts: createSlackPostDeletionAlerts(outboxOf(context, config).send, config.alertChannel),
+        alerts: createSlackPostDeletionAlerts(slackSendersOf(context, config).alerts),
     });
 }
 

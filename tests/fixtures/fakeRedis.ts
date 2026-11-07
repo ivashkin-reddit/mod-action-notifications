@@ -6,13 +6,15 @@ import { createKeyspace, MS_PER_SECOND, scoresAt, textAt, withinRequestLimit } f
 import type { Keyspace } from "./fakeRedisKeyspace.js";
 import { ranked, sortedSetCommands } from "./fakeRedisSortedSets.js";
 import type { SortedSetCommands, ZMember } from "./fakeRedisSortedSets.js";
+import { transactionCommands } from "./fakeRedisTransactions.js";
+import type { FakeTransaction, TransactionCommands } from "./fakeRedisTransactions.js";
 
-export type { ZMember };
+export type { FakeTransaction, ZMember };
 
 /**
  * A stand-in for Devvit's Redis client: the commands the app uses, with Redis's behaviour for expiry, NX sets,
- * sorted sets and hashes, and Devvit's limit on a request's size. Every command is a vi.fn, so a test can make one
- * fail (`mockRejectedValueOnce`) or count its calls.
+ * sorted sets, hashes, transactions and RENAME, and Devvit's limit on a request's size. Every command is a vi.fn,
+ * so a test can make one fail (`mockRejectedValueOnce`) or count its calls.
  */
 
 type SetOptions = Readonly<{ nx?: boolean; expiration?: Date }>;
@@ -27,7 +29,7 @@ interface StringCommands {
     readonly expire: Mock<(key: string, seconds: number) => Promise<void>>;
 }
 
-export interface FakeRedis extends StringCommands, SortedSetCommands, HashCommands {
+export interface FakeRedis extends StringCommands, SortedSetCommands, HashCommands, TransactionCommands {
     /** Live keys, sorted. */
     readonly keys: () => readonly string[];
     /** The members of the sorted set at `key`, lowest score first; none when there is no set. */
@@ -80,10 +82,13 @@ function stringCommands(keyspace: Keyspace): StringCommands {
 
 export function createFakeRedis(): FakeRedis {
     const keyspace = createKeyspace();
+    const strings = stringCommands(keyspace);
+    const hashes = hashCommands(keyspace);
     return {
-        ...stringCommands(keyspace),
+        ...strings,
         ...sortedSetCommands(keyspace),
-        ...hashCommands(keyspace),
+        ...hashes,
+        ...transactionCommands(keyspace, { ...hashes, expire: strings.expire }),
         keys: (): readonly string[] =>
             [...keyspace.keys()].sort((first: string, second: string): number => first.localeCompare(second)),
         members: (key: string): readonly string[] =>

@@ -26,7 +26,7 @@ describe("an outbox whose scheduler fails", (): void => {
             const failure = new Error("scheduler down");
             scheduler.runJob.mockRejectedValueOnce(failure);
 
-            await drive(outbox.send({ text: "hello" }));
+            await drive(outbox.notifications({ text: "hello" }));
 
             expect(texts(slack.messages)).toStrictEqual(["hello"]);
             expect(redis.keys()).not.toContain("slack_outbox_recovery_scheduled");

@@ -1,4 +1,4 @@
-import { escapeText, inChannel } from "../../slack/index.js";
+import { escapeText } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ConfigEditedAlert, MisfireAlert, SecurityAlerts, WokeAlert } from "../application/ports.js";
 import { CONFIG_PAGE } from "../domain/watch.js";
@@ -85,20 +85,16 @@ function misfireMessage({ editor, removals, hourlyAverage, subredditName }: Misf
 }
 
 /** Security alerts as Slack messages, handed to `send`, which queues them, for the alert channel. */
-export function createSlackSecurityAlerts(
-    send: SlackSender,
-    alertChannel: string,
-    nameOf: ActionNamer,
-): SecurityAlerts {
+export function createSlackSecurityAlerts(send: SlackSender, nameOf: ActionNamer): SecurityAlerts {
     return {
         moderatorWoke: async (alert: WokeAlert): Promise<void> => {
-            await send(inChannel(wokeMessage(alert, nameOf), alertChannel));
+            await send(wokeMessage(alert, nameOf));
         },
         configEdited: async (alert: ConfigEditedAlert): Promise<void> => {
-            await send(inChannel(configEditedMessage(alert), alertChannel));
+            await send(configEditedMessage(alert));
         },
         misfiring: async (alert: MisfireAlert): Promise<void> => {
-            await send(inChannel(misfireMessage(alert), alertChannel));
+            await send(misfireMessage(alert));
         },
     };
 }

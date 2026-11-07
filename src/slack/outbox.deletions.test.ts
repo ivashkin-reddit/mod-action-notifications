@@ -20,7 +20,7 @@ function fakeOutbox(): OutboxFakes & Readonly<{ outbox: SlackOutbox }> {
 }
 
 async function sendQuoting(outbox: SlackOutbox, contentId: string): Promise<void> {
-    await drive(outbox.send(...alertQuoting(contentId)));
+    await drive(outbox.notifications(...alertQuoting(contentId)));
 }
 
 /** Everything the queue stores, as text. */
@@ -263,7 +263,7 @@ describe("content deleted on Reddit", (): void => {
         await forgetContent(dependencies, "t1_a");
         slack.respond(...ONE_DRAIN_OF_FAILURES);
 
-        await drive(outbox.send({ text: "plain" }));
+        await drive(outbox.notifications({ text: "plain" }));
 
         expect(redis.members(QUEUE_KEY)).toHaveLength(1);
         expect(

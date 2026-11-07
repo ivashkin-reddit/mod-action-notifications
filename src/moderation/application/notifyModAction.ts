@@ -2,12 +2,15 @@ import { ACTIVITY_WINDOW_MS, activityOf, activitySpike } from "../domain/activit
 import { isReported } from "../domain/alerting.js";
 import type { AlertRules } from "../domain/alerting.js";
 import { hasBanDurationMetadata, matchBanLogEntry, withBanLogEntry } from "../domain/banDuration.js";
+import { burstAccountOf, isRemoval } from "../domain/burst.js";
 import { disciplineEventOf, disciplineStep, disciplineSubject, isRecorded, liftedBy } from "../domain/discipline.js";
 import type { DisciplineEvent } from "../domain/discipline.js";
 import { recentHistory } from "../domain/history.js";
 import { actionTypeOf, isBlank, isRedditAccount } from "../domain/modAction.js";
 import type { Actor, ModAction } from "../domain/modAction.js";
-import type { ModActionAlerts, ModerationLookups, ModerationRecords } from "./ports.js";
+import { joinBurst } from "./bursts.js";
+import type { BurstOutcome } from "./bursts.js";
+import type { BurstRecords, BurstSchedule, ModActionAlerts, ModerationLookups, ModerationRecords } from "./ports.js";
 
 export interface ModerationConfig extends AlertRules {
     /** Send actions by users not on the mod list as security alerts. */
@@ -20,6 +23,8 @@ export interface ModerationPorts {
     readonly records: ModerationRecords;
     readonly lookups: ModerationLookups;
     readonly alerts: ModActionAlerts;
+    readonly bursts: BurstRecords;
+    readonly burstSchedule: BurstSchedule;
 }
 
 /** A ban without a length, completed from the mod log when an entry matches; unchanged otherwise or on failure. */
@@ -162,12 +167,23 @@ async function isFirstDelivery(modAction: ModAction, records: ModerationRecords)
     });
 }
 
+/** What becomes of the action: a removal at the spike rate joins its account's burst; anything else goes on its own. */
+async function burstOutcome(modAction: ModAction, actor: Actor, ports: ModerationPorts): Promise<BurstOutcome> {
+    const account = burstAccountOf(modAction, actor);
+    const type = actionTypeOf(modAction);
+    return account === undefined || !isRemoval(type)
+        ? "alone"
+        : await joinBurst({ account, type, at: Date.now() }, ports);
+}
+
 /**
  * Tells moderators about a mod action. Every action, sent or not, is first completed from the mod log (a ban
  * without a length), remembered or matched against what it lifts (bans and mutes, while alerts for their lifting
- * are on), and counted toward its moderator's activity (except AutoModerator's and Reddit's). Only an action that is
- * reported has its moderator checked against the mod list, and an action delivered again is reported once. Returns
- * the action as completed, for what else counts it.
+ * are on), and counted toward its account's activity (except AutoModerator's). Only an action that is reported has
+ * its moderator checked against the mod list, and an action delivered again is reported once. A removal at the spike
+ * rate, by a moderator or one of Reddit's accounts, joins its account's burst: the first is alerted, saying further
+ * removals will be summarised, and the rest are held for the summary. Returns the action as completed, for what else
+ * counts it.
  */
 export async function notifyModAction(
     action: ModAction,
@@ -182,9 +198,18 @@ export async function notifyModAction(
         return modAction;
     }
     const actor = await actorOf(modAction, config, ports.lookups);
-    // Claimed just before the alert is queued, so a delivery that fails earlier leaves the report to the next one.
-    if (await isFirstDelivery(modAction, ports.records)) {
-        await ports.alerts.report(await withRecentHistory(modAction, config.banHistoryDays, ports.lookups), actor);
+    // Claimed just before the alert is queued, so a delivery that fails earlier leaves the report to the next one, and
+    // a removal delivered again is counted in its burst once.
+    if (!(await isFirstDelivery(modAction, ports.records))) {
+        return modAction;
+    }
+    const outcome = await burstOutcome(modAction, actor, ports);
+    if (outcome !== "held") {
+        await ports.alerts.report(
+            await withRecentHistory(modAction, config.banHistoryDays, ports.lookups),
+            actor,
+            outcome === "opened",
+        );
     }
     return modAction;
 }

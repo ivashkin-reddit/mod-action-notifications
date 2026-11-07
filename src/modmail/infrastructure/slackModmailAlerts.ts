@@ -1,4 +1,4 @@
-import { escapeText, inChannel } from "../../slack/index.js";
+import { escapeText } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ModmailAlerts } from "../application/ports.js";
 import type { WaitingModmail } from "../domain/modmail.js";
@@ -43,7 +43,7 @@ function waitingLine(waiting: WaitingModmail): string {
  * Modmail alerts as Slack messages for the alert channel. The admin alert gives the conversation's subject, which an
  * admin wrote, escaped; the waiting alert gives counts only.
  */
-export function createSlackModmailAlerts(send: SlackSender, alertChannel: string): ModmailAlerts {
+export function createSlackModmailAlerts(send: SlackSender): ModmailAlerts {
     return {
         fromAdmin: async ({
             conversationId,
@@ -57,7 +57,7 @@ export function createSlackModmailAlerts(send: SlackSender, alertChannel: string
                 `• *Subject:* ${escapeText(subject)}`,
                 `• *Conversation:* <${MODMAIL}/all/${encodeURIComponent(conversationId)}|Open in Modmail>`,
             ]);
-            await send(inChannel(alert, alertChannel));
+            await send(alert);
         },
         waiting: async (waiting: WaitingModmail): Promise<void> => {
             const conversations = plural(waiting.waiting, "conversation", "conversations");
@@ -72,7 +72,7 @@ export function createSlackModmailAlerts(send: SlackSender, alertChannel: string
                     FOLDER_LINKS,
                 ],
             );
-            await send(inChannel(alert, alertChannel));
+            await send(alert);
         },
     };
 }

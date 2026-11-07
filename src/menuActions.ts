@@ -23,7 +23,7 @@ import { createDevvitMonitorScheduler, monitorJobStatus } from "./modqueue/index
 import type { MonitorJobStatus } from "./modqueue/index.js";
 import { setUpScheduledJobs } from "./scheduledJobs.js";
 import type { AppConfig } from "./settings/index.js";
-import { createDirectSender, queueState, readConnection } from "./slack/delivery.js";
+import { createDirectSender, directToChannel, queueState, readConnection } from "./slack/delivery.js";
 import type { SlackConnection } from "./slack/delivery.js";
 import { countOf, createRedisStatisticsStore, dayRange, reportFor, reportLines } from "./statistics/index.js";
 import type { ReportLine, TeamReport } from "./statistics/index.js";
@@ -237,15 +237,18 @@ async function sendSimulatedModAction(
     if (channel === undefined) {
         return "channel-refused";
     }
-    const presentation = modActionPresentation(config);
+    const direct = createDirectSender(slackApiOf(context, config));
     await simulateModAction(
         simulationRequestFromForm(values),
         context.subredditName,
         // A moderator waits on the result, so the simulation goes straight to Slack, to the channel the form names.
-        createSlackSimulationAlerts(createDirectSender(slackApiOf(context, config)), {
-            ...presentation,
-            notificationChannel: channel === "" ? presentation.notificationChannel : channel,
-        }),
+        createSlackSimulationAlerts(
+            {
+                alerts: directToChannel(config.alertChannel, direct),
+                notifications: directToChannel(channel === "" ? config.notificationChannel : channel, direct),
+            },
+            modActionPresentation(config),
+        ),
     );
     return "sent";
 }

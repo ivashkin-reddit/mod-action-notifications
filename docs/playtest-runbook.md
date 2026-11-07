@@ -141,14 +141,27 @@ Then:
     - Which account Reddit names for the app's own installs and upgrades. If it is the app's account, not on the mod list, each upgrade sends a false "unknown moderator" alert, and the app should ignore its own account (`context.appAccountId`).
     - Whether the app's own modmail notices come back to it, as a ModMail event or a conversation waiting for a reply.
 
-### 15. Logs
+### 15. A burst of removals, and the alert queue
+
+- [ ] **Do:** as **Mod A**, remove eight of **User**'s comments within a minute.
+- [ ] **Expect:** in the notification channel, an alert for each removal up to Mod A's fifth action in the minute. The fifth's alert ends with `• *Burst:* Further removals by u/ModA will be summarised`. No alert comes for the rest.
+- [ ] **Expect:** about a minute after the last removal, a `🧹 Removal burst: … comments removed` summary in the notification channel. It counts from the removal that opened the burst. Its **Open the mod log** link opens old Reddit's mod log filtered to Mod A.
+- [ ] **Do:** add Approve Post and Approve Comment to **Enabled Mod Actions**. As **Mod A**, approve ten items in quick succession (bulk approve in the modqueue works), then at once, as **Mod A**, change **Mod B**'s permissions.
+- [ ] **Expect:** the security alert for the permissions change reaches the alert channel before the last approvals' alerts reach the notification channel. **Show Bot Status** meanwhile shows them apart: "Alerts waiting" and "Notifications waiting".
+- **Settles:**
+    - The burst's transaction runs on Devvit's Redis: `exec` answers one result for each command, and HSETNX's as a number or a boolean.
+    - Old Reddit's mod log filters by moderator with `?mod=`.
+    - An alert for the Alert Channel overtakes routine alerts waiting in Slack's queue.
+
+### 16. Logs
 
 - [ ] **Expect:** no `ERROR` lines in the logs for the session. A `WARN` line from the table in [OPERATORS-GUIDE.md](../OPERATORS-GUIDE.md#reading-the-logs) points to the step that failed.
 
 ## Clean up
 
 - [ ] Delete the rule from step 3 from AutoModerator's config. That sends another security alert.
-- [ ] Set back the settings from the start: Spam Queue Size Alert Threshold 0, Urgent Report Reasons blank, Report Pile-Up Alert Threshold 0, Modmail Waiting Alert (Hours) 24.
+- [ ] Set back the settings from the start: Spam Queue Size Alert Threshold 0, Urgent Report Reasons blank, Report Pile-Up Alert Threshold 0, Modmail Waiting Alert (Hours) 24, and Approve Post and Approve Comment out of Enabled Mod Actions.
+- [ ] Give **Mod B** back the permissions step 15 changed. That sends another security alert.
 - [ ] Archive the test modmail, and delete the test posts as User.
 
 ## Not covered here
@@ -162,3 +175,4 @@ These need time, or an account, that a session doesn't have. The integration tes
 | AutoModerator misfiring after an edit   | Needs 20 removals in the hour after an edit                      | `automodMisfire.test.ts`                       |
 | The weekly statistics and daily summary | Post on Mondays, and each day, at 08:00 UTC: check the next one  | `weeklyDigest.test.ts`, `dailySummary.test.ts` |
 | A folder of more than 100 conversations | Shows whether Reddit lists the latest first                      | `unansweredModmail.test.ts`                    |
+| A sweep of removals by Reddit's admins  | Needs Anti-Evil Operations to remove in the subreddit            | `removalBursts.test.ts`                        |

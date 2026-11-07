@@ -179,7 +179,7 @@ describe("what the app registers with Devvit", (): void => {
 
     // Scheduler job names are stored with every scheduled job: renaming one orphans the jobs already scheduled.
     it(
-        "registers the modqueue monitor, the Slack outbox, the daily summary and the weekly statistics as its scheduler jobs",
+        "registers the modqueue monitor, the Slack outbox, a burst's summary, the daily summary and the weekly statistics as its scheduler jobs",
         TEST_OPTIONS,
         async (): Promise<void> => {
             expect.hasAssertions();
@@ -189,6 +189,7 @@ describe("what the app registers with Devvit", (): void => {
             expect(Object.keys(app.registrations.schedulerJobs)).toStrictEqual([
                 "modqueueMonitor",
                 "slackOutbox",
+                "removalBurst",
                 "dailySummary",
                 "weeklyStatistics",
             ]);

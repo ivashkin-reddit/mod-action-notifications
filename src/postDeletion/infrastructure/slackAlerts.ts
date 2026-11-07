@@ -1,4 +1,4 @@
-import { inChannel, withoutTitle } from "../../slack/index.js";
+import { withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { DeletedPostAlert, PostDeletionAlerts } from "../application/ports.js";
 
@@ -28,11 +28,11 @@ function deletedPostMessage({ post, subredditName, deletedAt, reason }: DeletedP
     };
 }
 
-/** Deleted-post alerts as Slack messages, sent to the alert channel. */
-export function createSlackPostDeletionAlerts(send: SlackSender, alertChannel: string): PostDeletionAlerts {
+/** Deleted-post alerts as Slack messages for the alert channel, handed to `send`. */
+export function createSlackPostDeletionAlerts(send: SlackSender): PostDeletionAlerts {
     return {
         highScorePostDeleted: async (alert: DeletedPostAlert): Promise<void> => {
-            await send(inChannel(deletedPostMessage(alert), alertChannel));
+            await send(deletedPostMessage(alert));
         },
     };
 }

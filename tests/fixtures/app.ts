@@ -3,6 +3,7 @@ import { BOT_TOKEN, createFakeContext, defaultSettings } from "./fakeContext.js"
 import type { CreatedContext, FakeContext, Settings, ShownForm, Toast } from "./fakeContext.js";
 import type { FakeDevvit, FormDefinition, Handler, Registrations } from "./fakeDevvit.js";
 import type { FakeRedis } from "./fakeRedis.js";
+import type { ScheduledJob } from "./fakeScheduler.js";
 import { createFakeSlack, WORKSPACE } from "./fakeSlack.js";
 import type { FakeSlack } from "./fakeSlack.js";
 
@@ -35,6 +36,11 @@ export type App = Readonly<{
     fire: (event: string, payload: unknown, installation?: unknown) => Promise<void>;
     /** Runs a scheduler job the way the scheduler would. */
     runJob: (name: string) => Promise<void>;
+    /**
+     * Runs, oldest first and with their data, the one-off jobs named `name` whose time has come, as the scheduler would,
+     * and any of them schedules that are due at once; returns how many ran.
+     */
+    runDueJobs: (name: string) => Promise<number>;
     /** Presses a menu item by its label. */
     pressMenuItem: (label: string) => Promise<void>;
     /** The form the app most recently showed with ui.showForm. */
@@ -139,6 +145,20 @@ function installationOf(setup: Readonly<Setup>): CreatedContext & Readonly<{ set
     return { ...created, settings };
 }
 
+/** At most this many due jobs run at once: a job that keeps scheduling itself for now would run forever. */
+const MAX_DUE_RUNS = 100;
+
+/** The oldest one-off job named `name` whose time has come; undefined when none is due. */
+function dueJob(jobs: readonly ScheduledJob[], name: string): ScheduledJob | undefined {
+    const due = jobs.filter(
+        (job: ScheduledJob): boolean =>
+            job.name === name && job.runAt !== undefined && job.runAt.getTime() <= Date.now(),
+    );
+    return due.sort(
+        (first: ScheduledJob, second: ScheduledJob): number => Number(first.runAt) - Number(second.runAt),
+    )[0];
+}
+
 export async function loadApp(devvit: FakeDevvit, setup: Readonly<Setup> = {}): Promise<App> {
     vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
     const { context, toasts, shownForms, settings } = installationOf(setup);
@@ -158,6 +178,25 @@ export async function loadApp(devvit: FakeDevvit, setup: Readonly<Setup> = {}): 
         toasts,
         connectSlack: (token: string): void => {
             connect(context.redis, token);
+        },
+        runDueJobs: async (name: string): Promise<number> => {
+            const runFrom = async (ran: number): Promise<number> => {
+                const job = dueJob(context.scheduler.jobs, name);
+                if (job === undefined || ran >= MAX_DUE_RUNS) {
+                    return ran;
+                }
+                // Taken off the schedule as it starts, as the scheduler does: what it schedules is a job of its own.
+                context.scheduler.jobs = context.scheduler.jobs.filter(
+                    (scheduled: ScheduledJob): boolean => scheduled.id !== job.id,
+                );
+                await invoke(
+                    named(registrations.schedulerJobs, "scheduler job", name),
+                    { name, data: job.data },
+                    context,
+                );
+                return await runFrom(ran + 1);
+            };
+            return await runFrom(0);
         },
         ...actions(registrations, context, shownForms),
     };

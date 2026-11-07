@@ -6,7 +6,7 @@ import {
     updateFromPostEvent,
 } from "./approvedEdits/index.js";
 import type { CommentUpdateEvent, ContentUpdate, EditWatch, PostUpdateEvent } from "./approvedEdits/index.js";
-import { alertsConfigured, configOf, modmailPorts, outboxOf } from "./composition.js";
+import { alertsConfigured, configOf, modmailPorts, slackSendersOf } from "./composition.js";
 import type { AppContext } from "./composition.js";
 import { alertOnAdminModmail, messageFromEvent } from "./modmail/index.js";
 import type { ModmailEvent } from "./modmail/index.js";
@@ -43,7 +43,7 @@ async function alertOn(report: ContentReport, context: AppContext): Promise<void
         { urgentReasons: config.urgentReportReasons, pileUpThreshold: config.reportPileUpThreshold },
         {
             claims: createRedisReportClaims(context.redis),
-            alerts: createSlackReportAlerts(outboxOf(context, config).send, config.alertChannel),
+            alerts: createSlackReportAlerts(slackSendersOf(context, config).alerts),
         },
     );
 }
@@ -136,7 +136,7 @@ async function alertOnUpdate(update: ContentUpdate, context: AppContext): Promis
                 ? {
                       days: config.editsAfterApprovalDays,
                       editAt: Date.now(),
-                      alerts: createSlackEditAlerts(outboxOf(context, config).send, config.alertChannel),
+                      alerts: createSlackEditAlerts(slackSendersOf(context, config).alerts),
                   }
                 : undefined;
         });

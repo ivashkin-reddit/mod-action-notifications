@@ -1,4 +1,4 @@
-import { escapeText, inChannel, withoutTitle } from "../../slack/index.js";
+import { escapeText, withoutTitle } from "../../slack/index.js";
 import type { SlackMessage, SlackSender } from "../../slack/index.js";
 import type { ReportAlerts } from "../application/ports.js";
 import type { ContentReport } from "../domain/reports.js";
@@ -33,7 +33,7 @@ function message(text: string, color: string, lines: readonly string[]): SlackMe
  * Report alerts as Slack messages for the alert channel. They name the configured reason, never the report's own
  * words, and quote nothing of the content.
  */
-export function createSlackReportAlerts(send: SlackSender, alertChannel: string): ReportAlerts {
+export function createSlackReportAlerts(send: SlackSender): ReportAlerts {
     return {
         urgent: async ({ reason, report }: Readonly<{ reason: string; report: ContentReport }>): Promise<void> => {
             const urgent = message(`🚨 Urgent report: ${escapeText(reason)}`, "#ff0000", [
@@ -42,7 +42,7 @@ export function createSlackReportAlerts(send: SlackSender, alertChannel: string)
                 ...contentLines(report),
                 `• *Reports:* ${String(report.reportCount)}`,
             ]);
-            await send(inChannel(urgent, alertChannel));
+            await send(urgent);
         },
         pileUp: async (report: ContentReport): Promise<void> => {
             const count = String(report.reportCount);
@@ -51,7 +51,7 @@ export function createSlackReportAlerts(send: SlackSender, alertChannel: string)
                 `• *Reports:* ${count}`,
                 ...contentLines(report),
             ]);
-            await send(inChannel(pileUp, alertChannel));
+            await send(pileUp);
         },
     };
 }

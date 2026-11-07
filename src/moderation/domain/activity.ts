@@ -1,4 +1,4 @@
-import { isBlank, isRedditAccount } from "./modAction.js";
+import { isBlank } from "./modAction.js";
 import type { ActivitySpike, ModAction } from "./modAction.js";
 
 const MS_PER_SECOND = 1000;
@@ -16,17 +16,13 @@ export interface ModeratorRef {
 }
 
 /**
- * The moderator whose activity the action counts toward: none for AutoModerator's and Reddit's actions, whose
- * bursts are automated, or for an event that names no moderator or subreddit.
+ * The account whose activity the action counts toward: its moderator's, or one of Reddit's accounts', whose bursts of
+ * removals are summarised like a moderator's. None for AutoModerator's actions, whose bursts are its rules at work,
+ * or for an event that names no moderator or subreddit.
  */
 export function activityOf(modAction: ModAction): ModeratorRef | undefined {
     const { moderatorName, subredditName } = modAction;
-    if (
-        modAction.isAutoModerator ||
-        isRedditAccount(moderatorName) ||
-        isBlank(moderatorName) ||
-        isBlank(subredditName)
-    ) {
+    if (modAction.isAutoModerator || isBlank(moderatorName) || isBlank(subredditName)) {
         return undefined;
     }
     return { subredditName, moderatorName };

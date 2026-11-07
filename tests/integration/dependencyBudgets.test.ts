@@ -59,7 +59,9 @@ function commentRemoval(id: string): ReturnType<typeof modActionEvent> {
 
 // The hottest triggers' dependency calls, as measured in the observability pass: a change that adds a settings read,
 // a Reddit call or a Redis call in a loop fails here. Settings are read at most once an invocation, as Devvit's client
-// fetches every setting on each read; Redis counts are budgets, each the count measured.
+// fetches every setting on each read; Redis counts are budgets, each the count measured. Every look at Slack's queues
+// reads the alert queue before the notification queue, which added one Redis call to a comment deletion (10 to 11) and
+// five to a mod action's inline drain (66 to 71).
 describe("an invocation's dependency calls", (): void => {
     it(
         "are, for a comment edit to an item no moderator approved, one Redis read and nothing else",
@@ -85,7 +87,7 @@ describe("an invocation's dependency calls", (): void => {
             type: "CommentDelete",
             event: commentDeleteEvent({ commentId: "t1_x", postId: "t3_p" }),
             exact: { reddit: 0, settings: 0, slack: 0 },
-            redis: 10,
+            redis: 11,
         },
         {
             label: "a comment report",
@@ -113,7 +115,7 @@ describe("an invocation's dependency calls", (): void => {
             type: "ModAction",
             event: commentRemoval("ModAction_2"),
             exact: { reddit: 0, settings: 1, slack: 1 },
-            redis: 70,
+            redis: 71,
         },
     ])(
         "are, for $label, within their budget",
@@ -128,6 +130,29 @@ describe("an invocation's dependency calls", (): void => {
 
             expect(measured).toMatchObject(exact);
             expect(measured?.redis).toBeLessThanOrEqual(redis);
+        },
+    );
+
+    // A removal in a burst is counted, not alerted: its transaction is nine calls (WATCH, then MULTI, six commands and
+    // EXEC, counted as redis.tx.*), in place of queuing and draining an alert (71 calls above).
+    it(
+        "are, for a removal held in its moderator's burst, Redis calls and no alert",
+        TEST_OPTIONS,
+        async (): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit, { debugLogging: true });
+            // Five removals in a minute open ModA's burst; the sixth is held for its summary.
+            for (let index = 0; index < 5; index += 1) {
+                await app.fire("ModAction", commentRemoval(`ModAction_${String(index)}`));
+            }
+
+            await expect(callsOf(app, "ModAction", commentRemoval("ModAction_held"))).resolves.toStrictEqual({
+                redis: 39,
+                reddit: 0,
+                settings: 1,
+                slack: 0,
+            });
         },
     );
 });

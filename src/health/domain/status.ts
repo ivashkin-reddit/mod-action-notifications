@@ -12,8 +12,11 @@ export type MonitorState =
     | Readonly<{ enabled: boolean; job: "none" | "one-off" | "unknown" }>
     | Readonly<{ enabled: boolean; job: "scheduled"; cron: string }>;
 
-/** The alerts waiting for Slack: how many, and when the oldest was queued, in ms since the epoch. */
+/** The messages waiting in one of Slack's queues: how many, and when the oldest was queued, in ms since the epoch. */
 export type QueueState = Readonly<{ waiting: number; oldestQueuedAt: number | undefined }>;
+
+/** Slack's two queues: the Alert Channel's, delivered first, and the Notification Channel's. */
+export type QueueStates = Readonly<{ alerts: QueueState; notifications: QueueState }>;
 
 /** What the status reports, gathered from the settings, the scheduler and Redis; undefined for what Redis could not give. */
 export interface StatusInput {
@@ -24,7 +27,7 @@ export interface StatusInput {
     readonly slack: SlackStatus | undefined;
     readonly monitor: MonitorState;
     readonly problems: readonly InForce[] | undefined;
-    readonly queue: QueueState | undefined;
+    readonly queue: QueueStates | undefined;
     readonly lastSeen: LastSeen | undefined;
     /** Today's counts, by UTC day. */
     readonly today: Counts | undefined;
@@ -176,7 +179,8 @@ export function statusLines(input: StatusInput): readonly StatusLine[] {
         { label: "App version", value: input.version },
         { label: "Slack app", value: slackText(input.slack) },
         { label: "Current problems", value: problemsText(input.problems, input.now) },
-        { label: "Alerts waiting", value: waitingText(input.queue, input.now) },
+        { label: "Alerts waiting", value: waitingText(input.queue?.alerts, input.now) },
+        { label: "Notifications waiting", value: waitingText(input.queue?.notifications, input.now) },
         { label: "Last alert delivered", value: lastDeliveredText(input.lastSeen, input.now) },
         { label: "Modqueue monitor", value: monitorText(input.monitor) },
         { label: "Last monitor run", value: lastRunText(input.lastSeen, input.now) },

@@ -1,11 +1,21 @@
 import type { TriggerContext } from "@devvit/public-api";
 import type { Quoting, SlackMessage } from "./message.js";
 
-/** The queue: a sorted set of messages, each scored by when it was queued. Installations already hold members in it. */
-export const QUEUE_KEY = "slack_outbox";
+/** The outbox's two queues: the Alert Channel's, delivered first, and the Notification Channel's. */
+export type QueueName = "alerts" | "notifications";
+
+/**
+ * Each queue: a sorted set of messages, each scored by when it was queued. Installations already hold members in
+ * `slack_outbox`, which was the only queue before the alert queue, and is now the notification queue.
+ */
+export const QUEUE_KEYS: Readonly<Record<QueueName, string>> = {
+    alerts: "slack_outbox_alerts",
+    notifications: "slack_outbox",
+};
+const QUEUE_NAMES: readonly QueueName[] = ["alerts", "notifications"];
 /** A message queued longer than this is dropped: it is no longer news. A day. */
 export const MAX_AGE_SECONDS = 86_400;
-/** At most this many messages wait; beyond that the oldest are dropped. */
+/** At most this many messages wait in each queue; beyond that, the queue's oldest are dropped. */
 const MAX_QUEUED = 500;
 
 export type QueueRedis = Readonly<
@@ -14,6 +24,8 @@ export type QueueRedis = Readonly<
 
 /** A queued message, as stored; `message` is undefined for a member this app cannot read. */
 export interface Queued {
+    /** The queue it waits in. */
+    readonly queue: QueueName;
     readonly member: string;
     readonly score: number;
     readonly id: string;
@@ -25,6 +37,9 @@ export interface Queued {
 
 /** A queued message that quotes Reddit content. */
 export type QueuedQuoting = Queued & Readonly<{ quoting: Quoting }>;
+
+/** How many messages wait in a queue, and when its oldest was queued, in ms since the epoch. */
+export type QueueState = Readonly<{ waiting: number; oldestQueuedAt: number | undefined }>;
 
 /** A stored member's fields; none for one this app cannot read. */
 function fieldsOf(member: string): ReadonlyMap<string, unknown> {
@@ -52,10 +67,11 @@ function quotingOf(fields: Readonly<Pick<ReadonlyMap<string, unknown>, "get">>):
     return isSlackMessage(withoutQuotes) ? { contentIds: texts(fields.get("contentIds")), withoutQuotes } : undefined;
 }
 
-function queuedOf({ member, score }: Readonly<{ member: string; score: number }>): Queued {
+function queuedOf(queue: QueueName, { member, score }: Readonly<{ member: string; score: number }>): Queued {
     const fields = fieldsOf(member);
     const [id, queuedAt, message] = ["id", "queuedAt", "message"].map((name: string): unknown => fields.get(name));
     return {
+        queue,
         member,
         score,
         id: typeof id === "string" ? id : "",
@@ -76,49 +92,73 @@ function memberOf({ id, queuedAt }: Stamp, message: SlackMessage, quoting: Quoti
     );
 }
 
-/** Queues the message, and returns how many of the oldest messages it pushed out of a full queue. */
-export async function enqueue(redis: QueueRedis, message: SlackMessage, quoting: Quoting | undefined): Promise<number> {
+/** A message on its way to a queue: the queue, the message, and what it quotes when it quotes anything. */
+export type Outgoing = Readonly<{ queue: QueueName; message: SlackMessage; quoting: Quoting | undefined }>;
+
+/** What each queue is called when moderators are told about it. */
+export const QUEUE_TITLES: Readonly<Record<QueueName, string>> = {
+    alerts: "alert queue",
+    notifications: "notification queue",
+};
+
+/** Queues the message in its queue, and returns how many of that queue's oldest messages it pushed out. */
+export async function enqueue(redis: QueueRedis, { queue, message, quoting }: Outgoing): Promise<number> {
+    const key = QUEUE_KEYS[queue];
     const queuedAt = Date.now();
     const member = memberOf({ id: `${String(queuedAt)}:${String(Math.random())}`, queuedAt }, message, quoting);
-    await redis.zAdd(QUEUE_KEY, { member, score: queuedAt });
-    await redis.expire(QUEUE_KEY, MAX_AGE_SECONDS);
-    return await redis.zRemRangeByRank(QUEUE_KEY, 0, -(MAX_QUEUED + 1));
+    await redis.zAdd(key, { member, score: queuedAt });
+    await redis.expire(key, MAX_AGE_SECONDS);
+    return await redis.zRemRangeByRank(key, 0, -(MAX_QUEUED + 1));
 }
 
-/** How many messages wait, and when the oldest was queued. */
+/** How many messages wait in each queue, and when each queue's oldest was queued. */
 export async function queueState(
     redis: Readonly<Pick<QueueRedis, "zRange">> & Readonly<Pick<TriggerContext["redis"], "zCard">>,
-): Promise<Readonly<{ waiting: number; oldestQueuedAt: number | undefined }>> {
-    const waiting = await redis.zCard(QUEUE_KEY);
-    const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
-    return { waiting, oldestQueuedAt: first?.score };
+): Promise<Readonly<Record<QueueName, QueueState>>> {
+    const stateOf = async (queue: QueueName): Promise<QueueState> => {
+        const key = QUEUE_KEYS[queue];
+        const waiting = await redis.zCard(key);
+        const [first] = await redis.zRange(key, 0, 0, { by: "rank" });
+        return { waiting, oldestQueuedAt: first?.score };
+    };
+    return { alerts: await stateOf("alerts"), notifications: await stateOf("notifications") };
 }
 
+/** The next message to deliver: the oldest alert, else the oldest notification; undefined when none waits. */
 export async function oldest(redis: QueueRedis): Promise<Queued | undefined> {
-    const [first] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
-    return first === undefined ? undefined : queuedOf(first);
+    const [alert] = await redis.zRange(QUEUE_KEYS.alerts, 0, 0, { by: "rank" });
+    if (alert !== undefined) {
+        return queuedOf("alerts", alert);
+    }
+    const [notification] = await redis.zRange(QUEUE_KEYS.notifications, 0, 0, { by: "rank" });
+    return notification === undefined ? undefined : queuedOf("notifications", notification);
 }
 
-/** The queued messages that quote Reddit content. */
+/** The queued messages, in both queues, that quote Reddit content. */
 export async function quotingMessages(redis: QueueRedis): Promise<readonly QueuedQuoting[]> {
-    const members = await redis.zRange(QUEUE_KEY, 0, -1, { by: "rank" });
-    return members.map(queuedOf).filter((queued: Queued): queued is QueuedQuoting => queued.quoting !== undefined);
+    const queues = await Promise.all(
+        QUEUE_NAMES.map(async (queue: QueueName): Promise<readonly Queued[]> => {
+            const members = await redis.zRange(QUEUE_KEYS[queue], 0, -1, { by: "rank" });
+            return members.map((member: Readonly<{ member: string; score: number }>): Queued =>
+                queuedOf(queue, member),
+            );
+        }),
+    );
+    return queues.flat().filter((queued: Queued): queued is QueuedQuoting => queued.quoting !== undefined);
 }
 
 export async function remove(redis: QueueRedis, queued: Queued): Promise<void> {
-    await redis.zRem(QUEUE_KEY, [queued.member]);
+    await redis.zRem(QUEUE_KEYS[queued.queue], [queued.member]);
 }
 
 /**
- * Puts the message's version without quotes in its place, keeping its place in the queue, so the text it quoted is
- * no longer stored. One that has already left the queue stays gone.
+ * Puts the message's version without quotes in its place, keeping its queue and its place in it, so the text it
+ * quoted is no longer stored. One that has already left the queue stays gone.
  */
 export async function replaceWithoutQuotes(redis: QueueRedis, queued: QueuedQuoting): Promise<void> {
-    if ((await redis.zRem(QUEUE_KEY, [queued.member])) === 0) {
+    const key = QUEUE_KEYS[queued.queue];
+    if ((await redis.zRem(key, [queued.member])) === 0) {
         return;
     }
-    await redis.zAdd(QUEUE_KEY, {
-        member: memberOf(queued, queued.quoting.withoutQuotes, undefined),
-        score: queued.score,
-    });
+    await redis.zAdd(key, { member: memberOf(queued, queued.quoting.withoutQuotes, undefined), score: queued.score });
 }

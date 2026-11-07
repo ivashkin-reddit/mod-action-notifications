@@ -26,7 +26,8 @@ type DisciplineRecords = Pick<ModerationRecords, "recordDiscipline" | "disciplin
 type ReportRecords = Pick<ModerationRecords, "claimReport">;
 
 // Installations already hold values under these keys, in these shapes.
-function keyPart(value: string): string {
+/** A subreddit or account name as the keys hold it: lower case, with spaces and colons as underscores. */
+export function keyPart(value: string): string {
     return value.toLowerCase().replace(/[\s:]/gu, "_");
 }
 

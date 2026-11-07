@@ -28,7 +28,7 @@ describe("sending through the outbox", (): void => {
 
             const { outbox, redis, slack } = fakeOutbox();
 
-            await drive(outbox.send({ text: "hello" }));
+            await drive(outbox.notifications({ text: "hello" }));
 
             expect(texts(slack.messages)).toStrictEqual(["hello"]);
             expect(redis.keys()).toStrictEqual(["slack_outbox_last_sent", "slack_outbox_recovery_scheduled"]);
@@ -43,7 +43,7 @@ describe("sending through the outbox", (): void => {
         const failure = new Error("redis down");
         redis.zAdd.mockRejectedValueOnce(failure);
 
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.notifications({ text: "hello" }));
 
         expect(texts(slack.messages)).toStrictEqual(["hello"]);
         expect(console.warn).toHaveBeenCalledWith(
@@ -64,14 +64,14 @@ describe("sending through the outbox", (): void => {
                 await redis.zAdd(QUEUE_KEY, queued(`old ${String(index)}`, DAY - index));
             }
 
-            await drive(outbox.send({ text: "newest" }));
+            await drive(outbox.notifications({ text: "newest" }));
 
             expect(slack.requests).toStrictEqual([]);
 
             const [oldestLeft] = await redis.zRange(QUEUE_KEY, 0, 0, { by: "rank" });
 
             expect(oldestLeft?.member).toContain('"id":"old 1"');
-            expect(health.raise).toHaveBeenCalledWith("outbox-full", "");
+            expect(health.raise).toHaveBeenCalledWith("outbox-full", "notification queue");
         },
     );
 });
@@ -185,7 +185,7 @@ describe("a drain of the outbox", (): void => {
         slack.respond(503, 503, 503, 503, 503, 503, 503, 503);
 
         await drive(outbox.deliverQueued());
-        await drive(outbox.send({ text: "another" }));
+        await drive(outbox.notifications({ text: "another" }));
 
         expect(drains(scheduler.jobs)).toStrictEqual([LEASE_MS + 1000, 37_000]);
     });
@@ -227,7 +227,7 @@ describe("an outbox whose drain died", (): void => {
             const { outbox, redis, scheduler, slack } = fakeOutbox();
             await redis.set(LEASE_KEY, "a drain that died", { expiration: new Date(NOW.getTime() + LEASE_MS) });
 
-            await drive(outbox.send({ text: "hello" }));
+            await drive(outbox.notifications({ text: "hello" }));
 
             expect(slack.requests).toStrictEqual([]);
             expect(drains(scheduler.jobs)).toStrictEqual([LEASE_MS + 1000]);
@@ -239,7 +239,7 @@ describe("an outbox whose drain died", (): void => {
 
         const { outbox, redis, slack } = fakeOutbox();
         await redis.set(LEASE_KEY, "a drain that died", { expiration: new Date(NOW.getTime() + LEASE_MS) });
-        await drive(outbox.send({ text: "hello" }));
+        await drive(outbox.notifications({ text: "hello" }));
         await vi.advanceTimersByTimeAsync(LEASE_MS + 1000);
 
         await drive(outbox.deliverQueued());
@@ -258,9 +258,9 @@ describe("messages sent one after another", (): void => {
 
             const { outbox, slack } = fakeOutbox();
 
-            await drive(outbox.send({ text: "first" }));
+            await drive(outbox.notifications({ text: "first" }));
             await vi.advanceTimersByTimeAsync(500);
-            await drive(outbox.send({ text: "second" }));
+            await drive(outbox.notifications({ text: "second" }));
 
             expect(sendTimes(slack.requests)).toStrictEqual([0, 1100]);
         },

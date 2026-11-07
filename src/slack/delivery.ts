@@ -15,6 +15,7 @@ export {
     type SlackConnection,
 } from "./connection.js";
 export type { DeliveryCondition, DeliveryHealth } from "./health.js";
+export { directToChannel, toChannel } from "./message.js";
 export { createSlackOutbox, forgetContent, type SlackOutbox } from "./outbox.js";
 export { queueState } from "./queue.js";
 export { continuationStarted, OUTBOX_JOB_NAME } from "./schedule.js";

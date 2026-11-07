@@ -7,8 +7,33 @@ import { createClient } from "redis";
  * view (`viewFor`), which counts the bytes it sends and receives.
  */
 
-/** The client calls the harness makes: raw commands, and closing. */
-export type RedisClient = Readonly<{ sendCommand: (args: string[]) => Promise<unknown>; quit: () => Promise<unknown> }>;
+/** A transaction on the client's connection: commands added, then sent as MULTI ... EXEC, at once. */
+export type RawMulti = Readonly<{ addCommand: (args: string[]) => RawMulti; exec: () => Promise<unknown> }>;
+
+/** The client calls the harness makes: raw commands, transactions, and closing. */
+export type RedisClient = Readonly<{
+    sendCommand: (args: string[]) => Promise<unknown>;
+    multi: () => RawMulti;
+    quit: () => Promise<unknown>;
+}>;
+
+/**
+ * A transaction as the app queues one, through Devvit's transaction client: the app reads no command's answer, only
+ * `exec`'s results in order, as numbers, strings, or null for nil. WATCH sends nothing: the app watches a key nothing
+ * writes, so EXEC never aborts.
+ */
+export type LoadTransaction = Readonly<{
+    multi: () => Promise<void>;
+    hSetNX: (key: string, field: string, value: string) => Promise<void>;
+    hIncrBy: (key: string, field: string, value: number) => Promise<void>;
+    hSet: (key: string, fieldValues: Readonly<Record<string, string>>) => Promise<void>;
+    expire: (key: string, seconds: number) => Promise<void>;
+    hGet: (key: string, field: string) => Promise<void>;
+    exec: () => Promise<unknown[]>;
+}>;
+
+/** What the adapter adds to Devvit's commands: transactions, which take their own client. */
+export type LoadRedis = DevvitRedis & Readonly<{ watch: (key: string) => Promise<LoadTransaction> }>;
 
 /** What the app calls on Devvit's Redis client. */
 export type DevvitRedis = Readonly<
@@ -36,6 +61,7 @@ export type DevvitRedis = Readonly<
         | "hDel"
         | "hLen"
         | "hScan"
+        | "rename"
     >
 >;
 
@@ -106,8 +132,48 @@ function rangeArgs(key: string, start: number | string, stop: number | string, o
     return by === "score" ? [...limited, "WITHSCORES"] : limited;
 }
 
+/** A transaction on `client`, counting its traffic: its commands go to Redis together, at `exec`. */
+function transactionOn(client: RedisClient, traffic: Traffic): LoadTransaction {
+    const queued: string[][] = [];
+    const queue = async (args: string[]): Promise<void> => {
+        queued.push(args);
+        await Promise.resolve();
+    };
+    return {
+        multi: async (): Promise<void> => {
+            await Promise.resolve();
+        },
+        hSetNX: async (key: string, field: string, value: string): Promise<void> => {
+            await queue(["HSETNX", key, field, value]);
+        },
+        hIncrBy: async (key: string, field: string, value: number): Promise<void> => {
+            await queue(["HINCRBY", key, field, String(value)]);
+        },
+        hSet: async (key: string, fieldValues: Readonly<Record<string, string>>): Promise<void> => {
+            await queue(["HSET", key, ...Object.entries(fieldValues).flat()]);
+        },
+        expire: async (key: string, seconds: number): Promise<void> => {
+            await queue(["EXPIRE", key, String(seconds)]);
+        },
+        hGet: async (key: string, field: string): Promise<void> => {
+            await queue(["HGET", key, field]);
+        },
+        exec: async (): Promise<unknown[]> => {
+            const commands = queued.splice(0);
+            traffic.sent += commands.flat().reduce((sum: number, arg: string): number => sum + arg.length, 0);
+            const multi = commands.reduce(
+                (pending: RawMulti, args: string[]): RawMulti => pending.addCommand(args),
+                client.multi(),
+            );
+            const replies: unknown = await multi.exec();
+            traffic.received += JSON.stringify(replies ?? null).length;
+            return Array.isArray(replies) ? replies.map((reply: unknown): unknown => reply ?? null) : [];
+        },
+    };
+}
+
 /** A view of `client` for one invocation, counting its traffic. */
-export function viewFor(client: RedisClient, traffic: Traffic): DevvitRedis {
+export function viewFor(client: RedisClient, traffic: Traffic): LoadRedis {
     const send = async (args: readonly string[]): Promise<unknown> => {
         traffic.sent += args.reduce((sum: number, arg: string): number => sum + arg.length, 0);
         const reply: unknown = await client.sendCommand([...args]);
@@ -116,6 +182,8 @@ export function viewFor(client: RedisClient, traffic: Traffic): DevvitRedis {
     };
     const number = async (args: readonly string[]): Promise<number> => Number(await send(args));
     return {
+        watch: async (): Promise<LoadTransaction> => await Promise.resolve(transactionOn(client, traffic)),
+        rename: async (key: string, newKey: string): Promise<string> => text(await send(["RENAME", key, newKey])),
         get: async (key: string): Promise<string | undefined> => optionalText(await send(["GET", key])),
         mGet: async (keys: string[]): Promise<(string | null)[]> => {
             const replies: unknown = await send(["MGET", ...keys]);

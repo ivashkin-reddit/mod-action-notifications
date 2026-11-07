@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadApp } from "../fixtures/app.js";
-import { removedPost } from "../fixtures/events.js";
+import { bannedUser, modActionEvent, removedPost } from "../fixtures/events.js";
 import type { FakeDevvit } from "../fixtures/fakeDevvit.js";
 import { lastLine, lines, onlyMessage } from "../fixtures/messages.js";
 import { keysBesidesBookkeeping } from "../fixtures/redisKeys.js";
@@ -39,17 +39,60 @@ describe("an action by one of Reddit's own accounts", (): void => {
         },
     );
 
-    it("is not counted toward activity spikes", TEST_OPTIONS, async (): Promise<void> => {
+    // Reddit's accounts stand for Reddit, not a person, and Anti-Evil Operations has no profile to link to.
+    it.each([["reddit"], ["Anti-Evil Operations"]])(
+        "names %s in plain text, as a Reddit account",
+        TEST_OPTIONS,
+        async (name): Promise<void> => {
+            expect.hasAssertions();
+
+            const app = await loadApp(devvit);
+
+            await app.fire("ModAction", removedPost({ moderator: { name } }));
+
+            expect(lines(onlyMessage(app.slack.messages))[2]).toBe(`• *Reddit account:* ${name}`);
+        },
+    );
+
+    it("is named in plain text where an unban recalls its ban", TEST_OPTIONS, async (): Promise<void> => {
+        expect.hasAssertions();
+
+        const app = await loadApp(devvit);
+        await app.fire("ModAction", bannedUser({ moderator: { name: "Anti-Evil Operations" } }));
+
+        await app.fire(
+            "ModAction",
+            modActionEvent({ action: "unbanuser", moderator: { name: "ModB" }, targetUser: { name: "Troll" } }),
+        );
+
+        expect(lines(app.slack.messages[1])).toContain(
+            "• *Related Ban:* Reddit account Anti-Evil Operations • on 2026-11-04T12:00:00.000Z",
+        );
+    });
+
+    // Reddit's removals count toward its account's activity, so a sweep is summarised as a burst; the spike label
+    // stays on moderators' alerts, as Reddit's accounts acting fast is no news.
+    it("is counted toward a burst, and its alerts carry no spike label", TEST_OPTIONS, async (): Promise<void> => {
         expect.hasAssertions();
 
         const app = await loadApp(devvit);
 
         for (let count = 0; count < 5; count += 1) {
-            await app.fire("ModAction", removedPost({ moderator: { name: "reddit" } }));
+            await app.fire(
+                "ModAction",
+                removedPost({ id: `ModAction_${String(count)}`, moderator: { name: "reddit" } }),
+            );
         }
 
-        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([]);
-        expect(lastLine(app.slack.messages[4])).toBe("• *Status:* Origin Reddit");
+        expect(keysBesidesBookkeeping(app.context.redis)).toStrictEqual([
+            "mod_actions:burst:testsub:reddit",
+            "mod_actions:moderator_actions:testsub:reddit",
+            ...[0, 1, 2, 3, 4].map((count: number): string => `mod_actions:reported:ModAction_${String(count)}`),
+        ]);
+        expect(lines(app.slack.messages[4]).slice(-2)).toStrictEqual([
+            "• *Status:* Origin Reddit",
+            "• *Burst:* Further removals by reddit will be summarised",
+        ]);
     });
 
     it("can be silenced by excluding the account", TEST_OPTIONS, async (): Promise<void> => {

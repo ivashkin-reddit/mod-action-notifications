@@ -1,15 +1,19 @@
 import { vi } from "vitest";
 import type { Mock } from "vitest";
 
-/** A scheduled job: a cron job, or a one-off job due at `runAt`. */
+/** What a job carries to its run, as Devvit's scheduler takes it: JSON. */
+export type JobData = Readonly<Record<string, unknown>>;
+
+/** A scheduled job: a cron job, or a one-off job due at `runAt`, with the data it was scheduled with. */
 export interface ScheduledJob {
     readonly id: string;
     readonly name: string;
     readonly cron?: string;
     readonly runAt?: Date;
+    readonly data?: JobData;
 }
 
-type JobOptions = Readonly<{ name: string; cron?: string; runAt?: Date }>;
+type JobOptions = Readonly<{ name: string; cron?: string; runAt?: Date; data?: JobData | undefined }>;
 
 export interface FakeScheduler {
     jobs: readonly ScheduledJob[];
@@ -22,12 +26,18 @@ export function createFakeScheduler(): FakeScheduler {
     const scheduler: Pick<FakeScheduler, "jobs"> = { jobs: [] };
     let nextId = 1;
     return Object.assign(scheduler, {
-        runJob: vi.fn(async ({ name, cron, runAt }: JobOptions): Promise<string> => {
+        runJob: vi.fn(async ({ name, cron, runAt, data }: JobOptions): Promise<string> => {
             const id = `job-${String(nextId)}`;
             nextId += 1;
             scheduler.jobs = [
                 ...scheduler.jobs,
-                { id, name, ...(cron === undefined ? {} : { cron }), ...(runAt === undefined ? {} : { runAt }) },
+                {
+                    id,
+                    name,
+                    ...(cron === undefined ? {} : { cron }),
+                    ...(runAt === undefined ? {} : { runAt }),
+                    ...(data === undefined ? {} : { data }),
+                },
             ];
             return await Promise.resolve(id);
         }),
