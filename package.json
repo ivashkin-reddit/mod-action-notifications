@@ -14,26 +14,26 @@
     "upload": "devvit upload"
   },
   "dependencies": {
-    "@devvit/public-api": "^0.15.2",
-    "@devvit/shared-types": "^0.15.2"
+    "@devvit/public-api": "^0.15.3",
+    "@devvit/shared-types": "^0.15.3"
   },
   "devDependencies": {
-    "@devvit/protos": "^0.15.2",
+    "@devvit/protos": "^0.15.3",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
     "@vitest/eslint-plugin": "^1.6.28",
-    "devvit": "^0.15.2",
+    "devvit": "^0.15.3",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.5",
-    "eslint-plugin-boundaries": "^7.4.1",
-    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-boundaries": "^7.4.2",
+    "eslint-plugin-import-x": "^4.18.1",
     "eslint-plugin-regexp": "^3.3.3",
-    "prettier": "3.9.10",
+    "prettier": "3.10.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.72.1",
+    "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   },
   "engines": {
